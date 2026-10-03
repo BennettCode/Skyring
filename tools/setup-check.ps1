@@ -14,7 +14,7 @@ $ErrorActionPreference = 'Stop'
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 
-# Pinned versions (update together with CLAUDE.md section 3).
+# Pinned versions (update together with docs/RECON.md and the eldenring-rs rev in Cargo.toml).
 $Expected = @{
     SkyrimExe      = '1.7.104.0'
     SkseRuntimeDll = 'skse64_1_7_104.dll'

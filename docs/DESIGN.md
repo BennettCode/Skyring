@@ -65,7 +65,18 @@ Test: walk N/E/up in each game and log both, then write the conversion + a unit 
   through a mapping table. The ER character is never seen.
 - Phase 8 stretch goal: share ER's render of the player/VFX as a texture (D3D12 shared handle → D3D11, fence), depth-composited into Skyrim.
 
-## 8. Open questions
+## 8. Logging format (both plugins)
+Every line, on both sides:
+```
+<UTC ISO-8601 time, ms> [SKY|ER] [level] [subsystem] message
+2026-10-03T23:03:13.755Z [ER] [info] [core] main player spawned (in world)
+```
+- Skyrim plugin → `Documents\My Games\Skyrim Special Edition\SKSE\SkyrimXER.log`. ER plugin → `build\er-plugin\logs\skyrimxer_er.log`.
+  Both are truncated on each game start. `tools/collect-logs.ps1` gathers them (plus skse64/crash/me3 logs) into `logs/<timestamp>/`.
+- Same format on both sides so the two logs can be merged by timestamp. Log state *changes* and events, sample per-frame values (1 in N),
+  and log frame times as p50/p95/p99 every 5 s. Never log every frame.
+
+## 9. Open questions
 - Can ER be kept running at full rate while hidden/unfocused? What's the cost when both games run at once?
 - What's the best hook point in Skyrim to cancel incoming player damage and redirect it?
 - How do we take Skyrim's "hit happened" and get ER's damage formula result without a real ER target? Options: a dummy enemy in the arena

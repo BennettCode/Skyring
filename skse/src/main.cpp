@@ -1,6 +1,6 @@
 namespace
 {
-	// Line format shared with the ER plugin so logs from both sides can be merged by timestamp (CLAUDE.md section 10).
+	// Line format shared with the ER plugin so logs from both sides can be merged by timestamp (docs/DESIGN.md, "Logging format").
 	constexpr auto kLogPattern = "%Y-%m-%dT%H:%M:%S.%eZ [SKY] [%l] %v";
 
 	void SetupLog()

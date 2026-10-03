@@ -46,7 +46,7 @@ Newest first. One entry per session or verified step: **what changed · how it w
 - **Next:** me3 smoke test with Elden Ring (no natives, `--savefile skyrimxer.sl2`), then the rest of Phase 0.
 
 ## 2026-10-03: Project scaffold
-- **Changed:** Created the repo structure, `CLAUDE.md` (agent rules), design/roadmap/recon docs, whitelist `.gitignore`, me3 profile template,
+- **Changed:** Created the repo structure, local agent-rules file, design/roadmap/recon docs, whitelist `.gitignore`, me3 profile template,
   and folder READMEs. Ran `git init`. Cloned the reference repos into `reference/` (ignored).
 - **Environment found:** Skyrim `SkyrimSE.exe` 1.7.104.0 + SKSE 2.2.6 (no Address Library yet). Elden Ring `eldenring.exe` 2.7.1.0.
   VS 2026 C++ ✔, Rust ✔, git ✔. Missing: me3, Address Library.

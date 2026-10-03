@@ -19,7 +19,6 @@
 !/*.md
 !/LICENSE
 !/licenses/*.txt
-!/.claude/settings.json
 !/.github/**/*.yml
 
 # 4) Allowed: docs and config templates
@@ -61,9 +60,10 @@
 /reference/
 /target/
 **/target/
-/.claude/settings.local.json
-# Agent instructions for this machine/project only; kept local, never published.
+# AI-agent files: instructions and settings for this machine only (contain local paths); kept local, never published.
 /CLAUDE.md
+/AGENTS.md
+/.claude/
 /.vs/
 /.xmake/
 /vsxmake*/

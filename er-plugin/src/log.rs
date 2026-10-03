@@ -1,4 +1,4 @@
-//! Minimal file logger using the shared line format (CLAUDE.md section 10):
+//! Minimal file logger using the shared line format (docs/DESIGN.md, "Logging format"):
 //! `2026-10-03T14:22:05.123Z [ER] [info] [subsystem] message`
 
 use std::fs::{self, File, OpenOptions};

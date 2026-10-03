@@ -9,7 +9,8 @@ license = "GPL-3.0-or-later"
 publish = false
 
 [workspace.dependencies]
-# Pinned: this commit's RVA tables support eldenring.exe 2.7.1.0 (WW). Bump only together with the game pin in CLAUDE.md section 3.
+# Pinned: this commit's RVA tables support eldenring.exe 2.7.1.0 (WW). Bump only together with the game version pin
+# (docs/RECON.md and the $Expected table in tools/setup-check.ps1).
 eldenring = { git = "https://github.com/vswarte/eldenring-rs", rev = "59fbd3b3b7daaf14aca47c9f73530493dba6bc79" }
 fromsoftware-shared = { git = "https://github.com/vswarte/eldenring-rs", rev = "59fbd3b3b7daaf14aca47c9f73530493dba6bc79" }
 windows = { version = "0.61", features = ["Win32_Foundation", "Win32_System_LibraryLoader"] }
