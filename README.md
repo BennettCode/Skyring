@@ -34,7 +34,16 @@ See [`docs/DESIGN.md`](docs/DESIGN.md). In short: an SKSE plugin in Skyrim and a
 player state and combat events through a shared-memory protocol (`protocol/`), a design based on [SkyCraft](https://github.com/chasmlol/SkyCraft).
 
 ## Building from source
-See [`CLAUDE.md`](CLAUDE.md) §6.
+Requires Visual Studio 2026 with C++ (its bundled CMake and vcpkg are used), Rust (stable, MSVC), and Git.
+
+```
+git clone --recursive https://github.com/BennettCode/Skyring.git
+cd Skyring
+mkdir local
+copy config\paths.example.json local\paths.json   # then edit the paths for your machine
+powershell -ExecutionPolicy Bypass -File tools\setup-check.ps1
+powershell -ExecutionPolicy Bypass -File tools\build.ps1
+```
 
 ## Credits
 See [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).

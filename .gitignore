@@ -62,6 +62,8 @@
 /target/
 **/target/
 /.claude/settings.local.json
+# Agent instructions for this machine/project only; kept local, never published.
+/CLAUDE.md
 /.vs/
 /.xmake/
 /vsxmake*/
