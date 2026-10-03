@@ -5,6 +5,7 @@ All scripts: PowerShell 5.1-compatible, `Set-StrictMode -Version Latest`, `$Erro
 
 | Script | Phase | Does |
 |---|---|---|
+| `dev.ps1` | P1 | **The dev loop in one command:** build → deploy → back up saves → launch → wait for both plugins' ready lines → collect logs. Flags: `-Target all\|skse\|er`, `-Game both\|eldenring\|skyrim`, `-NoLaunch`, `-WaitSeconds`. |
 | `setup-check.ps1` | P0 | Checks game exe versions, SKSE, Address Library, me3, xmake, VS C++ tools, Rust. Prints ✔/✖ with fix hints. |
 | `backup-saves.ps1` | P1 | Copies the ER `.sl2` + Skyrim `Saves/` into `local/save-backups/<timestamp>/`. Keeps the last N. |
 | `build.ps1` | P1 | Builds skse + er-plugin (+ protogen), copies outputs into `build/`. |

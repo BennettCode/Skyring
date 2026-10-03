@@ -4,6 +4,13 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: Workflow + repo hygiene
+- **Changed:** Added `tools/dev.ps1` (build → deploy → backup → launch → wait for plugin ready lines → collect logs). AI-agent files are now
+  local-only, and history was rewritten so they never appear in it. Logging format moved to `docs/DESIGN.md` §8 and the release checklist to
+  `release/README.md`, so public docs are self-contained. Added a local pre-commit guard against private data and game/binary files.
+- **Tested:** `dev.ps1 -NoLaunch` (full build + deploy in 9 s). The pre-commit guard blocks a staged Windows user path and passes clean files.
+  The full `dev.ps1` launch path gets its first real run in P2.
+
 ## 2026-10-04: Phase 1 complete (hello world from both plugins)
 - **Changed:** Added `skse/` (CMake + Ninja preset, VS-bundled vcpkg pinned to registry baseline 00c5775, CommonLibVR-ng submodule @39f9d07,
   AE only, `src/main.cpp`). Added the Cargo workspace + `er-plugin/` (eldenring-rs @59fbd3b, `lib.rs` + `log.rs`, panic=unwind).
