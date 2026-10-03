@@ -62,6 +62,7 @@
 **/target/
 # AI-agent files: instructions and settings for this machine only (contain local paths); kept local, never published.
 /CLAUDE.md
+/claudeprogress.md
 /AGENTS.md
 /.claude/
 /.vs/
