@@ -1,0 +1,29 @@
+# me3 profile for Skyrim X Elden Ring (dev setup). Format checked against me3 0.13.0 `profile create`.
+#
+# Launch (ALWAYS pass --savefile so the user's real ER0000.sl2 is never touched):
+#   me3 launch -g eldenring -p me3/skyrim-x-er.me3 --savefile skyrimxer.sl2
+#
+# me3 starts eldenring.exe directly (no Easy Anti-Cheat) and blocks matchmaking by default.
+# NEVER pass --online true. Paths are relative to this file.
+
+profileVersion = "v1"
+packages = []
+
+[[supports]]
+game = "eldenring"
+
+# Our hidden-game plugin, loaded straight from the build output (never copied into the game folder).
+[[natives]]
+path = '..\build\er-plugin\skyrimxer_er.dll'
+optional = false
+enabled = true
+load_before = []
+load_after = []
+load_early = false
+
+# Optional: local param/asset overrides made with Smithbox (kept in local/, never committed).
+# [[packages]]
+# id = "skyrimxer-local"
+# path = '..\local\me3-package'
+
+[debug_properties]

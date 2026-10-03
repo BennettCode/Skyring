@@ -1,0 +1,93 @@
+# -----------------------------------------------------------------------------
+# WHITELIST .gitignore: everything is ignored unless explicitly allowed below.
+# This keeps game files, extracted assets, builds and RE databases from ever
+# being committed. To track a new kind of source file, add a `!` rule ON PURPOSE.
+# -----------------------------------------------------------------------------
+
+# 1) Ignore everything
+*
+
+# 2) Let git look inside directories (files inside are still ignored unless allowed)
+!*/
+
+# 3) Allowed: root project files
+!/.gitignore
+!/.gitmodules
+!/.gitattributes
+!/.editorconfig
+!/.clang-format
+!/*.md
+!/LICENSE
+!/licenses/*.txt
+!/.claude/settings.json
+!/.github/**/*.yml
+
+# 4) Allowed: docs and config templates
+!/docs/**/*.md
+!/docs/**/*.svg
+!/config/*.example.json
+!/config/*.example.toml
+
+# 5) Allowed: source code, by extension (only outside the hard-ignored folders below)
+!*.cpp
+!*.h
+!*.hpp
+!*.inl
+!*.rs
+!*.lua
+!**/CMakeLists.txt
+!*.cmake
+!**/CMakePresets.json
+!**/vcpkg.json
+!**/vcpkg-configuration.json
+!*.ps1
+!*.psm1
+!*.me3
+!**/Cargo.toml
+!/Cargo.lock
+!/rust-toolchain.toml
+!/rustfmt.toml
+!/protocol/schema/*.toml
+!**/README.md
+
+# Git submodules (tracked as a commit pointer; their contents are not part of this repo)
+!/skse/extern/CommonLibSSE-NG
+
+# 6) HARD-IGNORED folders (re-excluded after the allows; their contents can never be tracked)
+/build/
+/dist/
+/logs/
+/local/
+/reference/
+/target/
+**/target/
+/.claude/settings.local.json
+/.vs/
+/.xmake/
+/vsxmake*/
+
+# 7) Belt and braces: game/RE file types that must never be committed, wherever they are
+*.bsa
+*.ba2
+*.esm
+*.esp
+*.esl
+*.bdt
+*.bhd
+*.dcx
+*.bnd
+*.sl2
+*.ess
+*.skse
+*.hkx
+*.nif
+*.dds
+*.gpr
+*.rep
+*.i64
+*.idb
+*.bndb
+regulation.bin
+*.dll
+*.exe
+*.pdb

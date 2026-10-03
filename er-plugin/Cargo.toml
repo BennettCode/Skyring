@@ -1,0 +1,16 @@
+[package]
+name = "skyrimxer-er"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "skyrimxer_er"
+crate-type = ["cdylib"]
+
+[dependencies]
+eldenring.workspace = true
+fromsoftware-shared.workspace = true
+windows.workspace = true
+chrono.workspace = true

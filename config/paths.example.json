@@ -1,0 +1,23 @@
+{
+  "_comment": "Copy to local/paths.json (ignored by git) and edit for your machine. Scripts read local/paths.json.",
+  "skyrim": {
+    "install": "C:/Program Files (x86)/Steam/steamapps/common/Skyrim Special Edition",
+    "exe": "SkyrimSE.exe",
+    "skseLoader": "skse64_loader.exe",
+    "pluginsDir": "Data/SKSE/Plugins",
+    "userDir": "%USERPROFILE%/Documents/My Games/Skyrim Special Edition",
+    "savesDir": "%USERPROFILE%/Documents/My Games/Skyrim Special Edition/Saves",
+    "logDir": "%USERPROFILE%/Documents/My Games/Skyrim Special Edition/SKSE"
+  },
+  "eldenRing": {
+    "install": "C:/Program Files (x86)/Steam/steamapps/common/ELDEN RING/Game",
+    "exe": "eldenring.exe",
+    "savesDir": "%APPDATA%/EldenRing/<steam-id>",
+    "me3Profile": "me3/skyrim-x-er.me3"
+  },
+  "repo": {
+    "buildDir": "build",
+    "logsDir": "logs",
+    "saveBackupsDir": "local/save-backups"
+  }
+}
