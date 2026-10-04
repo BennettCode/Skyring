@@ -4,6 +4,13 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P3: i-frame search attempt 2 (not found) → handoff
+- **Changed:** `er-plugin/src/actions.rs` Watcher: the dev-only word-diff probe now covers three regions (`action_flag`, `event` = CSChrEventModule,
+  `chr_flags` = ChrIns+0x1c4..0x1cb), and the per-frame `[action]` line shows raw `ev_flags`.
+- **Tested in-game (ER only, self-test, 10 backsteps):** no region shows an i-frame window. `ev_flags` is a constant 0xff; the chr_flags bits flip
+  irregularly. Details: `docs/research/elden-ring-state.md`.
+- **Result:** ✘ second failed attempt at the same problem → stuck-loop rule: handoff written (STATUS "Handoff notes"); the next try runs in a fresh session.
+
 ## 2026-10-04: Docs: README + roadmap refresh for the GitHub page
 - **Changed:** README: author's "About this project" section, "What works today" / "Not working yet", input badge, Tested setup says
   keyboard + mouse (**controller support not added yet**, why, and that it's planned for P4), dev-loop commands updated. ROADMAP: P3

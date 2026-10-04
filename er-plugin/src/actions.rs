@@ -45,17 +45,33 @@ pub fn watch(frame: u64) {
     INJECT_FRAME.store(frame, Ordering::Relaxed);
 }
 
-/// Cap for the action_flag word-diff lines (i-frame search), per session.
-const MAX_FLAG_DIFF_LINES: u32 = 300;
+/// Cap for the word-diff lines (i-frame search), per session.
+const MAX_FLAG_DIFF_LINES: u32 = 400;
 static FLAG_DIFF_LINES: AtomicU32 = AtomicU32::new(0);
 
-/// The action-flag module as raw u32 words (bounded probe: which words change during a dodge, since the eldenring-rs
-/// `perfect_invincibility`/`dodging` bits read 0 on 2.7.1).
-fn action_flag_words(player: &eldenring::cs::PlayerIns) -> Vec<u32> {
-    let module: &eldenring::cs::CSChrActionFlagModule = &player.chr_ins.modules.action_flag;
-    let words = size_of::<eldenring::cs::CSChrActionFlagModule>() / 4;
-    // SAFETY: reads the module's own bytes on the main thread (task callback); u32 has no invalid bit patterns.
-    unsafe { std::slice::from_raw_parts((module as *const eldenring::cs::CSChrActionFlagModule).cast::<u32>(), words) }.to_vec()
+/// `bytes` bytes at `ptr` as u32 words (unaligned-safe). Bounded probe for the i-frame search: the eldenring-rs
+/// `perfect_invincibility`/`dodging` bits read 0 on 2.7.1, so the Watcher diffs whole regions frame to frame.
+///
+/// # Safety
+/// `ptr..ptr+bytes` must be readable game memory; main thread only (task callback).
+unsafe fn raw_words(ptr: *const u8, bytes: usize) -> Vec<u32> {
+    (0..bytes / 4).map(|i| unsafe { std::ptr::read_unaligned(ptr.add(i * 4).cast::<u32>()) }).collect()
+}
+
+/// The regions the Watcher diffs: (name, words to skip at the start (vtable/owner pointers), words).
+fn probe_regions(player: &eldenring::cs::PlayerIns) -> [(&'static str, usize, Vec<u32>); 3] {
+    use eldenring::cs::{CSChrActionFlagModule, CSChrEventModule};
+    let m = &player.chr_ins.modules;
+    let flag: &CSChrActionFlagModule = &m.action_flag;
+    let event: &CSChrEventModule = &m.event;
+    // SAFETY: each region is a live object's own bytes (the 8 chr_flags bytes start at ChrIns+0x1c4 and run through 0x1cb).
+    unsafe {
+        [
+            ("action_flag", 4, raw_words((flag as *const CSChrActionFlagModule).cast(), size_of::<CSChrActionFlagModule>())),
+            ("event", 4, raw_words((event as *const CSChrEventModule).cast(), size_of::<CSChrEventModule>())),
+            ("chr_flags", 0, raw_words((&raw const player.chr_ins.chr_flags1c4).cast(), 8)),
+        ]
+    }
 }
 
 /// Runs in `inject_group()`. Self-test only for now; P3 step 4 feeds it from Skyrim's InputState.
@@ -108,15 +124,16 @@ impl Injector {
     }
 }
 
-/// Runs in ChrIns_PostPhysics (after behavior): logs what the injected press did, and which action_flag words changed.
+/// Runs in ChrIns_PostPhysics (after behavior): logs what the injected press did, and which probed words changed.
 pub struct Watcher {
     last: Option<game::Snapshot>,
-    last_words: Option<Vec<u32>>,
+    last_words: Option<[(&'static str, usize, Vec<u32>); 3]>,
+    last_ev_flags: u8,
 }
 
 impl Watcher {
     pub fn new() -> Self {
-        Self { last: None, last_words: None }
+        Self { last: None, last_words: None, last_ev_flags: 0 }
     }
 
     pub fn run(&mut self) {
@@ -134,15 +151,20 @@ impl Watcher {
         let frame = crate::bridge::FRAMES.load(Ordering::Relaxed);
         let since = frame.saturating_sub(INJECT_FRAME.load(Ordering::Relaxed));
         let pressing = PULSE_LEFT.load(Ordering::Relaxed) > 0 || since < 3;
+        // eldenring-rs: "bit in pos 1 is iframes" (CSChrEventModule.flags), unverified: logged raw next to anim/stamina.
+        let ev_flags = player.chr_ins.modules.event.flags;
         let changed = match &self.last {
             None => true,
-            Some(l) => l.anim_id != s.anim_id || l.iframe != s.iframe || l.dodging != s.dodging || l.stamina != s.stamina,
+            Some(l) => {
+                l.anim_id != s.anim_id || l.iframe != s.iframe || l.dodging != s.dodging || l.stamina != s.stamina || ev_flags != self.last_ev_flags
+            }
         };
+        self.last_ev_flags = ev_flags;
         if changed || pressing {
             crate::info!(
                 "action",
-                "frame={frame} +{since}: stamina={} anim={} iframe={} dodging={} | requests.sp_move={} new_presses.sp_move={} \
-                 readback_new.sp_move={} roll_timer={:.3}",
+                "frame={frame} +{since}: stamina={} anim={} iframe={} dodging={} ev_flags={ev_flags:#04x} | requests.sp_move={} \
+                 new_presses.sp_move={} readback_new.sp_move={} roll_timer={:.3}",
                 s.stamina,
                 s.anim_id,
                 s.iframe as u8,
@@ -153,16 +175,17 @@ impl Watcher {
                 ar.action_timers.roll
             );
         }
-        let words = action_flag_words(player);
+        let regions = probe_regions(player);
         if let Some(prev) = &self.last_words {
-            // Words 0..4 are the vtable and owner pointers.
-            for (i, (old, new)) in prev.iter().zip(&words).enumerate().skip(4) {
-                if old != new && FLAG_DIFF_LINES.fetch_add(1, Ordering::Relaxed) < MAX_FLAG_DIFF_LINES {
-                    crate::info!("probe", "frame={frame} +{since}: action_flag +{:#05x}: {old:#010x}→{new:#010x} anim={}", i * 4, s.anim_id);
+            for ((name, skip, old), (_, _, new)) in prev.iter().zip(&regions) {
+                for (i, (o, n)) in old.iter().zip(new).enumerate().skip(*skip) {
+                    if o != n && FLAG_DIFF_LINES.fetch_add(1, Ordering::Relaxed) < MAX_FLAG_DIFF_LINES {
+                        crate::info!("probe", "frame={frame} +{since}: {name} +{:#05x}: {o:#010x}→{n:#010x} anim={}", i * 4, s.anim_id);
+                    }
                 }
             }
         }
-        self.last_words = Some(words);
+        self.last_words = Some(regions);
         if left == 1 {
             crate::info!("action", "frame={frame} watch window over: {}", s.line());
         }

@@ -35,6 +35,16 @@ Both plugins share the region `Local\SkyrimXER_v2`, handshake, exchange heartbea
    P3 accept: stamina drop ✔ in combat (136→128 in Skyrim's log and HUD); the i-frame flag is still not found (`docs/research/elden-ring-state.md`).
 
 ## Handoff notes
+**I-frame search: stuck after 2 attempts (2026-10-04).** Goal: set `PlayerFlag::IFrame` during ER's dodge i-frames (the last P3 accept item).
+Tried: (1) word-diff of `CSChrActionFlagModule` every frame of a backstep, out of combat and in combat; (2) the same for `CSChrEventModule`
+(eldenring-rs "iframes" bit) and the ChrIns flag bytes. Neither shows a window (`docs/research/elden-ring-state.md`). Hypothesis: dodge
+invincibility isn't a persistent flag our PostPhysics read can see. It may be applied through a special effect, or checked inside the
+hit pipeline from the TAE state. Next, in order:
+1. **Special effects:** log the player's active SpEffect list every frame of the dodge window (an effect id appearing for ~10–15 frames = i-frames).
+2. **Timing test in combat:** log the frame of every HP loss relative to the last backstep start over many backsteps (`-ErVisible`, enemy aggroed).
+   Hits never land in frames +a..+b → that's the window, so IFrame = the anim is a backstep/roll and frames are in [a, b] (anim-based, documented as such).
+3. **Upstream:** check newer eldenring-rs revisions / community ER docs for a mapped dodge-invincibility field (notes only, no copied code).
+
 **P3 step 3 done (2026-10-04).** Protocol v2 slots are in, and the tests/fake peers exercise them. The plugins were only rebuilt against v2
 (no behaviour change). Step 4 hands `Link::shared()` / `Link::Shared()` to the game threads and moves the peers' `PlayerWatch` edge
 logger into the Skyrim plugin.

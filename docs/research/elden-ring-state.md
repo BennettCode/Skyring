@@ -24,6 +24,10 @@ Game/version: eldenring.exe 2.7.1.0 (1.17.1), eldenring-rs `59fbd3b`. Read in `e
   - +0x040 bit 15 (eldenring-rs: `disable_turning`) is set from +12 to +90 frames. That's the whole animation, too long for i-frames.
   - +0x1d8: 0 → 1 for exactly one frame at the end (+89).
 - Same result **in combat** (enemy attacking): only those markers, plus +0x010 bit 4 (set while in combat: the word reads 0x11 instead of 0x1).
+- **Attempt 2 (2026-10-04, 10 self-test backsteps, out of combat):** also diffed `CSChrEventModule` (whole struct) and `ChrIns` flags
+  `chr_flags1c4..1cb`. `CSChrEventModule.flags` (eldenring-rs: "bit in pos 1 is iframes") reads **0xff on every frame**, idle and dodging, and the
+  module never changed. So on 2.7.1 that field is either misplaced or not the i-frame flag. `chr_flags` +0x2 bit 6 and +0x5 bit 0 flip at random
+  frames during the backstep (+10, +17, +25, +32, +55, ...), in both directions, several times per backstep: render/visibility-like, not a window.
 - So nothing in this module looks like an i-frame window. Next places to look: the same probe with an enemy attacking (i-frames may only
   matter, or only be set, in combat), or other modules (special effects, `ChrIns` flags).
 - Confidence: observed (2026-10-04, 8 backsteps).
