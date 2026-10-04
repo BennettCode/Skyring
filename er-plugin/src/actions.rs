@@ -2,8 +2,8 @@
 //! (stamina, recovery, tap = roll on release / hold = dash) still decide what happens. Writing `action_requests` directly does NOT
 //! work: the engine rebuilds it from the pad every ChrIns_PreBehavior (probe result, docs/research/elden-ring-input.md).
 //!
-//! P3 step 2 self-test (`selftest=dodge` in skyrimxer_er.cfg): hold Backstep for PULSE_FRAMES frames every PULSE_EVERY frames, then
-//! release it, and watch the player for WATCH_FRAMES frames from a ChrIns_PostPhysics task, logging every change.
+//! P3 step 2 self-test (`selftest=dodge` in skyrimxer_er.cfg): every PULSE_EVERY frames hold Backstep for the next length in
+//! HOLD_FRAMES (a real tap held ~9 frames and the backstep began while still held; 3-frame holds did nothing), then release it, and watch the player for WATCH_FRAMES frames from a ChrIns_PostPhysics task, logging every change.
 
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
@@ -11,7 +11,8 @@ use eldenring::cs::{CSTaskGroupIndex, UserInputKey};
 
 use crate::{game, pad};
 
-const PULSE_FRAMES: u32 = 4;
+/// Hold lengths cycled per pulse (frames).
+const HOLD_FRAMES: [u32; 5] = [4, 8, 12, 20, 30];
 const PULSE_EVERY: u64 = 240;
 const WATCH_FRAMES: u32 = 120;
 
@@ -58,14 +59,15 @@ impl Injector {
             let s = game::snapshot(player);
             // SAFETY: main thread.
             let slots = unsafe { pad::digital_slots(UserInputKey::Backstep) };
+            let hold = HOLD_FRAMES[(n as usize - 1) % HOLD_FRAMES.len()];
             crate::info!(
                 "action",
-                "frame={frame} selftest pulse #{n}: hold Backstep {PULSE_FRAMES} frames then release; before: stamina={} anim={} \
+                "frame={frame} selftest pulse #{n}: hold Backstep {hold} frames then release; before: stamina={} anim={} \
                  slots (mapped, index, checked)={slots:?}",
                 s.stamina,
                 s.anim_id
             );
-            PULSE_LEFT.store(PULSE_FRAMES, Ordering::Relaxed);
+            PULSE_LEFT.store(hold + 1, Ordering::Relaxed);
             WATCH_LEFT.store(WATCH_FRAMES, Ordering::Relaxed);
             INJECT_FRAME.store(frame, Ordering::Relaxed);
         }
@@ -101,7 +103,7 @@ impl Watcher {
         let ar = &player.chr_ins.modules.action_request;
         let frame = crate::bridge::FRAMES.load(Ordering::Relaxed);
         let since = frame.saturating_sub(INJECT_FRAME.load(Ordering::Relaxed));
-        let pressing = PULSE_LEFT.load(Ordering::Relaxed) > 0 || since < PULSE_FRAMES as u64;
+        let pressing = PULSE_LEFT.load(Ordering::Relaxed) > 0 || since < 3;
         let changed = match &self.last {
             None => true,
             Some(l) => l.anim_id != s.anim_id || l.iframe != s.iframe || l.dodging != s.dodging || l.stamina != s.stamina,
@@ -110,14 +112,15 @@ impl Watcher {
             crate::info!(
                 "action",
                 "frame={frame} +{since}: stamina={} anim={} iframe={} dodging={} | requests.sp_move={} new_presses.sp_move={} \
-                 readback_new.sp_move={}",
+                 readback_new.sp_move={} roll_timer={:.3}",
                 s.stamina,
                 s.anim_id,
                 s.iframe as u8,
                 s.dodging as u8,
                 ar.action_requests.sp_move() as u8,
                 ar.new_action_presses.sp_move() as u8,
-                ar.readback_new_presses.sp_move() as u8
+                ar.readback_new_presses.sp_move() as u8,
+                ar.action_timers.roll
             );
         }
         if left == 1 {
@@ -153,15 +156,47 @@ pub mod probe {
     static ROW: Mutex<Vec<String>> = Mutex::new(Vec::new());
     static ANY: Mutex<bool> = Mutex::new(false);
     static LINES: AtomicU32 = AtomicU32::new(0);
+    const MASK_EVERY: u64 = 120;
+    const MAX_MASK_LINES: u32 = 200;
+    static MASK_LINES: AtomicU32 = AtomicU32::new(0);
+
+    fn bits(a: eldenring::cs::ChrActions) -> u64 {
+        // SAFETY: ChrActions is a one-field bitfield over a u64 (its inner field is private).
+        unsafe { std::mem::transmute(a) }
+    }
+
+    /// Whole-mask snapshot of the engine's input gating (end of frame). `queued = new_presses & possible` per eldenring-rs, so a
+    /// press with `possible` clear is dropped: this line shows which actions the current state allows.
+    fn log_masks(player: &eldenring::cs::PlayerIns, frame: u64) {
+        let ar = &player.chr_ins.modules.action_request;
+        let flags: u32 = {
+            let f = player.chr_ins.modules.action_flag.animation_action_flags;
+            // SAFETY: ChrActionAnimationFlags is a one-field bitfield over a u32.
+            unsafe { std::mem::transmute(f) }
+        };
+        crate::info!(
+            "probe",
+            "frame={frame} masks: possible={:#x} prev_possible={:#x} cancels={:#x} disabled={:#x} queued={:#x} requests={:#x} \
+             anim_flags={flags:#x} anim={}",
+            bits(ar.possible_action_inputs),
+            bits(ar.prev_possible_action_inputs),
+            bits(ar.possible_action_cancels),
+            bits(ar.disabled_action_inputs),
+            bits(ar.queued_action_inputs),
+            bits(ar.action_requests),
+            game::snapshot(player).anim_id
+        );
+    }
 
     pub fn sample(name: &'static str, last: bool) {
         // SAFETY: task callbacks run on the main thread.
         let Some(player) = (unsafe { game::main_player() }) else { return };
         let ar = &player.chr_ins.modules.action_request;
-        let (r, n, p, pr) = (
+        let (r, n, p, q, pr) = (
             ar.action_requests.sp_move(),
             ar.new_action_presses.sp_move(),
             ar.possible_action_inputs.sp_move(),
+            ar.queued_action_inputs.sp_move(),
             ar.previous_action_requests.sp_move(),
         );
         let mut row = ROW.lock().unwrap_or_else(|e| e.into_inner());
@@ -169,11 +204,14 @@ pub mod probe {
         // K = what ER's in-game pad reports for the Backstep key (the virtual input we write).
         // SAFETY: main thread.
         let k = unsafe { crate::pad::poll(eldenring::cs::UserInputKey::Backstep) }.unwrap_or(false);
-        row.push(format!("{name}:K{}R{}N{}P{}r{}", k as u8, r as u8, n as u8, p as u8, pr as u8));
+        row.push(format!("{name}:K{}R{}N{}P{}Q{}r{}", k as u8, r as u8, n as u8, p as u8, q as u8, pr as u8));
         *any |= r || n || pr || k;
         if last {
+            let frame = crate::bridge::FRAMES.load(Ordering::Relaxed);
+            if frame % MASK_EVERY == 0 && MASK_LINES.fetch_add(1, Ordering::Relaxed) < MAX_MASK_LINES {
+                log_masks(player, frame);
+            }
             if *any && LINES.fetch_add(1, Ordering::Relaxed) < MAX_LINES {
-                let frame = crate::bridge::FRAMES.load(Ordering::Relaxed);
                 let s = game::snapshot(player);
                 crate::info!(
                     "probe",

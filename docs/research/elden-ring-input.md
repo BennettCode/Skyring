@@ -63,3 +63,19 @@ Open hypotheses (next session):
    write `initial_virtual_input_data` before the copy. Mapped input 783 may be the *keyboard* binding; the user plays with a **DualSense (PS5) over USB**,
    so try the pad-mapped input / `PadDevice` (`s_thumb*`, `w_buttons`).
 3. Hold/release timing: hold longer (10+ frames) and check `BackstepTapped` (13) too.
+
+## P3 step 2, session 2 results (2026-10-04, window visible + focused, test character idle in m10_01_00_00)
+- **Focus matters for the action module.** With `-ErVisible` and the window clicked, the virtual Backstep hold reaches
+  `CSChrActionRequestModule`: `action_requests.sp_move` 1 while held, `new_action_presses` 1 on the first frame, `action_timers.roll` counts
+  up 1/60 s per frame, release clears it. Hidden (focus spoof only) it stays 0, so the spoof is still missing a check.
+- **Still no dodge**, for holds of 3, 4, 8, 12, 20 and 30 frames: no anim change, no movement, no stamina change. So hold length isn't the cause.
+- **Gating masks at idle (end of frame), same for real and injected presses:** `possible_action_inputs` = 0x0, `possible_action_cancels` =
+  0x73c1ffeef (includes sp_move), `disabled_action_inputs` = 0x0, `queued_action_inputs` = 0x0, `animation_action_flags` = 0x1 (stay_state).
+  During the backstep anim 27010: possible = cancels = 0x73d1ffeef, flags 0x0. So `possible = 0` at idle is normal and not the blocker.
+- **Same-session real Circle tap** (DualSense): R held about 9 frames, P0 Q0 throughout. Anim 27010 began **while still held**, one frame before
+  the pad poll saw the release. Every module field we log looks the same for the real tap and for ours. So whatever starts the dodge
+  (behavior script) reads input from somewhere other than `CSChrActionRequestModule` and `CSInGamePad`.
+- **Next candidates:** (1) the player's pad manipulator (`PlayerIns.chr_manipulator`, `ManipulatorType::Pad`, untyped in eldenring-rs):
+  compare its bytes across a real tap and an injected one with a bounded memory-diff probe. (2) Mapped input 783 is probably the keyboard
+  binding: inject the pad-mapped Circle input and `UserInputKey::BackstepTapped` instead. (3) Skip input: ask the behavior for the
+  evasion directly, then check that ER's stamina gating still applies.

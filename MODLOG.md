@@ -4,6 +4,14 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P3 step 2 diagnostics (dodge injection, still blocked)
+- **Changed:** `er-plugin/src/actions.rs`: the probe logs the action-request gating masks every 120 frames (possible, cancels, disabled, queued,
+  animation flags) and a queued bit per task group. The self-test cycles hold lengths 4/8/12/20/30 frames and logs the engine's hold timer. Dev-only, off by default.
+- **Tested in-game (ER only, 3 runs, window visible):** the virtual press reaches the action-request module like a real press; no dodge for any hold
+  length; a real DualSense tap in the same session backsteps with identical module values.
+- **Result:** step 2 still ✘, narrowed: the module isn't the missing link. Findings in `docs/research/elden-ring-input.md` ("session 2 results").
+  Also: me3 needs Steam running (`Steam is required to run this game` in the me3 log).
+
 ## 2026-10-04: Phase 3 started: ER runs hidden; dodge injection research
 - **Changed:** P3 plan (`docs/P3-PLAN.md`). `er-plugin`: `window.rs` (each frame: focus flags spoofed; hide the window while the player is in
   the world, show it again at the title), `game.rs` (player snapshot: HP/FP/stamina, anim, i-frame/dodging/hyperarmor flags, poise, position,

@@ -28,8 +28,9 @@ Both plugins share the region `Local\SkyrimXER_v1`, handshake, exchange heartbea
 3. Protocol v2 (InputState + PlayerState seqlock slots), then wire Skyrim Sprint → ER dodge → PlayerState back to Skyrim.
 
 ## Handoff notes
-**P3 step 2, dodge injection (stuck after 2 attempts, 2026-10-04).** Goal: the hidden ER player dodges from code, with ER's own gating intact.
-Tried: (1) writing `action_requests.sp_move`: the engine rebuilds it every PreBehavior. (2) Holding the virtual pad slot for `Backstep`:
-ER's in-game pad poll reads it as pressed, but the player's action request never sets. Evidence, frame order and hypotheses:
-`docs/research/elden-ring-input.md` ("P3 in-game results"). Cheapest next test: the same self-test with the ER window visible and focused
-(`tools/dev.ps1 -Target er -Game eldenring -Restart -ErSelfTest dodge -ErProbe -ErVisible`). The test character is idle in m10_01_00_00.
+**P3 step 2, dodge injection (stuck, session 2, 2026-10-04).** Goal: the hidden ER player dodges from code, with ER's own gating intact.
+Session 2: with the window **visible + focused**, the virtual Backstep hold reaches `CSChrActionRequestModule` exactly like a real press (requests,
+new press, hold timer, release), but the player still doesn't dodge, for any hold length (4 to 30 frames). The idle gating masks are the same for a
+real tap and ours. So the behavior reads input from another place, most likely the player's pad manipulator (untyped). Hidden, the request
+doesn't even reach the module. Details and next candidates: `docs/research/elden-ring-input.md` ("session 2 results"). The next step needs new
+ER struct offsets, so plan it first.
