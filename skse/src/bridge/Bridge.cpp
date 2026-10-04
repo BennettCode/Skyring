@@ -216,7 +216,7 @@ namespace sxer::bridge
 		hooks::InstallSprintSwallow();
 		hooks::InstallMoveSwallow();
 		input::Install();
-		SKSE::log::info("[core] hooks installed: PlayerCharacter::Update (vfunc 0xAD) → InputState/PlayerState slots, SprintHandler::CanProcess "
+		SKSE::log::info("[core] hooks installed: PlayerCharacter::Update (vfunc 0xAD; pose proof F7) → InputState/PlayerState slots, SprintHandler::CanProcess "
 		                "(vfunc 0x1, vanilla sprint off while bridged), MovementHandler::CanProcess (vfunc 0x1, keys off during a dodge), input sink (Sprint → Dodge, movement keys → move stick, F10 toggle)");
 	}
 

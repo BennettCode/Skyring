@@ -35,7 +35,7 @@ window come back every frame; coordinate conversion measured (`protocol/src/coor
 
 ## Next 3 steps (P4, `docs/P4-PLAN.md`)
 1. Step 5 roll animation by ER pose streaming (`docs/POSE-PLAN.md`): step 1 done (ER pose found, `docs/research/elden-ring-pose.md`);
-   next the Skyrim one-bone proof (step 2).
+   step 2 done (bone writes after PlayerCharacter::Update show on screen); next protocol v4 PoseState (step 3).
 2. Step 6: Skyrim's stamina bar mirrors ER's.
 3. Step 7: NPC hits during ER i-frames are cancelled.
 

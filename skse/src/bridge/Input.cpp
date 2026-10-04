@@ -20,6 +20,8 @@ namespace sxer::input
 		std::array<std::atomic<bool>, 8> g_seenDevice{};
 		// Held movement keys: forward, back, strafe left, strafe right.
 		std::array<std::atomic<bool>, 4> g_move{};
+		// Keyboard keys held right now, by DirectInput scan code (debug keys, e.g. F7/F8 for the pose proof).
+		std::array<std::atomic<bool>, 256> g_key{};
 		// User events already logged once (main thread only), so the log shows which key/button maps to which event.
 		std::vector<std::string> g_seenEvents;
 
@@ -71,6 +73,9 @@ namespace sxer::input
 						continue;
 					}
 					const auto* button = e->AsButtonEvent();
+					if (e->GetDevice() == RE::INPUT_DEVICE::kKeyboard && button->GetIDCode() < g_key.size()) {
+						g_key[button->GetIDCode()].store(button->IsPressed(), std::memory_order_relaxed);
+					}
 					if (e->GetDevice() == RE::INPUT_DEVICE::kKeyboard && button->GetIDCode() == kToggleKey && button->IsDown()) {
 						g_bridgeOn.store(!g_bridgeOn.load(std::memory_order_relaxed), std::memory_order_relaxed);
 					}
@@ -109,6 +114,8 @@ namespace sxer::input
 	bool BridgeOn() { return g_bridgeOn.load(std::memory_order_relaxed); }
 
 	bool SprintHeld() { return g_sprint.load(std::memory_order_relaxed); }
+
+	bool KeyHeld(std::uint32_t a_scanCode) { return a_scanCode < g_key.size() && g_key[a_scanCode].load(std::memory_order_relaxed); }
 
 	const char* SprintDevice() { return DeviceName(g_sprintDevice.load(std::memory_order_relaxed)); }
 

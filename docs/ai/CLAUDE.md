@@ -192,6 +192,7 @@ Paths are relative to `reference/` (studied 2026-10-04). **A value or offset fro
 | Killcraft (MIT) | ULTRAKILL host (BepInEx/Harmony C#) + SkyCraft's hidden Minecraft | `src/{Host,Link,Combat,Patches}.cs` |
 | GTA-San-AnSkateas (own code **unlicensed: ideas only**) | GTA SA host + in-process Rust Skate 3 engine; pose streamed onto CJ | `mashup/docs/SKATE.md`, `sa-plugin/src/main.cpp` 1–7 (frame order) |
 | 2010-rust-rewrite-mashup (Apache-2.0; `skate/`, `third_party/` unclear) | one Rust process: MW2 rewrite host + headless Skate 3, pose retargeted onto the soldier | `AGENT.md`, `CONTEXT.md`, `crates/render_anim/src/skate{.rs,/rig.rs}` |
+| SkyCraft-SkateBridge (no license), modern-warfare-2-ai (Apache-2.0) | plans only, no code yet: Skate 3 in Skyrim/SkyCraft; MW2+Minecraft+Skate+Skyrim. Both plan the rig retarget from the mashup's `rig.rs` | `docs/MVP-PLAN.md`, `docs/SKYCRAFT-INTEGRATION.md` |
 | ai-game-modding-guides (MIT) | the method | `guides/02`, `05`, `09`, `templates/` |
 
 **The shared recipe (what we replicate):**

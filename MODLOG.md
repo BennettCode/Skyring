@@ -4,6 +4,15 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: POSE-PLAN step 2, Skyrim one-bone proof (Skyrim only)
+- **Changed:**
+  - `skse/src/bridge/Pose.{h,cpp}` (new): logs the third-person bone tree and each skinned geometry's bones (the bind-pose source) once. While F7 is held it turns the pelvis 45° right after `PlayerCharacter::Update`, using `local.rotate` + `UpdateDownwardPass`, and traces whether the write is still there at the next Update.
+  - `bridge/Input`: `KeyHeld(scan code)`. `hooks/PlayerUpdate.cpp` calls the pose code before and after the original Update.
+- **Tested:** Skyrim, keyboard. User: "F7 brought the legs out". A write after Update shows on screen; the animation re-poses the skeleton before the next Update.
+  - A trial `UpdateAnimation` (vfunc 0x7D) hook showed it runs on a worker thread, once per frame. The hook was removed again.
+  - `tests/run-tests.ps1` green.
+- **Result:** ✔ step 2 accepted. Notes: `docs/research/skyrim-hooks.md` "Posing the player's skeleton". Also checked SkyCraft-SkateBridge and modern-warfare-2-ai (Skyrim + Skate plans). Neither has pose code yet; both plan the same `rig.rs` retarget we use. Next: step 3, protocol v4 PoseState.
+
 ## 2026-10-04: POSE-PLAN step 1, ER skeleton pose found (ER only)
 - **Changed:**
   - `er-plugin/src/pose.rs` (new, research): `pose_probe=1` / `tools/dev.ps1 -ErPoseProbe`. A one-time object-graph walk from the opaque pose pointers, using safe reads (ReadProcessMemory on the own process) and RTTI names. It detects transform and bone-name arrays, then samples them during rolls, and logs the parents, the bind pose and the key bones.

@@ -68,3 +68,25 @@ before use (a missing id makes CommonLib abort the game at load).
   `ThirdPersonState.freeRotationEnabled/freeRotation.x` set to the difference: the logged heading stays on the camera yaw the next frame
   (the camera state re-aligns the body). Confidence: verified by test (2026-10-04, 7 rolls). Turning the body needs a camera-state hook
   (how True Directional Movement does it) or a different animation source.
+
+## Posing the player's skeleton (POSE-PLAN step 2, 2026-10-04)
+- **Write point:** right after `PlayerCharacter::Update` (vfunc 0xAD, our existing hook), on the main thread.
+  - Set `NiAVObject::local.rotate`, then call `UpdateDownwardPass(NiUpdateData{}, 0)` on that node. Both are virtual, so no new Address Library ids.
+  - Test: F7 turns the pelvis 45° and the legs visibly turn.
+  - The animation re-poses the skeleton before the next Update, so the write must be repeated every frame. The trace shows our value always gone by the next pre-Update.
+- **`UpdateAnimation` (vfunc 0x7D)** is called once per frame for the player (595 times in 10 s), but on a **worker thread**. Not used: writing there would race the main thread.
+- **Skeleton:** the third-person 3D is `Skeleton.nif` (`Get3D(false)`). Bones, child<parent:
+  | Chain | Bones |
+  |---|---|
+  | Root | NPC Root [Root] < NPC; NPC COM [COM ] < Root |
+  | Legs | NPC Pelvis [Pelv] < COM; NPC L/R Thigh [LThg]/[RThg] < Pelvis; NPC L/R Calf [LClf]/[RClf]; NPC L/R Foot [Lft ]/[Rft ] |
+  | Spine | NPC Spine [Spn0] < **COM** (not the pelvis); Spine1 [Spn1]; Spine2 [Spn2]; NPC Neck [Neck]; NPC Head [Head] |
+  | Left arm | NPC L Clavicle [LClv] < Spine2; NPC L UpperArm [LUar]; NPC L Forearm [LLar]; NPC L Hand [LHnd] |
+  | Right arm | NPC R Clavicle [RClv] < Spine2; NPC R UpperArm [RUar]; NPC R Forearm [RLar]; NPC R Hand [RHnd] |
+  | Helpers | upper-arm twist, pauldrons, skirt bones, WEAPON/SHIELD/QUIVER, AnimObjectA/B/L/R |
+
+  Note the trailing spaces in `[COM ]`, `[Lft ]` and `[Rft ]`. The shape matches ER's skeleton: legs under the pelvis, spine under the root (`docs/research/elden-ring-pose.md`).
+- **Bind pose source:** the body's skinned geometry (`BSGeometry` → `skinInstance` → `NiSkinData::boneData[i].skinToBone`, bones in `skinInstance->bones`).
+  - The default body has 26 bones, with the pelvis at index 0.
+  - Pelvis skinToBone: rotation = identity, t = (0, 0, −68.91) Skyrim units.
+  - Pelvis world scale is 1.03 (race height).

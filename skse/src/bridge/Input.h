@@ -11,6 +11,8 @@ namespace sxer::input
 	bool BridgeOn();
 	// Sprint user event held right now (any device).
 	bool SprintHeld();
+	// Keyboard key held right now (DirectInput scan code). For debug keys.
+	bool KeyHeld(std::uint32_t a_scanCode);
 	// Device of the last Sprint event: "keyboard", "mouse", "gamepad", ... (for the log).
 	const char* SprintDevice();
 	// Movement keys held right now (Forward/Back/Strafe Left/Strafe Right user events, keyboard): x = right - left,
