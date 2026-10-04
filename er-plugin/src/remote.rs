@@ -2,6 +2,7 @@
 //! - [`DodgeFromSkyrim`] (in `actions::inject_group()`): Skyrim's held Dodge → the virtual Backstep key, the same way the step-2
 //!   self-test presses it (hold Backstep, BackstepTapped on the press frame only). ER's own gating decides what happens
 //!   (tap = backstep/roll, hold = dash). Stale or disconnected input = nothing held (fail-safe).
+//!   Skyrim's movement keys (`move_x/move_y`) → the virtual move stick, so Dodge + direction = roll (P3 step 5).
 //! - [`publish_state`] (ChrIns_PostPhysics in world, FrameBegin otherwise): the player snapshot → PlayerState every frame.
 
 use std::sync::Mutex;
@@ -27,11 +28,13 @@ pub struct DodgeFromSkyrim {
     fresh: bool,
     held: bool,
     held_frames: u32,
+    /// Move stick we hold (x right, y forward); (0, 0) = not holding, so a real keyboard still works with `-ErVisible`.
+    moving: (f32, f32),
 }
 
 impl DodgeFromSkyrim {
     pub fn new() -> Self {
-        Self { reader: None, last_input: None, fresh: false, held: false, held_frames: 0 }
+        Self { reader: None, last_input: None, fresh: false, held: false, held_frames: 0, moving: (0.0, 0.0) }
     }
 
     pub fn run(&mut self) {
@@ -63,15 +66,31 @@ impl DodgeFromSkyrim {
         // SAFETY: task callbacks run on the game's main thread.
         let player = unsafe { game::main_player() };
         let held = is_fresh && player.is_some() && input.is_some_and(|i| i.buttons & DODGE != 0);
+        let moving = match input {
+            Some(i) if is_fresh && player.is_some() => (i.move_x.clamp(-1.0, 1.0), i.move_y.clamp(-1.0, 1.0)),
+            _ => (0.0, 0.0),
+        };
+        if moving != self.moving {
+            let seq = input.map_or(0, |i| i.seq);
+            crate::info!("input", "frame={frame} move x={:.2} y={:.2} (InputState seq={seq})", moving.0, moving.1);
+            // SAFETY: main thread. The edge to (0, 0) writes the release once.
+            unsafe { pad::set_move(moving.0, moving.1) };
+            self.moving = moving;
+        } else if moving != (0.0, 0.0) {
+            // SAFETY: main thread. PadStep re-copies the device data each frame, so a held stick is written every frame.
+            unsafe { pad::set_move(moving.0, moving.1) };
+        }
         // SAFETY (all pad calls): main thread.
         if held && !self.held {
             let (i, s) = (input.unwrap(), game::snapshot(player.unwrap()));
             crate::info!(
                 "input",
-                "frame={frame} Dodge down (InputState frame={} seq={} age={}ms) → Backstep; before: stamina={} anim={}",
+                "frame={frame} Dodge down (InputState frame={} seq={} age={}ms, move x={:.2} y={:.2}) → Backstep; before: stamina={} anim={}",
                 i.frame,
                 i.seq,
                 now.saturating_sub(i.time_ms),
+                moving.0,
+                moving.1,
                 s.stamina,
                 s.anim_id
             );

@@ -57,6 +57,72 @@ pub unsafe fn set_digital(key: UserInputKey, down: bool) -> usize {
     slots.len()
 }
 
+/// Virtual analog slots that feed `key` as a stick axis (IsStickMoving): the movement keys MoveForwards/Backwards/Left/Right.
+///
+/// # Safety
+/// Main thread only (task callback).
+pub unsafe fn analog_slots(key: UserInputKey) -> Vec<i32> {
+    let Ok(pads) = (unsafe { FD4PadManager::instance() }) else { return Vec::new() };
+    let Some(pad) = pads.get_in_game_pad() else { return Vec::new() };
+    let groups = unsafe { pad.input_type_group.as_ref() };
+    let Some(group) = groups.find(&key) else { return Vec::new() };
+    let key_assign = unsafe { pad.key_assign.as_ref() };
+    group
+        .iter()
+        .filter(|(_, ty)| *ty == InputType::IsStickMoving)
+        .filter_map(|(mapped, _)| key_assign.get_virtual_input_index(mapped))
+        .collect()
+}
+
+/// Sets every virtual analog slot of `key` to `value`. Returns how many slots were written (0 = not available yet).
+///
+/// # Safety
+/// Main thread only (task callback).
+pub unsafe fn set_analog(key: UserInputKey, value: f32) -> usize {
+    let slots = unsafe { analog_slots(key) };
+    let Ok(pads) = (unsafe { FD4PadManager::instance_mut() }) else { return 0 };
+    let Some(pad) = pads.get_in_game_pad_mut() else { return 0 };
+    let device = unsafe { pad.pad_device.as_mut().virtual_multi_device.as_mut() };
+    for &index in &slots {
+        device.set_virtual_analog_state(index as usize, value);
+    }
+    slots.len()
+}
+
+/// What ER's in-game pad reports for analog `key` right now. `None` = no pad yet.
+///
+/// # Safety
+/// Main thread only (task callback).
+pub unsafe fn poll_analog(key: UserInputKey) -> Option<f32> {
+    let pads = unsafe { FD4PadManager::instance() }.ok()?;
+    Some(pads.get_in_game_pad()?.poll_analog_input(key))
+}
+
+/// Holds the move stick: `x` right (-1..1), `y` forward (-1..1). Each direction key is one-sided: Forwards/Right take the positive
+/// part, Backwards/Left the **negative** part (a positive value there is ignored: P3 step 5 self-test). Returns how many slots were written.
+///
+/// # Safety
+/// Main thread only (task callback).
+pub unsafe fn set_move(x: f32, y: f32) -> usize {
+    use UserInputKey::*;
+    unsafe {
+        set_analog(MoveForwards, y.max(0.0))
+            + set_analog(MoveBackwards, y.min(0.0))
+            + set_analog(MoveRight, x.max(0.0))
+            + set_analog(MoveLeft, x.min(0.0))
+    }
+}
+
+/// Polled move keys as `F/B/L/R` values, for log lines.
+///
+/// # Safety
+/// Main thread only (task callback).
+pub unsafe fn move_polls() -> String {
+    use UserInputKey::*;
+    let p = |k| unsafe { poll_analog(k) }.unwrap_or(f32::NAN);
+    format!("{:.2}/{:.2}/{:.2}/{:.2}", p(MoveForwards), p(MoveBackwards), p(MoveLeft), p(MoveRight))
+}
+
 /// Every entry of `key`'s input-type group: (mapped input, type, virtual index, checked). Unlike `digital_slots` this keeps
 /// AreKeysUp / IsStickMoving entries and unmapped ones (P3 step 2 probe).
 ///

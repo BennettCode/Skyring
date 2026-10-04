@@ -4,7 +4,8 @@
 //!
 //! P3 step 2 self-test (`selftest=dodge` in skyrimxer_er.cfg): every PULSE_EVERY frames hold Backstep for the next length in
 //! HOLD_FRAMES, with BackstepTapped on the press frame only (what a real tap does), then release it, and watch the player for
-//! WATCH_FRAMES frames from a ChrIns_PostPhysics task, logging every change.
+//! WATCH_FRAMES frames from a ChrIns_PostPhysics task, logging every change. `selftest=roll` (P3 step 5) also holds a move direction
+//! on the virtual analog stick around each press, so ER rolls instead of backstepping.
 
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
@@ -36,8 +37,20 @@ pub fn inject_group() -> (CSTaskGroupIndex, &'static str) {
 }
 
 pub fn selftest_enabled() -> bool {
-    crate::config::get().selftest == "dodge"
+    matches!(crate::config::get().selftest.as_str(), "dodge" | "roll")
 }
+
+/// `selftest=roll`: each pulse also holds a move direction (cycled per pulse) from MOVE_LEAD frames before the press until
+/// MOVE_TAIL frames after the release, so ER rolls instead of backstepping (P3 step 5).
+fn selftest_roll() -> bool {
+    crate::config::get().selftest == "roll"
+}
+const MOVE_LEAD: u32 = 10;
+const MOVE_TAIL: u32 = 5;
+/// (x right, y forward, name) per pulse.
+const DIRECTIONS: [(f32, f32, &str); 4] = [(0.0, 1.0, "forward"), (1.0, 0.0, "right"), (0.0, -1.0, "back"), (-1.0, 0.0, "left")];
+/// Frames left holding the self-test direction (read by the watcher to log the polled analog values).
+static MOVE_LEFT: AtomicU32 = AtomicU32::new(0);
 
 /// Starts a WATCH_FRAMES watch window from `frame` (remote.rs calls this on each Dodge press from Skyrim).
 pub fn watch(frame: u64) {
@@ -70,11 +83,12 @@ fn probe_regions(player: &eldenring::cs::PlayerIns) -> [(&'static str, usize, Ve
 /// Runs in `inject_group()`. Self-test only for now; P3 step 4 feeds it from Skyrim's InputState.
 pub struct Injector {
     frames: u64,
+    dir: (f32, f32, &'static str),
 }
 
 impl Injector {
     pub fn new() -> Self {
-        Self { frames: 0 }
+        Self { frames: 0, dir: DIRECTIONS[0] }
     }
 
     pub fn run(&mut self) {
@@ -85,15 +99,33 @@ impl Injector {
         };
         self.frames += 1;
         let frame = crate::bridge::FRAMES.load(Ordering::Relaxed);
+        let next = PULSES.load(Ordering::Relaxed) as usize;
+        if selftest_roll() && self.frames % PULSE_EVERY == PULSE_EVERY - MOVE_LEAD as u64 && PULSE_LEFT.load(Ordering::Relaxed) == 0 {
+            // The pulse after this one: same hold length the next block picks.
+            let hold = HOLD_FRAMES[next % HOLD_FRAMES.len()];
+            self.dir = DIRECTIONS[next % DIRECTIONS.len()];
+            // SAFETY: main thread.
+            let slots = unsafe { [UserInputKey::MoveForwards, UserInputKey::MoveRight].map(|k| pad::analog_slots(k)) };
+            crate::info!("action", "frame={frame} selftest: hold move {} for {MOVE_LEAD} frames before the press; analog slots F/R={slots:?}", self.dir.2);
+            MOVE_LEFT.store(MOVE_LEAD + hold + 1 + MOVE_TAIL, Ordering::Relaxed);
+        }
+        let move_left = MOVE_LEFT.load(Ordering::Relaxed);
+        if move_left > 0 {
+            let (x, y) = if move_left > 1 { (self.dir.0, self.dir.1) } else { (0.0, 0.0) };
+            // SAFETY: main thread. Held while move_left > 1; the last frame writes the release.
+            unsafe { pad::set_move(x, y) };
+            MOVE_LEFT.store(move_left - 1, Ordering::Relaxed);
+        }
         if self.frames % PULSE_EVERY == 0 && PULSE_LEFT.load(Ordering::Relaxed) == 0 {
             let n = PULSES.fetch_add(1, Ordering::Relaxed) + 1;
             let s = game::snapshot(player);
             // SAFETY: main thread.
             let slots = unsafe { pad::digital_slots(UserInputKey::Backstep) };
             let hold = HOLD_FRAMES[(n as usize - 1) % HOLD_FRAMES.len()];
+            let dir = if selftest_roll() { self.dir.2 } else { "none" };
             crate::info!(
                 "action",
-                "frame={frame} selftest pulse #{n}: hold Backstep {hold} frames then release; before: stamina={} anim={} \
+                "frame={frame} selftest pulse #{n}: hold Backstep {hold} frames then release (move {dir}); before: stamina={} anim={} \
                  slots (mapped, index, checked)={slots:?}",
                 s.stamina,
                 s.anim_id
@@ -211,7 +243,7 @@ impl Watcher {
             crate::info!(
                 "action",
                 "frame={frame} +{since}: hp={} stamina={} anim={} iframe={} dodging={} ev_flags={ev_flags:#04x} | requests.sp_move={} \
-                 new_presses.sp_move={} readback_new.sp_move={} roll_timer={:.3}",
+                 new_presses.sp_move={} readback_new.sp_move={} roll_timer={:.3} mv(F/B/L/R)={}",
                 s.hp,
                 s.stamina,
                 s.anim_id,
@@ -220,7 +252,9 @@ impl Watcher {
                 ar.action_requests.sp_move() as u8,
                 ar.new_action_presses.sp_move() as u8,
                 ar.readback_new_presses.sp_move() as u8,
-                ar.action_timers.roll
+                ar.action_timers.roll,
+                // SAFETY: main thread.
+                unsafe { pad::move_polls() }
             );
         }
         let regions = probe_regions(player);

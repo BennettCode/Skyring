@@ -4,6 +4,18 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P3: roll direction: Skyrim W/A/S/D → ER move stick (P3 accept met)
+- **Changed:** `er-plugin/src/pad.rs`: analog slot helpers (`analog_slots`, `set_analog`, `poll_analog`, `set_move`, `move_polls`).
+  `remote.rs`: fresh `move_x/move_y` from Skyrim → ER's MoveForwards/Backwards/Left/Right analog slots every frame while held, one release
+  write, logged on change. `actions.rs`: `selftest=roll` (direction cycled per pulse, held 10 frames before the press until 5 after the release),
+  the watch line shows the polled stick. Skyrim `bridge/Input.cpp`: Forward/Back/Strafe Left/Strafe Right user events → `MoveAxes()`;
+  `Bridge.cpp` writes them into InputState and logs changes. `tools/dev.ps1 -ErSelfTest roll`. No protocol change (fields were in v2).
+- **Tested:** ER self-test 1: forward/right rolled, back/left only backstepped (positive values ignored there). Self-test 2 with negative
+  Backwards/Left: 7/7 short taps in all four directions roll (27110, dodge flag 27 frames). Both games (user, keyboard): 8/8 Sprint + direction
+  → roll, Skyrim `IFrame on` 34–51 ms after the release and off ~450 ms later, HUD "i-frames yes"; 2/2 Sprint alone → backstep, "i-frames no".
+  `tests/run-tests.ps1` green.
+- **Result:** ✔ P3 accept met (stamina drop in combat earlier, i-frame window now). Next: coordinate/yaw test, the last P3 item.
+
 ## 2026-10-04: P3: i-frame window found (rolls set FLAG_AS_DODGING)
 - **Changed:** `er-plugin/src/game.rs`: `iframe` = `action_modifiers_flags` bit 1 (`dodging`, TAE FLAG_AS_DODGING) or an invincibility bit
   (0/3/5), was bit 0 only. `actions.rs`: the Watcher logs HP, opens a watch window on every dodge animation (real presses too), and logs every HP

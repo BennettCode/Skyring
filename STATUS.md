@@ -34,9 +34,9 @@ Both plugins share the region `Local\SkyrimXER_v2`, handshake, exchange heartbea
 4. ~~Wire the loop~~ ✔ both games: Skyrim Sprint (keyboard) → hidden ER backsteps → anim/state back in Skyrim's log (~170 ms).
    P3 accept: stamina drop ✔ in combat (136→128 in Skyrim's log and HUD). I-frame source ✔ found: `action_modifiers_flags` bit 1
    (FLAG_AS_DODGING), set ~27 frames per **roll**; backsteps have none (`docs/research/elden-ring-state.md`).
-5. **Next: roll direction.** Skyrim movement keys → `InputState.move_x/move_y` → ER virtual analog `MoveForwards/Backwards/Left/Right`
-   at PadStep, so Sprint + direction = roll. Then the both-games check (Skyrim log `IFrame on/off`, HUD) closes the P3 accept, then the
-   coordinate/yaw test.
+5. ~~Roll direction~~ ✔ both games: Skyrim W/A/S/D → `move_x/move_y` → ER virtual analog stick (Backwards/Left take negative values).
+   Sprint + direction = roll; Skyrim logs `IFrame on/off` (~450 ms) and the HUD says "i-frames yes". **P3 accept met.**
+6. **Next: coordinate/yaw test** (RECON §D) → `protocol/src/coords.rs` + C++ mirror, result in DESIGN §6. Then P3 is done → P4 plan (plan mode).
 
 ## Handoff notes
 **I-frame search solved (2026-10-04, attempt 3).** Attempts 1–2 diffed memory only during *backsteps*, which set no invincibility at

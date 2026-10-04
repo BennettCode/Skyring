@@ -53,14 +53,15 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
 ## What works today
 
 - Elden Ring runs **hidden** at a full 60 fps while you play Skyrim (it keeps running when its window isn't focused).
-- **Sprint in Skyrim (Left Shift) → the Elden Ring character dodges.** Elden Ring's own rules decide what happens (tap = backstep).
+- **Sprint in Skyrim (Left Shift) → the Elden Ring character dodges.** Hold a movement key (W/A/S/D) while you tap Sprint and it **rolls**
+  in that direction; tap Sprint alone and it backsteps. Elden Ring's own rules decide what happens (tap = dodge, hold = dash).
 - **Elden Ring's state comes back to Skyrim every frame:** stamina (a dodge costs stamina in combat), HP, animation.
-  Skyrim shows a short on-screen message after each dodge, e.g. `ER dodge: anim 27010 | stamina 136->128`.
+  Skyrim shows a short on-screen message after each dodge, e.g. `ER dodge: anim 27110 | stamina 136->128 | i-frames yes`.
+- **Roll i-frames reach Skyrim:** Skyrim knows the exact window (about 0.45 s) in which the Elden Ring roll makes you invincible.
 - Fail-safe: if either game closes, crashes or pauses, the other one notices within a moment and stops acting on stale input.
 
 **Not working yet:** your Skyrim character doesn't move or fight differently yet (that's P4/P5). **Controller support isn't added yet:**
-Skyrim is keyboard-and-mouse only for now (details below). Sprint triggers Elden Ring's backstep, which has no i-frames. The roll's i-frame
-window is already read, but it only reaches Skyrim once rolls work (direction from your movement keys comes next).
+Skyrim is keyboard-and-mouse only for now (details below). The i-frames are known to Skyrim but don't protect your Skyrim character yet (P4).
 
 ## Progress
 
@@ -69,7 +70,7 @@ window is already read, but it only reaches Skyrim once rolls work (direction fr
 | P0 | Tooling and version research | ✅ done |
 | P1 | Both plugins load and log | ✅ done |
 | P2 | Shared memory link: handshake, heartbeats, crash fail-safe | ✅ done |
-| **P3** | **Dodge in Skyrim → Elden Ring dodges → its stamina comes back** | 🔄 almost done: hidden ER at 60 fps ✅, Skyrim Sprint → ER dodge ✅, stamina back in Skyrim ✅, on-screen feedback ✅, i-frame window found ✅, roll direction ⏳ |
+| **P3** | **Dodge in Skyrim → Elden Ring dodges → its stamina comes back** | 🔄 almost done: hidden ER at 60 fps ✅, Skyrim Sprint → ER dodge ✅, stamina back in Skyrim ✅, on-screen feedback ✅, rolls with i-frames reach Skyrim ✅, coordinate test ⏳ |
 | P4 | Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support | ⏳ |
 | P5 | Damage both ways uses Elden Ring's math (poise, stagger) | ⏳ |
 | P6 | Elden Ring-style HUD | ⏳ |

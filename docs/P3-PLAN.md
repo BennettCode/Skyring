@@ -88,6 +88,11 @@ ER character dodges (ER's own gating and stamina) → ER state (stamina, i-frame
 ### 5. Roll direction + coordinate test (finishes the ROADMAP P3 list)
 - Skyrim forward/strafe user events + gamepad move stick → `move_x/move_y`. ER: `set_virtual_analog_state` on MoveForwards/… at `PadStep`
   (the experiment: does ER then walk/roll in that direction?).
+- **Result, roll direction (2026-10-04):** Skyrim's Forward/Back/Strafe user events → `move_x/move_y` → ER `set_virtual_analog_state` on the
+  MoveForwards/Backwards/Left/Right slots (66/65/64/63) in WorldChrMan_Prepare, every frame while held. **Forwards/Right take +1,
+  Backwards/Left take −1** (a positive value there is ignored). ER self-test: 7/7 short taps in all four directions roll (27110, dodge flag
+  27 frames); 30-frame holds dash. Both games: 8/8 Sprint + direction → roll, Skyrim `IFrame on` 34–51 ms after the release, off ~450 ms
+  later, HUD "i-frames yes"; 2/2 Sprint alone → backstep, "i-frames no". **P3 accept met.**
 - Coordinate test per RECON §D: the same Skyrim input drives both. Walk N/E, compare position deltas + yaw in both logs → conversion in
   `protocol/src/coords.rs` + unit test + C++ mirror, result in DESIGN §6.
 

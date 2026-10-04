@@ -52,6 +52,7 @@ namespace sxer::bridge
 			std::optional<SlotReader<proto::PlayerState>> player;
 			PlayerWatch watch;
 			bool held = false;
+			input::Move move;
 			std::vector<float> frameMs;
 			std::vector<float> hookUs;
 			std::uint64_t nextReportMs = 0;
@@ -141,10 +142,10 @@ namespace sxer::bridge
 			SKSE::log::info("[perf] frame={} n={} frame_ms p50={:.2f} p95={:.2f} p99={:.2f} | our hook us p99={:.1f} max={:.1f}", a_frame, n, p50, p95,
 				p99, hook99, hookMax);
 			if (const auto& s = a_f.watch.Last()) {
-				SKSE::log::info("[state] sample: connected={} sprint={} | ER stamina={}/{} hp={}/{} fp={}/{} flags={:#x} anim={} er_frame={}", a_connected,
-					a_f.held, s->stamina, s->max_stamina, s->hp, s->max_hp, s->fp, s->max_fp, s->flags, s->anim_id, s->frame);
+				SKSE::log::info("[state] sample: connected={} sprint={} move={},{} | ER stamina={}/{} hp={}/{} fp={}/{} flags={:#x} anim={} er_frame={}",
+					a_connected, a_f.held, a_f.move.x, a_f.move.y, s->stamina, s->max_stamina, s->hp, s->max_hp, s->fp, s->max_fp, s->flags, s->anim_id, s->frame);
 			} else {
-				SKSE::log::info("[state] sample: connected={} sprint={} | no fresh PlayerState", a_connected, a_f.held);
+				SKSE::log::info("[state] sample: connected={} sprint={} move={},{} | no fresh PlayerState", a_connected, a_f.held, a_f.move.x, a_f.move.y);
 			}
 			a_f.frameMs.clear();
 			a_f.hookUs.clear();
@@ -171,7 +172,7 @@ namespace sxer::bridge
 
 		hooks::InstallPlayerUpdate();
 		input::Install();
-		SKSE::log::info("[core] hooks installed: PlayerCharacter::Update (vfunc 0xAD) → InputState/PlayerState slots, input sink (Sprint → Dodge)");
+		SKSE::log::info("[core] hooks installed: PlayerCharacter::Update (vfunc 0xAD) → InputState/PlayerState slots, input sink (Sprint → Dodge, movement keys → move stick)");
 	}
 
 	void OnFrame(float a_delta)
@@ -200,10 +201,17 @@ namespace sxer::bridge
 			f.held = held;
 			SKSE::log::info("[input] Dodge {} frame={} (Sprint from {})", held ? "down" : "up", frame, input::SprintDevice());
 		}
+		const auto move = input::MoveAxes();
+		if (move != f.move) {
+			f.move = move;
+			SKSE::log::info("[input] move x={} y={} frame={}", move.x, move.y, frame);
+		}
 		proto::InputState state{};
 		state.frame = frame;
 		state.time_ms = now;
 		state.buttons = held ? kDodge : 0;
+		state.move_x = move.x;
+		state.move_y = move.y;
 		f.input->Write(state);
 		f.watch.Update(f.player->Read(), connected, now);
 		UpdateHud(f, connected, pressed, now);

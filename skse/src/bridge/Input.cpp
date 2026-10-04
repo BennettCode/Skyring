@@ -15,6 +15,8 @@ namespace sxer::input
 		std::atomic<bool> g_sprint{ false };
 		std::atomic<int> g_sprintDevice{ -1 };
 		std::array<std::atomic<bool>, 8> g_seenDevice{};
+		// Held movement keys: forward, back, strafe left, strafe right.
+		std::array<std::atomic<bool>, 4> g_move{};
 		// User events already logged once (main thread only), so the log shows which key/button maps to which event.
 		std::vector<std::string> g_seenEvents;
 
@@ -66,9 +68,16 @@ namespace sxer::input
 						continue;
 					}
 					const auto* button = e->AsButtonEvent();
-					if (button->QUserEvent() == events->sprint) {
+					const auto& name = button->QUserEvent();
+					if (name == events->sprint) {
 						g_sprint.store(button->IsPressed(), std::memory_order_relaxed);
 						g_sprintDevice.store(static_cast<int>(e->GetDevice()), std::memory_order_relaxed);
+					}
+					const RE::BSFixedString* moves[] = { &events->forward, &events->back, &events->strafeLeft, &events->strafeRight };
+					for (std::size_t i = 0; i < g_move.size(); ++i) {
+						if (name == *moves[i]) {
+							g_move[i].store(button->IsPressed(), std::memory_order_relaxed);
+						}
 					}
 				}
 				return RE::BSEventNotifyControl::kContinue;
@@ -94,4 +103,10 @@ namespace sxer::input
 	bool SprintHeld() { return g_sprint.load(std::memory_order_relaxed); }
 
 	const char* SprintDevice() { return DeviceName(g_sprintDevice.load(std::memory_order_relaxed)); }
+
+	Move MoveAxes()
+	{
+		const auto held = [](std::size_t i) { return g_move[i].load(std::memory_order_relaxed) ? 1.0f : 0.0f; };
+		return { held(3) - held(2), held(0) - held(1) };
+	}
 }

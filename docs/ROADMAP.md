@@ -32,8 +32,11 @@ Tick boxes as you go. Keep each phase small. If a phase grows, split it.
 - [x] ER → Skyrim: PlayerState every frame. Skyrim logs stamina/anim edges and shows an on-screen summary per dodge (2026-10-04)
 - [x] Stamina drop visible in Skyrim's log with timestamps (in combat: 136→128; out of combat ER charges no stamina for dodges)
 - [x] I-frame window found: ER's dodge flag (TAE FLAG_AS_DODGING) is set for ~27 frames of every roll and no hit lands while it's set. Backsteps have none, so Skyrim sees it once rolls work (2026-10-04, `docs/research/elden-ring-state.md`)
-- [ ] Roll direction from Skyrim's movement input + coordinate/yaw conversion test written and passing
-**Accept:** pressing dodge in Skyrim → ER rolls → Skyrim's log shows the stamina drop and the i-frame window with timestamps.
+- [x] Roll direction: Skyrim's movement keys (W/A/S/D) steer ER's move stick, so Sprint + direction = roll. Skyrim logs `IFrame on/off` for every
+  roll (~450 ms, starting 34–51 ms after the release) and the HUD says "i-frames yes"; Sprint alone still backsteps with none (2026-10-04)
+- [ ] Coordinate/yaw conversion test written and passing
+**Accept:** pressing dodge in Skyrim → ER rolls → Skyrim's log shows the stamina drop and the i-frame window with timestamps. ✔ met 2026-10-04
+(stamina drop in combat, i-frame window from rolls); the coordinate test is the last P3 item.
 
 ## P4: Movement & defense
 - [ ] **Controller support:** PS5 DualSense in Skyrim. Skyrim only reads XInput, so it needs Steam Input, which doesn't apply when SKSE starts

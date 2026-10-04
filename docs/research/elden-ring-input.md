@@ -95,6 +95,15 @@ Open hypotheses (next session):
   the window to really be foreground; our two-flag spoof (`is_game_window_focused`, `is_back_ground_window`) isn't enough. Next: find that check (P3 step 2, Stage 3).
 - Stamina stayed 101 for both the real and the injected backstep (out of combat, idle); not a difference.
 
+## P3 step 5: move stick from code (2026-10-04)
+- The movement keys are analog slots on the same VirtualMultiDevice: `MoveForwards` → 66, `MoveBackwards` → 65, `MoveLeft` → 64,
+  `MoveRight` → 63 (`set_virtual_analog_state`, written in WorldChrMan_Prepare every frame while held, like the digital keys).
+- **Sign:** Forwards/Right take a positive value (+1 = full), **Backwards/Left take a negative value** (−1 = full). A positive value on
+  Backwards/Left is ignored (no walking, the dodge stays a backstep). `CSPad::poll_analog_input` reads back exactly what was written.
+- Stick held + Backstep tap (4 or 9 frames, BackstepTapped on the press frame) → roll anim 27110 with the dodge flag for 27 frames, in all
+  four directions (hidden window). A 30-frame hold with a direction = dash (12020210 → 12022200), ER's normal hold behaviour.
+- The roll direction is relative to ER's camera; mapping it to Skyrim's world is the coordinate test.
+
 ## P3 step 2, session 3: hidden window solved (2026-10-04)
 - **Focus probe** (`er-plugin/src/focus.rs`, change-only, FrameBegin before our spoof + WorldChrMan_Prepare): with ER not foreground,
   `FD4PadManager.is_back_ground_window` is **set to 1 again during PadStep every frame**; our FrameBegin spoof was too early.
