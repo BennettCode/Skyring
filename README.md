@@ -26,6 +26,13 @@ which may be different from how other people use their AI. So **expect bugs**, r
 
 Feedback, bug reports and ideas are welcome. You can find me on Discord: **bennetteu**.
 
+## Made with Claude
+
+This mod is built with **Claude Opus 5.5** in Claude Code, guided by a `CLAUDE.md` written for this project (rules, safety limits,
+build and test commands, and how to run both games for playtests).
+**Want Claude to work on this project the same way? [Get the project's CLAUDE.md](docs/ai/CLAUDE.md)**, copy it to the repository root
+as `CLAUDE.md`, and start Claude Code in the repo.
+
 ## How it works
 
 Neither game is rewritten. Both run at the same time: **Skyrim is the visible host**, and **Elden Ring runs hidden in the background**
@@ -147,6 +154,7 @@ Run scripts with `powershell -ExecutionPolicy Bypass -File <script>`. More in [`
 | `protocol/` | Shared-memory protocol: one TOML schema → generated C++ header + Rust module |
 | `tools/` | PowerShell dev scripts, protocol generator, fake game peers for testing |
 | `docs/` | Design, roadmap, research notes (plain-language reverse-engineering notes; no game code) |
+| `docs/ai/` | The `CLAUDE.md` this project is built with (copy it to the repo root to use it) |
 
 ## Credits
 
@@ -156,5 +164,5 @@ Full list and licenses: [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
 ## Legal
 
 Unofficial fan project. Not affiliated with or endorsed by Bethesda Softworks, ZeniMax, FromSoftware or Bandai Namco.
-Offline/single-player only. Built with AI coding tools (Claude Code).
+Offline/single-player only. Built with AI coding tools (Claude Code, Claude Opus 5.5).
 License: **GPL-3.0-or-later** (see [`LICENSE`](LICENSE)). The Skyrim plugin links CommonLibSSE-NG, which is GPL-3.0-or-later.

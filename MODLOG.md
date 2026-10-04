@@ -4,6 +4,12 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: Docs: "Made with Claude" + public CLAUDE.md
+- **Changed:** README "Made with Claude" section (built with Claude Opus 5.5 in Claude Code, guided by a project CLAUDE.md) linking a new
+  public copy `docs/ai/CLAUDE.md` (the project's agent instructions, cleaned of machine paths and private notes; copy it to the repo root to use it).
+  Repository layout + Legal lines mention it.
+- **Tested:** docs only; scanned the copy for private strings.
+
 ## 2026-10-04: P3: coordinate/yaw conversion measured (P3 done)
 - **Changed:** bounded `[coords]` samples on both sides (Skyrim `Bridge.cpp` `SampleCoords`: position + `GetAngleZ()`; ER `remote.rs`
   `sample_coords` in ChrIns_PostPhysics: position + yaw + move), max 1500 lines per session, only while moving. New `protocol/src/coords.rs`
