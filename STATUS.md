@@ -34,12 +34,24 @@ window come back every frame; coordinate conversion measured (`protocol/src/coor
   Continue each run (no warp in P3). The user tests with a DualSense (PS5) over USB in both games.
 
 ## Next 3 steps (P4, `docs/P4-PLAN.md`)
-1. Step 5 roll animation, fresh attempt (Handoff notes).
+1. Step 5 roll animation: plan ER pose streaming onto the Skyrim skeleton (Handoff notes; fresh chat, plan mode).
 2. Step 6: Skyrim's stamina bar mirrors ER's.
 3. Step 7: NPC hits during ER i-frames are cancelled.
 
 ## Handoff notes
-**P4 step 5, roll animation: stuck after 2 attempts (2026-10-04).** Goal: a roll animation in Skyrim with vanilla files only.
+**P4 step 5, roll animation: vanilla route stopped after 3 attempts (2026-10-04, stuck rule).** Attempt 3 (Sneak through the game's
+SneakHandler, forward move input, Silent Roll perk added while bridged; `skse/src/bridge/VanillaInput.cpp`, `kSneakRollTrick` now off):
+the roll plays and sneak toggles cleanly, but **only forward**: the third-person camera re-aligns the body to the camera yaw every frame
+(SetHeading + ThirdPersonState free rotation ignored). User, asked how the other merged games do it: GTA San AnSkateas **streams the hidden
+engine's bone pose onto the host character each frame** (`reference/GTA-San-AnSkateas`, `mashup/docs/SKATE.md`: `render_anim/src/skate/rig.rs`
+"maps Skate 3 bones onto the soldier skeleton"; no animation files converted or shipped). SkyCraft/FalloutCraft render the hidden game's
+pieces offscreen and composite them (our P8 stretch). **Recommended next (fresh chat, plan mode):** ER pose streaming. Research: where ER
+keeps the hidden character's final bone pose (eldenring-rs ChrIns has only opaque `hka_pose_importer` / `anim_skeleton_to_model_modifier`
+pointers, chr_ins.rs ~297), ER bone names vs Skyrim's (`NPC Pelvis`, `NPC Spine` ...), a per-frame protocol slot (~30 bones × quaternion),
+and the Skyrim write point after its animation update (NiNode local rotations + world update). Prove with one bone first.
+Alternatives: a dodge animation mod (TK Dodge RE + Pandora/Nemesis), or keep the slide.
+
+**P4 step 5, attempts 1–2 (2026-10-04).** Goal: a roll animation in Skyrim with vanilla files only.
 Tried: (1) `NotifyAnimationGraph("SneakSprintStartRoll")` → returns true, nothing plays. (2) Sneak trick in `Movement.cpp`
 (`kSneakRollTrick`, now off): SneakStart, SprintStart one frame later → the roll starts but is cut after ~8 frames (we zero
 `moveInputVec` during dodges, so the sprint ends), half the tries only crouch, the sneak eye stays on the HUD afterwards.

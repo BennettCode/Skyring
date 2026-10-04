@@ -4,6 +4,17 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P4 step 5, attempt 3: vanilla Silent Roll (off; handed off)
+- **Changed:** `skse/src/bridge/VanillaInput.{h,cpp}` (new): Sneak pressed through the game's SneakHandler with a synthetic ButtonEvent;
+  Silent Roll perk added while the bridge is on (removed on F10 if added). `Movement.cpp`: trick = Sneak press → SprintStart once sneaking
+  (retried) → forward move input for 0.48 s → sprint off + Sneak press; body turn via SetHeading + camera free rotation; chained rolls keep
+  sneak; the "press + ER moving" chain rule only for backsteps (it falsely restarted dodges in a roll's recovery). `kSneakRollTrick` = false.
+- **Tested:** both games, keyboard, 2 runs (~45 rolls). Sneak toggles cleanly, the roll plays, distances 98–101 %; but only forward (the
+  third-person camera re-aligns the body each frame), and run 1's weapon-drawn rolls got no SprintStart. User: "it isn't working".
+  `tests/run-tests.ps1` green.
+- **Result:** ✖ vanilla route stopped (3 attempts). Next: stream ER's bone pose onto the Skyrim skeleton (STATUS handoff), user's direction
+  ("do what the other merged games do").
+
 ## 2026-10-04: P4 step 4b: the hidden ER character is pinned (ER only)
 - **Changed:** `er-plugin/src/park.rs` rewritten: every frame (ChrIns_PostPhysics) the character's horizontal step is added to a virtual
   position and the character is put back on its spot (physics position + `chr_proxy_pos_update_requested`); PlayerState.pos = the virtual

@@ -4,6 +4,7 @@
 #include <numbers>
 
 #include "bridge/Coords.h"
+#include "bridge/VanillaInput.h"
 
 // Actor::ApplyCurrent = Actor vfunc 0x9D (CommonLib RE/A/Actor.h; called through the player's own vtable, no Address Library id):
 // Skyrim's "current" push (water currents), a velocity the character controller applies for a time, with collision.
@@ -40,14 +41,21 @@ namespace sxer::movement
 		// (a wall stops the player, so the target stops too), and the push is capped at kMaxSpeed.
 		constexpr float kMaxLeadUnits = 60.0f;
 		constexpr float kMaxSpeed = 1500.0f;
-		// The vanilla sneak-sprint roll (Silent Roll perk) is played for rolls within this angle of the body's facing (it only rolls
-		// forward); other directions slide. Experiment (P4 step 5, attempt 2): the vanilla roll is the sneak sprint (graph notifies
-		// tailSprint .. SprintStop), so the player is put into sneak (SneakStart) and sprints (SprintStart) one frame later; both are
-		// undone when the dodge ends.
+		// Roll animation (P4 step 5): the vanilla Silent Roll is sneak + sprint. Attempt 3: Sneak is pressed through the game's own
+		// SneakHandler (vanilla::PressSneak, so HUD/stealth follow), sprint starts once the player sneaks, and the move input holds the
+		// roll's key direction so the game keeps the sprint going. The vanilla roll only goes where the body faces, so in third person the
+		// body is turned to the roll heading for the roll while the camera's free rotation is set to the same angle the other way (camera
+		// stays put), then both are put back. After kVanillaRollS (a vanilla tap-roll: tailSprint .. SprintStop ~0.48 s) sprint stops and
+		// Sneak is pressed again. First person only animates rolls within kAnimMaxAngle of the facing. Attempt 2 (bits only, zero move
+		// input) cut the roll after ~8 frames, half the tries only crouched and the sneak eye stayed.
 		constexpr float kAnimMaxAngle = 1.05f;  // ~60 degrees
-		// OFF (2026-10-04, attempt 2 of 2): the roll starts (tailSprint + StartAnimatedCameraDelta) but SprintStop follows ~8 frames
-		// later (vanilla: ~29), about half the tries only crouch, and the HUD sneak eye stays up afterwards. See docs/P4-PLAN.md step 5.
+		// OFF (2026-10-04, attempt 3): Sneak via the handler works (sneak in/out clean, no lingering eye) and the roll plays, but only
+		// forward: the third-person camera puts the body back on the camera yaw every frame (SetHeading + free rotation had no effect).
+		// Next: stream ER's own animation pose onto the Skyrim skeleton (STATUS handoff).
 		constexpr bool kSneakRollTrick = false;
+		constexpr float kVanillaRollS = 0.48f;
+		// Frames to wait for the player to sneak, and for the graph to take SprintStart (refused for a frame or two with a weapon out).
+		constexpr int kSneakWaitFrames = 6;
 		constexpr float kChainSpeedMs = 1.0f;
 
 		struct State
@@ -73,9 +81,18 @@ namespace sxer::movement
 			float erSpeedMs = 0;
 			std::uint64_t pressFrame = 0;
 			bool pressed = false;
-			// Sneak-roll trick state: 0 = off, 1 = sneak started (sprint next frame), 2 = sprinting.
+			// Roll animation: 0 = off, 1 = Sneak pressed (waiting for the player to sneak), 2 = rolling (sprint on).
 			int trick = 0;
-			bool trickWasSneaking = false;
+			bool trickEnteredSneak = false;
+			int trickWait = 0;
+			float trickTime = 0;
+			// Move input held during the roll (PlayerControls moveInputVec convention: x right, y forward, camera-relative).
+			RE::NiPoint2 trickDir;
+			// Body turned for the roll (third person): camera yaw at the turn and the camera's free-rotation flag before it.
+			bool turned = false;
+			bool savedFreeRotation = false;
+			float turnCamYaw = 0;
+			int turnLogFrames = 0;
 		} g;
 
 		void Notify(RE::PlayerCharacter* a_player, const char* a_event)
@@ -84,21 +101,82 @@ namespace sxer::movement
 			SKSE::log::info("[move] roll animation: NotifyAnimationGraph('{}') = {}", a_event, ok);
 		}
 
-		void EndTrick(RE::PlayerCharacter* a_player)
+		float LookYaw(const RE::PlayerCharacter* a_player);
+
+		RE::ThirdPersonState* ThirdPerson()
+		{
+			auto* camera = RE::PlayerCamera::GetSingleton();
+			if (!camera || !camera->IsInThirdPerson()) {
+				return nullptr;
+			}
+			return static_cast<RE::ThirdPersonState*>(camera->currentState.get());
+		}
+
+		// Body faces the roll heading; the camera's free rotation takes the difference so the view doesn't move (every trick frame).
+		void TurnBody(RE::PlayerCharacter* a_player)
+		{
+			auto* tps = ThirdPerson();
+			if (!tps) {
+				return;
+			}
+			if (!g.turned) {
+				g.turned = true;
+				g.savedFreeRotation = tps->freeRotationEnabled;
+				g.turnCamYaw = LookYaw(a_player);
+				g.turnLogFrames = 3;
+				SKSE::log::info("[move] roll animation: body {:.3f} → {:.3f}, camera {:.3f} (free rotation was {} x={:.3f})", a_player->GetAngleZ(),
+					g.rollHeading, g.turnCamYaw, tps->freeRotationEnabled, tps->freeRotation.x);
+			} else if (g.turnLogFrames > 0) {
+				--g.turnLogFrames;
+				SKSE::log::info("[move] roll animation: body {:.3f} camera {:.3f} (camera at the turn {:.3f})", a_player->GetAngleZ(), LookYaw(a_player),
+					g.turnCamYaw);
+			}
+			a_player->SetHeading(g.rollHeading);
+			tps->freeRotationEnabled = true;
+			tps->freeRotation.x = std::remainder(g.turnCamYaw - g.rollHeading, 2.0f * std::numbers::pi_v<float>);
+		}
+
+		// Body back to where the camera looks, free rotation as it was.
+		void RestoreBody(RE::PlayerCharacter* a_player)
+		{
+			if (!g.turned) {
+				return;
+			}
+			g.turned = false;
+			a_player->SetHeading(g.turnCamYaw);
+			if (auto* tps = ThirdPerson()) {
+				tps->freeRotation.x = 0;
+				tps->freeRotationEnabled = g.savedFreeRotation;
+			}
+			SKSE::log::info("[move] roll animation: body back to {:.3f}, camera {:.3f}", g.turnCamYaw, LookYaw(a_player));
+		}
+
+		// a_keepSneak: a chained roll follows at once (pressing Sneak out and in again within a frame doesn't work).
+		void EndTrick(RE::PlayerCharacter* a_player, const char* a_why, bool a_keepSneak = false)
 		{
 			if (g.trick == 0) {
 				return;
 			}
 			auto* state = a_player->AsActorState();
-			if (g.trick == 2) {
+			if (state->actorState1.sprinting) {
 				state->actorState1.sprinting = 0;
 				Notify(a_player, "SprintStop");
 			}
-			if (!g.trickWasSneaking) {
-				state->actorState1.sneaking = 0;
-				Notify(a_player, "SneakStop");
+			if (auto* controls = RE::PlayerControls::GetSingleton()) {
+				controls->data.moveInputVec = { 0.0f, 0.0f };
 			}
+			RestoreBody(a_player);
+			const bool before = a_player->IsSneaking();
+			bool pressed = false;
+			if (g.trickEnteredSneak && before && !a_keepSneak) {
+				pressed = vanilla::PressSneak();
+			}
+			SKSE::log::info("[move] roll animation end ({}) after {:.2f} s: sneak {} → {} (Sneak pressed: {})", a_why, g.trickTime, before,
+				a_player->IsSneaking(), pressed);
 			g.trick = 0;
+			if (!a_keepSneak) {
+				g.trickEnteredSneak = false;
+			}
 		}
 
 		// Where the player looks: the camera's yaw (heading convention), or the body's heading without a camera.
@@ -111,8 +189,10 @@ namespace sxer::movement
 		}
 
 		bool IsDodgeAnim(std::int32_t a_anim) { return a_anim >= 0 && (a_anim % 1000000) / 1000 == 27; }
+		// Backsteps 27010 (+ stance prefix); rolls are 271xx.
+		bool IsBackstepAnim(std::int32_t a_anim) { return a_anim >= 0 && (a_anim % 1000000) / 100 == 270; }
 
-		void End(RE::PlayerCharacter* a_player, std::uint64_t a_frame, const char* a_why)
+		void End(RE::PlayerCharacter* a_player, std::uint64_t a_frame, const char* a_why, bool a_keepSneak = false)
 		{
 			const auto pos = a_player->GetPosition();
 			const float skyM = std::hypot(pos.x - g.startPos.x, pos.y - g.startPos.y) / coords::kSkyrimUnitsPerM;
@@ -120,7 +200,7 @@ namespace sxer::movement
 				g.frames, g.erFrames, g.erDistM, skyM, g.erDistM > 0.01f ? 100.0f * skyM / g.erDistM : 0.0f, a_frame);
 			g.active = false;
 			g.spent = true;
-			EndTrick(a_player);
+			EndTrick(a_player, "dodge end", a_keepSneak);
 		}
 
 		void Start(RE::PlayerCharacter* a_player, std::int32_t a_anim, const input::Move& a_move, std::uint64_t a_frame, const char* a_why)
@@ -141,17 +221,28 @@ namespace sxer::movement
 			SKSE::log::info("[move] dodge start ({}): anim={} move={},{} body {:.3f} camera {:.3f} → roll heading {:.3f} frame={}", a_why, a_anim, a_move.x,
 				a_move.y, a_player->GetAngleZ(), LookYaw(a_player), g.rollHeading, a_frame);
 			g.pressed = false;
-			// Vanilla roll animation for forward-ish rolls: enter sneak now, sprint next frame (Update).
+			// Vanilla roll animation: press Sneak now, sprint once the player sneaks (Update).
 			const float off = std::remainder(g.rollHeading - a_player->GetAngleZ(), 2.0f * std::numbers::pi_v<float>);
-			EndTrick(a_player);
-			if (kSneakRollTrick && steering && std::fabs(off) <= kAnimMaxAngle) {
-				auto* state = a_player->AsActorState();
-				g.trickWasSneaking = state->IsSneaking();
-				if (!g.trickWasSneaking) {
-					state->actorState1.sneaking = 1;
-					Notify(a_player, "SneakStart");
-				}
+			const auto* camera = RE::PlayerCamera::GetSingleton();
+			const bool firstPerson = camera && camera->IsInFirstPerson();
+			EndTrick(a_player, "new dodge", true);
+			if (kSneakRollTrick && steering && (!firstPerson || std::fabs(off) <= kAnimMaxAngle) && vanilla::HasRollPerk(a_player)) {
+				const float len = std::hypot(a_move.x, a_move.y);
+				g.trickDir = { a_move.x / len, a_move.y / len };
+				g.trickWait = 0;
+				g.trickTime = 0;
+				const bool sneaking = a_player->IsSneaking();
+				const bool pressed = !sneaking && vanilla::PressSneak();
+				// A chained roll keeps the sneak the previous roll entered (EndTrick a_keepSneak).
+				g.trickEnteredSneak = pressed || (sneaking && g.trickEnteredSneak);
 				g.trick = 1;
+				SKSE::log::info("[move] roll animation start: dir=({:.2f},{:.2f}) first_person={} sneak {} → {} (Sneak pressed: {})", g.trickDir.x,
+					g.trickDir.y, firstPerson, sneaking, a_player->IsSneaking(), pressed);
+			} else if (g.trickEnteredSneak) {
+				g.trickEnteredSneak = false;
+				if (a_player->IsSneaking()) {
+					vanilla::PressSneak();
+				}
 			}
 		}
 	}
@@ -161,6 +252,7 @@ namespace sxer::movement
 	void Update(RE::PlayerCharacter* a_player, const std::optional<proto::PlayerState>& a_state, const input::Move& a_move, bool a_enabled,
 		bool a_pressed, float a_delta, std::uint64_t a_frame)
 	{
+		vanilla::UpdateRollPerk(a_player, kSneakRollTrick && a_enabled, a_frame);
 		if (a_pressed) {
 			g.pressFrame = a_frame;
 			g.pressed = true;
@@ -169,7 +261,7 @@ namespace sxer::movement
 			if (g.active && a_player) {
 				End(a_player, a_frame, a_enabled ? "ER state stale" : "bridge off");
 			} else if (a_player) {
-				EndTrick(a_player);
+				EndTrick(a_player, "bridge off or ER stale");
 			}
 			g.active = false;
 			g.spent = false;
@@ -194,11 +286,12 @@ namespace sxer::movement
 		} else if (iframeRise && g.pressed && a_frame - g.pressFrame <= kChainPressFrames && (!g.active || g.erFrames >= kMinChainErFrames)) {
 			// Rolls chained by spamming keep the same animation id (27110 → 27110); each one opens a new i-frame window.
 			if (g.active) {
-				End(a_player, a_frame, "chained");
+				End(a_player, a_frame, "chained", true);
 			}
 			Start(a_player, s.anim_id, a_move, a_frame, "chained roll");
-		} else if (!g.active && g.pressed && a_frame - g.pressFrame <= kChainPressFrames && g.erSpeedMs > kChainSpeedMs) {
+		} else if (!g.active && IsBackstepAnim(s.anim_id) && g.pressed && a_frame - g.pressFrame <= kChainPressFrames && g.erSpeedMs > kChainSpeedMs) {
 			// Chained backsteps keep the animation id and have no i-frames: a fresh press plus ER moving again starts the next one.
+			// (Backsteps only: a roll's recovery still moves ER a little, and a press then is the next roll, which opens i-frames.)
 			Start(a_player, s.anim_id, a_move, a_frame, "chained (press + ER moving)");
 		}
 
@@ -236,13 +329,36 @@ namespace sxer::movement
 			return;
 		}
 		++g.frames;
+		if (g.trick) {
+			TurnBody(a_player);
+		}
 		if (g.trick == 1) {
-			a_player->AsActorState()->actorState1.sprinting = 1;
-			Notify(a_player, "SprintStart");
-			g.trick = 2;
+			bool started = false;
+			if (a_player->IsSneaking()) {
+				auto& state1 = a_player->AsActorState()->actorState1;
+				state1.sprinting = 1;
+				started = a_player->NotifyAnimationGraph("SprintStart");
+				if (!started) {
+					state1.sprinting = 0;
+				}
+				SKSE::log::info("[move] roll animation: SprintStart = {} (try {})", started, g.trickWait + 1);
+			}
+			if (started) {
+				g.trick = 2;
+			} else if (++g.trickWait > kSneakWaitFrames) {
+				EndTrick(a_player, a_player->IsSneaking() ? "graph refused SprintStart" : "player never sneaked");
+			}
+		} else if (g.trick == 2) {
+			g.trickTime += a_delta;
+			if (!a_player->AsActorState()->actorState1.sprinting) {
+				EndTrick(a_player, "game ended the sprint");
+			} else if (g.trickTime >= kVanillaRollS) {
+				EndTrick(a_player, "roll time over");
+			}
 		}
 		if (auto* controls = RE::PlayerControls::GetSingleton()) {
-			controls->data.moveInputVec = { 0.0f, 0.0f };
+			// Forward: the body faces the roll (third person) or is within kAnimMaxAngle of it (first person); vanilla sprint only runs forward.
+			controls->data.moveInputVec = g.trick ? RE::NiPoint2{ 0.0f, 1.0f } : RE::NiPoint2{ 0.0f, 0.0f };
 		}
 		// Steer onto the target: the velocity that closes the gap this frame, capped; a blocked player drags the target along.
 		const auto here = a_player->GetPosition();

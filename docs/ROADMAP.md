@@ -73,6 +73,8 @@ Tick boxes as you go. Keep each phase small. If a phase grows, split it.
 ## P8: Visuals & performance (stretch goal)
 - [ ] Frame-time profiling on both sides. Budget: 60 fps on the user's PC
 - [ ] Optional: ER player/VFX rendered offscreen and depth-composited into Skyrim
+- [ ] ER animations on the Skyrim character: the hidden ER character's bone pose streamed onto the Skyrim skeleton every frame (how GTA San
+  AnSkateas shows Skate 3 on CJ). Candidate to move forward for the roll animation (P4 step 5 handoff)
 - [ ] One-step installer: version checks for both games, SKSE, Address Library and me3, plus an uninstall that leaves the games clean
 **Accept:** profiling numbers logged in MODLOG. The user is happy with how it feels.
 

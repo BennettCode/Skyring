@@ -58,3 +58,13 @@ before use (a missing id makes CommonLib abort the game at load).
 - With the Silent Roll perk, sneak + sprint plays a forward roll. Graph notifications: `tailSneakLocomotion` → `tailSprint` →
   `SprintStop` (~0.48 s). Forcing it (SneakStart, then SprintStart, actorState sneaking/sprinting bits) starts it, but it ends after
   ~8 frames when the move input is zero. Confidence: likely (one session, 2026-10-04).
+- **Pressing Sneak like the player:** `RE::ButtonEvent::Create(kKeyboard, UserEvents::sneak, 0x1D, 1, 0)` handed to
+  `PlayerControls::sneakHandler` (`CanProcess` vfunc 0x1, then `ProcessButton` vfunc 0x4, through the object's vtable), then `RE::free`.
+  Toggles sneak exactly like the key (HUD eye, stealth state); `IsSneaking()` changes the same frame. Two presses within a frame or two
+  don't both take. Ids used (all present, addrlib-check): ButtonEvent vtable 208708, UserEvents 402638, heap 68088/68115-68117/11141/36091.
+  Confidence: verified by test (2026-10-04, ~40 rolls).
+- **Perks:** `Actor::HasPerk` AE 37698 (checked), `AddPerk`/`RemovePerk` = Actor vfuncs 0xFB/0xFC; Silent Roll = 00105F23.
+- **Turning the player in third person doesn't stick:** `Actor::SetHeading` (AE 37230, checked) every frame plus
+  `ThirdPersonState.freeRotationEnabled/freeRotation.x` set to the difference: the logged heading stays on the camera yaw the next frame
+  (the camera state re-aligns the body). Confidence: verified by test (2026-10-04, 7 rolls). Turning the body needs a camera-state hook
+  (how True Directional Movement does it) or a different animation source.

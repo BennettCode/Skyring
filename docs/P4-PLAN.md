@@ -84,6 +84,15 @@ First: copy this plan to `docs/P4-PLAN.md`, ROADMAP P4/P5 edits (swallow list, v
   `StartAnimatedCameraDelta`) but `SprintStop` follows after ~8 frames (vanilla ~29) because the dodge zeroes the move input; about half
   the tries only crouch, and the HUD sneak eye stays up. Switched off (`kSneakRollTrick`). Vanilla sneak roll (Silent Roll perk, user's
   test save) notifies only `tailSneakLocomotion` → `tailSprint` → `SprintStop` ~0.48 s later.
+- **Attempt 3 (2026-10-04, user chose vanilla Silent Roll):** Sneak pressed through the game's own `SneakHandler` (a "Sneak"
+  `ButtonEvent`, `bridge/VanillaInput.cpp`) + forward move input + perk added while the bridge is on. Works: sneak goes in and out
+  cleanly every time (no lingering eye), the roll plays (`tailSprint` + `StartAnimatedCameraDelta`), distances 98–101 %. Fails: the roll
+  only plays **forward** (where the camera looks) because the third-person camera puts the body back on the camera yaw every frame;
+  `SetHeading` + `ThirdPersonState.freeRotation` had no effect. With a weapon drawn the graph refused `SprintStart` (run 1). Off again.
+- **Next (user, 2026-10-04: "do what the other merged games do"):** GTA San AnSkateas streams the hidden engine's **bone pose** onto the
+  host character every frame (no animation files converted or shipped). Here: ER plays the roll on the hidden character, the ER plugin
+  reads its skeleton pose, Skyrim writes it onto the player's skeleton. New plan + research (ER pose location, bone map, protocol slot)
+  in a fresh chat; it would animate every ER action (P5 attacks too), so it may become its own phase.
 
 ### 6. Stamina bar mirrors ER (Skyrim)
 - Every frame with fresh PlayerState: Skyrim Stamina current = Skyrim max × ER stamina/max (damage-modifier delta via
