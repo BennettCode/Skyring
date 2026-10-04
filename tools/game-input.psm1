@@ -57,6 +57,15 @@ public static class SxerGameInput {
         return GetForegroundWindow() == hwnd;
     }
 
+    // Relative mouse motion (games read raw/DirectInput deltas): turns the camera.
+    public static bool Mouse(int dx, int dy) {
+        var input = new INPUT { type = 0 };
+        input.u.mi.dx = dx;
+        input.u.mi.dy = dy;
+        input.u.mi.dwFlags = 0x0001;  // MOUSEEVENTF_MOVE
+        return SendInput(1, new[] { input }, Marshal.SizeOf(typeof(INPUT))) == 1;
+    }
+
     public static bool Key(ushort scan, bool extended, bool up) {
         var input = new INPUT { type = INPUT_KEYBOARD };
         input.u.ki.wScan = scan;
@@ -116,7 +125,8 @@ function Resolve-Key([string]$Name) {
 <#
 .SYNOPSIS
   Runs a key script on the focused game: "down W; wait 500; tap LShift 60; wait 1500; up W".
-  Steps: down K | up K | tap K [ms, default 50] | wait ms. Stops (keys released) if the game loses focus.
+  Steps: down K | up K | tap K [ms, default 50] | wait ms | mouse dx dy (relative, turns the camera; split into 20 px moves).
+  Stops (keys released) if the game loses focus.
 #>
 function Send-GameKeys {
     param([ValidateSet('skyrim', 'eldenring')][string]$Game, [string]$Script, [switch]$NoFocus)
@@ -142,7 +152,16 @@ function Send-GameKeys {
                     & $send $code $true
                 }
                 'wait' { Start-Sleep -Milliseconds ([int]$parts[1]) }
-                default { throw "unknown step '$step' (use: down K; up K; tap K [ms]; wait ms)" }
+                'mouse' {
+                    $dx = [int]$parts[1]; $dy = if ($parts.Count -gt 2) { [int]$parts[2] } else { 0 }
+                    $n = [math]::Max(1, [math]::Ceiling([math]::Max([math]::Abs($dx), [math]::Abs($dy)) / 20))
+                    for ($i = 0; $i -lt $n; $i++) {
+                        if (-not (Test-GameFocused $Game)) { throw "$Game lost focus; stopped the key script (keys released)" }
+                        [void][SxerGameInput]::Mouse([int]($dx / $n), [int]($dy / $n))
+                        Start-Sleep -Milliseconds 10
+                    }
+                }
+                default { throw "unknown step '$step' (use: down K; up K; tap K [ms]; wait ms; mouse dx dy)" }
             }
             Write-Host ("  [keys] {0:HH:mm:ss.fff} {1}" -f (Get-Date), $step)
         }

@@ -13,7 +13,8 @@ Run them as `powershell -ExecutionPolicy Bypass -File tools/<script>`. Shared he
 | `build.ps1` | `-Target all\|skse\|er`. skse: CMake in a VS dev shell → `build/skse/`. er: cargo → `build/er-plugin/` (retries the copy while a killed ER holds the DLL). |
 | `deploy.ps1` | Copies `SkyrimXER.dll/.pdb` into `Data/SKSE/Plugins/` + writes `local/deploy-manifest.json`. `-Undo` removes exactly those files. `-WhatIf`. |
 | `launch.ps1` | Backs up saves, starts ER through me3 (offline, dev save `skyrimxer.sl2`), then Skyrim through `skse64_loader.exe`. `-AutoLoad`: Skyrim loads its newest save by itself (env `SKYRIMXER_AUTOLOAD`, dev only). |
-| `game-input.ps1` | `-Game skyrim\|eldenring [-Focus] [-Keys "down W; wait 800; tap LShift 60; up W"]`: brings the game to the front and plays a key script (SendInput scan codes). Stops and releases every key if the game loses focus, so keys never reach another app. Helpers in `game-input.psm1`. |
+| `screenshot.ps1` | `[-Frames 8 -IntervalMs 110 -LeadMs 600 -Crop]`: a screenshot or contact sheet into `logs/shots/` (gitignored), so the agent can look at the game, e.g. during a roll. |
+| `game-input.ps1` | `-Game skyrim\|eldenring [-Focus] [-Keys "down W; wait 800; tap LShift 60; up W"]`: brings the game to the front and plays a key script (SendInput scan codes; `mouse dx dy` turns the camera). Stops and releases every key if the game loses focus, so keys never reach another app. Helpers in `game-input.psm1`. |
 | `backup-saves.ps1` | Both games' saves → `local/save-backups/<timestamp>/`, keeps the newest 10. |
 | `collect-logs.ps1` | Copies both plugin logs, skse64.log, the newest crash log and the me3 log into `logs/<timestamp>/`, prints `[core]`/`[link]`/`[error]` lines. |
 | `protogen/` | Rust: `protocol/schema/messages.toml` → `protocol/generated/`. `cargo run -p protogen [-- --check]`. |

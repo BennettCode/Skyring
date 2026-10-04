@@ -6,6 +6,7 @@
 #include "bridge/Link.h"
 #include "bridge/Movement.h"
 #include "bridge/PlayerWatch.h"
+#include "bridge/Pose.h"
 #include "bridge/Slot.h"
 #include "hooks/PlayerUpdate.h"
 #include "hooks/MoveSwallow.h"
@@ -66,6 +67,8 @@ namespace sxer::bridge
 		{
 			std::optional<SlotWriter<proto::InputState>> input;
 			std::optional<SlotReader<proto::PlayerState>> player;
+			std::optional<SlotReader<proto::PoseState>> pose;
+			std::optional<proto::PoseState> lastPose;  // last good copy (a torn read keeps it, like PlayerWatch)
 			PlayerWatch watch;
 			bool bridgeOn = true;
 			bool swallow = false;
@@ -216,7 +219,7 @@ namespace sxer::bridge
 		hooks::InstallSprintSwallow();
 		hooks::InstallMoveSwallow();
 		input::Install();
-		SKSE::log::info("[core] hooks installed: PlayerCharacter::Update (vfunc 0xAD; pose proof F7) → InputState/PlayerState slots, SprintHandler::CanProcess "
+		SKSE::log::info("[core] hooks installed: PlayerCharacter::Update (vfunc 0xAD; ER pose applier) → InputState/PlayerState slots, SprintHandler::CanProcess "
 		                "(vfunc 0x1, vanilla sprint off while bridged), MovementHandler::CanProcess (vfunc 0x1, keys off during a dodge), input sink (Sprint → Dodge, movement keys → move stick, F10 toggle)");
 	}
 
@@ -239,6 +242,7 @@ namespace sxer::bridge
 			}
 			f.input.emplace(base, proto::kOffSlotInput);
 			f.player.emplace(base, proto::kOffSlotPlayer);
+			f.pose.emplace(base, proto::kOffSlotPose);
 			f.nextReportMs = now + kReportMs;
 			SKSE::log::info("[core] slots ready (frame={})", frame);
 		}
@@ -300,6 +304,11 @@ namespace sxer::bridge
 		SampleCoords(f, a_player, frame, move);
 		f.watch.Update(f.player->Read(), connected, now);
 		movement::Update(a_player, f.watch.Last(), move, on, pressed, a_delta, frame);
+		if (auto p = f.pose->Read()) {
+			f.lastPose = p;
+		}
+		const bool poseFresh = on && connected && f.lastPose && Fresh(f.lastPose->time_ms, now);
+		pose::Apply(a_player, poseFresh ? f.lastPose : std::nullopt, movement::RollHeading().value_or(a_player->GetAngleZ()), frame);
 		animprobe::Update(a_player, frame);
 		UpdateHud(f, connected, pressed, now);
 

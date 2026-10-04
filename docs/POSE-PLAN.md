@@ -6,7 +6,7 @@ Three attempts at a vanilla Skyrim roll failed: the third-person camera snaps th
 - Rolls face the right direction, because the yaw is applied by us.
 - Every later ER action (P5 attacks, weapon arts) gets animated for free.
 
-Status: direction approved (user, 2026-10-04). **Step 1 done** (pose found, `docs/research/elden-ring-pose.md`). **Step 2 done** (write after `PlayerCharacter::Update` shows on screen; `docs/research/skyrim-hooks.md` "Posing the player's skeleton"). **Step 3 done** (protocol v4 `PoseState` at 0x400, fake ER swings a pose, tests green); **Step 4 done** (ER writer `er-plugin/src/pose_stream.rs` + math `protocol/src/rig.rs`; basis and A-pose bind measured, `docs/research/elden-ring-pose.md` "Streaming it"); next: step 5. `docs/P4-PLAN.md` step 5 links here.
+Status: direction approved (user, 2026-10-04). **Step 1 done** (pose found, `docs/research/elden-ring-pose.md`). **Step 2 done** (write after `PlayerCharacter::Update` shows on screen; `docs/research/skyrim-hooks.md` "Posing the player's skeleton"). **Step 3 done** (protocol v4 `PoseState` at 0x400, fake ER swings a pose, tests green); **Step 4 done** (ER writer `er-plugin/src/pose_stream.rs` + math `protocol/src/rig.rs`; basis and A-pose bind measured, `docs/research/elden-ring-pose.md` "Streaming it"); **Step 5 done** (Skyrim applier `skse/src/bridge/Pose.cpp`; rolls play in Skyrim, 2026-10-04); next: step 6 (docs) and the polish list in `docs/research/skyrim-hooks.md` "Applying the ER pose". `docs/P4-PLAN.md` step 5 links here.
 
 Research results (this session):
 - **ER:** eldenring-rs 59fbd3b and libER have no typed pose. The candidates below are all opaque pointers.

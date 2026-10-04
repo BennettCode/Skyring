@@ -249,6 +249,8 @@ namespace sxer::movement
 
 	bool Active() { return g.active; }
 
+	std::optional<float> RollHeading() { return g.active ? std::optional<float>(g.rollHeading) : std::nullopt; }
+
 	void Update(RE::PlayerCharacter* a_player, const std::optional<proto::PlayerState>& a_state, const input::Move& a_move, bool a_enabled,
 		bool a_pressed, float a_delta, std::uint64_t a_frame)
 	{

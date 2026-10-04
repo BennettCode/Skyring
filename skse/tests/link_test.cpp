@@ -3,7 +3,8 @@
 //   skyrimxer_link_test selftest
 //       Two Links (Skyrim + ER) in this process on a private region, simulated clock: handshake, heartbeat events,
 //       timeout, reconnect, Bye, LinkShared, plus seqlock slots (round trip, concurrent torn-read check) and the coordinate
-//       conversion (bridge/Coords.h, same cases as protocol/src/coords.rs).
+//       conversion (bridge/Coords.h, same cases as protocol/src/coords.rs) and the pose retarget math (bridge/Rig.h, same
+//       cases as protocol/src/rig.rs, plus Slerp and RotationArc).
 //       Exit 0 = pass. Run by ctest and tests/run-tests.ps1.
 //   skyrimxer_link_test peer [--side skyrim|er] [--seconds N] [--no-bye] [--region NAME] [--dodge-every S]
 //       Real-time peer, for cross-language tests against `cargo run -p fake-peer`. Same thread shape as the plugin: the link
@@ -16,6 +17,7 @@
 #include "bridge/Coords.h"
 #include "bridge/Link.h"
 #include "bridge/PlayerWatch.h"
+#include "bridge/Rig.h"
 #include "bridge/Slot.h"
 
 #include <algorithm>
@@ -164,6 +166,46 @@ namespace
 			"coords: measured ER W/D segments");
 	}
 
+	// Same cases as protocol/src/rig.rs, plus Slerp and RotationArc (C++ only).
+	void RigTests()
+	{
+		using namespace sxer::rig;
+		const auto nearV = [](Vec3 a_a, Vec3 a_b) { return Near(a_a[0], a_b[0], 1e-4f) && Near(a_a[1], a_b[1], 1e-4f) && Near(a_a[2], a_b[2], 1e-4f); };
+		// Same rotation (q and -q are equal rotations).
+		const auto same = [](Quat a_a, Quat a_b) { return std::fabs(a_a.x * a_b.x + a_a.y * a_b.y + a_a.z * a_b.z + a_a.w * a_b.w) > 1 - 1e-5f; };
+		const auto mulV = [](const Mat3& a_m, Vec3 a_v) { return Vec3{ Dot(a_m[0], a_v), Dot(a_m[1], a_v), Dot(a_m[2], a_v) }; };
+
+		bool roundTrip = true, rotateMatches = true;
+		for (auto q : { kIdentity, AxisAngle({ 0, 0, 1 }, 3.14159265f), AxisAngle({ 0.6f, 0, 0.8f }, 2.0f), Quat{ 0.70f, 0.70f, -0.05f, -0.12f } }) {
+			q = *Normalize(q);
+			roundTrip &= same(FromMat(ToMat(q)), q);
+			rotateMatches &= nearV(Rotate(q, { 1, 2, 3 }), mulV(ToMat(q), { 1, 2, 3 }));
+		}
+		Check(roundTrip, "rig: quaternion -> matrix -> quaternion round trip");
+		Check(rotateMatches, "rig: Rotate == ToMat * v");
+
+		const auto bind = *Normalize({ 0.707f, 0.707f, 0, 0 });
+		Check(same(Delta(bind, bind), kIdentity), "rig: identity bind gives identity delta");
+		const auto turn = AxisAngle({ 0, 1, 0 }, 0.5f);
+		Check(same(Delta(Mul(turn, bind), bind), turn), "rig: delta recovers the model-space turn");
+
+		const auto a = AxisAngle({ 0, 0, 1 }, 0.3f);
+		const auto b = AxisAngle({ 0, 0, 1 }, 0.3f + 1.5707963f);
+		Check(same(Slerp(a, b, 0), a) && same(Slerp(a, b, 1), b), "rig: Slerp endpoints");
+		Check(Near(Angle(Delta(Slerp(a, b, 0.5f), a)), 0.7853982f, 1e-4f), "rig: Slerp halfway through a 90 deg turn = 45 deg");
+		const Quat negB{ -b.x, -b.y, -b.z, -b.w };
+		Check(same(Slerp(a, negB, 0.5f), Slerp(a, b, 0.5f)), "rig: Slerp takes the short path (b and -b give the same result)");
+
+		const Vec3 from = *Unit({ 0.3f, -0.5f, 0.8f }), to = *Unit({ -0.7f, 0.1f, 0.2f });
+		Check(nearV(Rotate(RotationArc(from, to), from), to), "rig: RotationArc maps from onto to");
+		Check(same(RotationArc(to, to), kIdentity), "rig: RotationArc of parallel vectors = identity");
+		const Vec3 back{ -to[0], -to[1], -to[2] };
+		const auto flip = RotationArc(to, back);
+		Check(nearV(Rotate(flip, to), back) && Near(Angle(flip), 3.14159265f, 1e-3f), "rig: RotationArc of antiparallel vectors = 180 deg turn");
+		const Vec3 x{ 1, 0, 0 }, negX{ -1, 0, 0 };
+		Check(nearV(Rotate(RotationArc(x, negX), x), negX), "rig: RotationArc antiparallel along an axis");
+	}
+
 	void SlotTests(std::uint8_t* a_base)
 	{
 		using namespace sxer;
@@ -233,6 +275,7 @@ namespace
 	int SelfTest()
 	{
 		CoordsTests();
+		RigTests();
 		std::ostringstream lines;
 		auto logger = std::make_shared<spdlog::logger>("selftest", std::make_shared<spdlog::sinks::ostream_sink_mt>(lines));
 		logger->set_pattern("%l %v");

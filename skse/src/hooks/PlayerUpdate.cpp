@@ -4,7 +4,6 @@
 #include <exception>
 
 #include "bridge/Bridge.h"
-#include "bridge/Pose.h"
 
 // PlayerCharacter::Update = Actor vfunc 0xAD (CommonLib RE/A/Actor.h): once per frame on the main thread while the game runs
 // (menus that pause the game stop it, which makes our InputState go stale on purpose). A vtable write, so no trampoline.
@@ -18,10 +17,9 @@ namespace sxer::hooks
 		{
 			static void thunk(RE::PlayerCharacter* a_this, float a_delta)
 			{
-				pose::BeforePlayerUpdate(a_this);
 				func(a_this, a_delta);
 				try {
-					pose::AfterPlayerUpdate(a_this);
+					// After the original: the skeleton is posed by now, so bridge::OnFrame's pose writes (bridge/Pose.cpp) show.
 					bridge::OnFrame(a_this, a_delta);
 				} catch (const std::exception& e) {
 					static std::atomic<bool> logged{ false };

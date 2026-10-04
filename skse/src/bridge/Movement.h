@@ -17,4 +17,6 @@ namespace sxer::movement
 		bool a_pressed, float a_delta, std::uint64_t a_frame);
 	// True while a dodge moves the player (Skyrim's own movement keys should do nothing then).
 	bool Active();
+	// The roll direction (heading convention) while a dodge moves the player: ER's forward is laid along it, so the posed body faces it.
+	std::optional<float> RollHeading();
 }

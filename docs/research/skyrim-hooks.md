@@ -99,3 +99,21 @@ before use (a missing id makes CommonLib abort the game at load).
 - Input: SendInput with scan codes reaches Skyrim's input sink (`[input] user event 'Forward'/'Sprint'` from the key script).
 - Focus: under Chrome Remote Desktop, SetForegroundWindow, AttachThreadInput and the Alt trick all fail (the foreground belongs to
   `remoting_desktop`); `SwitchToThisWindow` works.
+
+## Applying the ER pose (POSE-PLAN step 5, 2026-10-04)
+- `skse/src/bridge/Pose.cpp`, called from `bridge::OnFrame` after `movement::Update`, i.e. right after PlayerCharacter::Update.
+  Per bone: world = R_root · Yaw · delta · fit · hostBind. Locals are computed through the parents' world rotations, slerped with
+  the animation's local (5 frames in/out). The pelvis offset moves **NPC COM** (parent of both Pelvis and Spine; moving the pelvis
+  alone stretched the body at the waist), then one `UpdateDownwardPass` on COM. No new Address Library ids.
+- **Host bind:** inverse `skinToBone` from all 25 skinned geometries, moved into the 3D root's space. The bind is an A-pose:
+  hands at (±28.9, 1.8, 72.8) units, pelvis (0, 0, 68.9), head (0, −1.6, 120.3). **No mesh is skinned to `NPC Neck`**, so its bind
+  is derived: the parent's bind × today's local.
+- **Fits** (Skyrim bind segment → ER bind segment, degrees): clavicles 37, upper arms 21, forearms/hands 26, Spine2 14, legs 5–7.
+  Pelvis → Spine gave 54° (Skyrim's spine sits just above and behind the pelvis), so the pelvis aligns its hip axis (L → R thigh) instead (0°).
+- **Check line** `[pose] check: segment error deg`: posed segment vs ER's segment, 0° for spine, neck, arms and legs.
+  Hands and feet aren't checked: `Finger20`/`Toe0` have no skin bind, so they reuse the forearm/calf fit.
+- **Facing:** `movement::RollHeading()` (ER's forward is laid along it), else the body heading. Heading grows = turning right = −Z rotation.
+  Verified: a right roll (D) turns the body +90° and it tumbles that way.
+- **Cost:** ≤ 0.14 ms per frame while posing (hook p99 ~0.1 ms, 0.01 ms idle); frame time unchanged (17 ms p99).
+- **Polish later:** prefer the body mesh's bind (today the first skinned mesh wins, so armour with another bind can tilt a bone), finger and toe bones, foot planting/IK, smoothing between ER frames when Skyrim runs above 60 fps,
+  ending the pose at ER's move-cancel window instead of the end of the animation (101 frames).

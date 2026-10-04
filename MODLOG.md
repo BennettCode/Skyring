@@ -4,6 +4,25 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: POSE-PLAN step 5, ER roll animation plays in Skyrim
+- **Changed:**
+  - `skse/src/bridge/Pose.cpp` (rewritten from the F7 proof): the applier.
+  - `skse/src/bridge/Rig.h` (new, written by a forked subagent): C++ mirror of `rig.rs` + Slerp/RotationArc, 11 selftest checks.
+  - `Bridge.cpp` reads PoseState; `movement::RollHeading()`; `hooks/PlayerUpdate.cpp` dropped the proof calls.
+  - `tools/game-input` gained `mouse dx dy`; `tools/screenshot.ps1` (new) takes contact sheets so the agent can look at the game.
+- **Tested (agent-run, no user input):**
+  - vs `fake-peer er --pose-always`: segment error 0° (limbs/spine), 9–11° (hands/feet).
+  - Both games: forward roll plays (tuck, tumble, recover), Skyrim moved 99% of ER's distance.
+  - Right roll: the body faces +90° and tumbles right.
+  - Hook ≤ 0.14 ms, frame time unchanged. `run-tests.ps1` green.
+- **Review (subagent) fixes:**
+  - The pelvis offset now moves NPC COM, so hips and torso drop together (it had moved only the legs).
+  - The facing is held through the blend-out, and the yaw is measured from the root's real heading.
+  - `NiPointer` root (no dangling bones after a 3D rebuild). Resolve is retried every 60 frames.
+  - Non-finite or non-unit pose data is rejected. No allocation per frame.
+  - Retested: forward and left roll, whole body tumbles, 99% distance, ≤ 83 µs.
+- **Not done:** fingers/toes, foot IK, interpolation above 60 fps, bind taken from the first skinned mesh (armour can tilt it), user's visual judgement.
+
 ## 2026-10-04: dev loop loads in without the user
 - **Changed:**
   - `tools/game-input.psm1/.ps1` (new): window focus plus SendInput scan-code key scripts. A guard stops the script and releases

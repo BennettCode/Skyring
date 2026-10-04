@@ -68,10 +68,14 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
 - **Rolls cost stamina only while your Skyrim character is in combat**, like in Elden Ring (exploring, they're free).
 - **Your Skyrim character moves with the roll:** the same distance as Elden Ring's roll, in the direction you're looking + holding,
   stopped by Skyrim's walls (Elden Ring's walls don't matter: the hidden character never leaves its spot). Spamming chains rolls. **Tap** Sprint to dodge, **hold** it to sprint.
+- **Your Skyrim character plays Elden Ring's real roll animation.** Elden Ring plays the roll on its hidden character, and its skeleton
+  pose (spine, head, arms, legs) is copied onto your Skyrim character every frame, facing the way you roll. No animation files are
+  converted or shipped. Hands and feet keep Skyrim's own pose, and the body blends in and out over a few frames.
 - **Roll i-frames reach Skyrim:** Skyrim knows the exact window (about 0.45 s) in which the Elden Ring roll makes you invincible.
 - Fail-safe: if either game closes, crashes or pauses, the other one notices within a moment and stops acting on stale input.
 
-**Not working yet:** there's no roll animation in Skyrim yet (your character slides), and fighting is still vanilla (P5). **Controller support isn't added yet:**
+**Not working yet:** fighting is still vanilla (P5). The roll animation copies 20 main bones, so fingers, cloth and armour
+helpers follow Skyrim's own pose, and feet can slide a little (no foot placement yet). **Controller support isn't added yet:**
 Skyrim is keyboard-and-mouse only for now (details below). The i-frames are known to Skyrim but don't protect your Skyrim character yet (P4).
 
 ## Progress
@@ -82,7 +86,7 @@ Skyrim is keyboard-and-mouse only for now (details below). The i-frames are know
 | P1 | Both plugins load and log | ✅ done |
 | P2 | Shared memory link: handshake, heartbeats, crash fail-safe | ✅ done |
 | P3 | Dodge in Skyrim → Elden Ring dodges → its stamina and i-frames come back | ✅ done |
-| **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 in progress (3/7: Sprint = dodge, F10 toggle, combat stamina, rolls move you) |
+| **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 in progress (5/7: Sprint = dodge, combat stamina, rolls move you, Elden Ring's roll animation plays in Skyrim) |
 | P5 | Damage both ways uses Elden Ring's math (poise, stagger) | ⏳ |
 | P6 | Elden Ring-style HUD | ⏳ |
 | P7 | Runes from kills, leveling, flasks refill at "graces" | ⏳ |
