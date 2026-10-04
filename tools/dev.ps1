@@ -10,7 +10,10 @@
   powershell -ExecutionPolicy Bypass -File tools/dev.ps1 -NoLaunch            # build + deploy only
   powershell -ExecutionPolicy Bypass -File tools/dev.ps1 -Target er -Game eldenring -Restart -ErSelfTest dodge
 .NOTES
-  -WaitInWorld N (ER): after the plugins report in, wait for the user to press Continue in ER (up to 5 min), let ER run N more seconds,
+  Loading in is automatic (tools/game-input.psm1): ER gets the confirm key at the title screen until its player spawns; Skyrim loads its
+   most recent save by itself (launch.ps1 -AutoLoad) and gets the focus at the end (it pauses unfocused). -Manual = the user does both.
+  -SkyrimKeys "<script>": once Skyrim is in the world, run a key script on it (game-input.ps1 syntax) and print Skyrim's log lines.
+  -WaitInWorld N (ER): once the ER player is in the world, let ER run N more seconds,
    then print the ER plugin's log lines whose subsystem matches -Show. Tests then need no "done" message from the user.
   -Restart stops the game(s) about to be launched first (ER is hidden in-world, so it gets Stop-Process; no clean Bye).
   -ErVisible / -ErSelfTest / -ErInjectGroup / -ErProbe / -ErDump / -ErForceCombat / -ErNoPin / -ErPoseProbe are written to build/er-plugin/skyrimxer_er.cfg on every launch (er-plugin/src/config.rs).
@@ -36,12 +39,15 @@ param(
     [switch]$ErNoPin,
     [switch]$ErPoseProbe,
     [int]$WaitInWorld = 0,
+    [switch]$Manual,
+    [string]$SkyrimKeys = '',
     [string]$Show = 'action|state|window|probe|error|warning'
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'common.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'game-input.psm1') -Force
 $paths = Get-ProjectPaths
 $timer = [Diagnostics.Stopwatch]::StartNew()
 
@@ -84,7 +90,7 @@ if ($Game -in 'both', 'eldenring') {
 }
 $launchedAt = Get-Date
 Step "launch ($Game)"
-& (Join-Path $PSScriptRoot 'launch.ps1') -Game $Game
+& (Join-Path $PSScriptRoot 'launch.ps1') -Game $Game -AutoLoad:(-not $Manual)
 
 $checks = @()
 if ($Game -in 'both', 'skyrim') {
@@ -110,8 +116,54 @@ while ($pending.Count -gt 0 -and (Get-Date) -lt $deadline) {
 }
 
 $erLog = Join-Path $paths.BuildDir 'er-plugin\logs\skyrimxer_er.log'
+$skyLog = Join-Path $paths.SkyrimLogDir 'SkyrimXER.log'
+$erInWorld = { Select-String -LiteralPath $erLog -Pattern 'main player spawned \(in world' -Quiet }
+
+# ER: press the menu-confirm key at the title screen ("press any button", then Continue is preselected) until the player spawns.
+# E and Enter both confirm with default binds; alternating covers a rebound one. The window must be in front for the key to count.
+if (-not $Manual -and $Game -in 'both', 'eldenring' -and $pending.Count -eq 0) {
+    Step 'Elden Ring: loading in (confirm key at the title screen)'
+    $deadline = (Get-Date).AddSeconds(90)
+    $presses = 0
+    $lastKey = ''
+    while (-not (& $erInWorld) -and (Get-Date) -lt $deadline) {
+        $key = @('E', 'E', 'Enter', 'Enter')[$presses % 4]
+        if (Set-GameFocus eldenring -TimeoutSeconds 5) {
+            try { Send-GameKeys -Game eldenring -Script "tap $key 80" -NoFocus; $lastKey = $key; $presses++ } catch { Write-Host "  $_" -ForegroundColor Yellow }
+        } else {
+            Write-Host '  could not bring Elden Ring to the front' -ForegroundColor Yellow
+        }
+        for ($i = 0; $i -lt 6 -and -not (& $erInWorld); $i++) { Start-Sleep -Milliseconds 500 }
+    }
+    if (& $erInWorld) { Write-Host "  ER in world after $presses key press(es), last key $lastKey" -ForegroundColor Green }
+    else { Write-Host 'ER did not load in within 90 s (title screen not reached, or the confirm key is rebound)' -ForegroundColor Yellow }
+}
+
+# Skyrim: the plugin loads the most recent save at the main menu (AutoLoad.cpp); then give it the focus, or it pauses.
+$skyInWorld = $false
+if (-not $Manual -and $Game -in 'both', 'skyrim' -and $pending.Count -eq 0) {
+    Step 'Skyrim: waiting for the auto-loaded save'
+    $deadline = (Get-Date).AddSeconds(120)
+    while (-not (Select-String -LiteralPath $skyLog -Pattern 'save loaded \(success=true\)' -Quiet) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
+    $skyInWorld = [bool](Select-String -LiteralPath $skyLog -Pattern 'save loaded \(success=true\)' -Quiet)
+    if (-not $skyInWorld) { Write-Host 'Skyrim did not load a save within 120 s (see [autoload] lines in SkyrimXER.log)' -ForegroundColor Yellow }
+    if (Set-GameFocus skyrim) { Write-Host '  Skyrim in world and focused' -ForegroundColor Green }
+    else { Write-Host '  could not bring Skyrim to the front: click its window once (it pauses unfocused)' -ForegroundColor Yellow }
+}
+
+if ($SkyrimKeys -and $skyInWorld) {
+    Step 'Skyrim: key script'
+    Start-Sleep -Seconds 3  # the world fades in after the load message
+    $keysFrom = Get-Date
+    Send-GameKeys -Game skyrim -Script $SkyrimKeys
+    Start-Sleep -Seconds 1
+    Step 'Skyrim log lines during the key script'
+    Get-Content -LiteralPath $skyLog | Where-Object { $_ -match '\[(input|move|state|pose|autoload)\]' } |
+        Where-Object { [datetime]::Parse(($_ -split ' ')[0]).ToLocalTime() -ge $keysFrom.AddSeconds(-1) } | Select-Object -Last 60
+}
+
 if ($WaitInWorld -gt 0 -and $Game -in 'both', 'eldenring' -and $pending.Count -eq 0) {
-    Step 'waiting for the player to load in (user: press Continue in Elden Ring)'
+    Step "waiting for the player to load in$(if ($Manual) { ' (user: press Continue in Elden Ring)' })"
     $inWorldDeadline = (Get-Date).AddMinutes(5)
     while (-not (Select-String -LiteralPath $erLog -Pattern 'main player spawned \(in world' -Quiet) -and (Get-Date) -lt $inWorldDeadline) {
         Start-Sleep -Seconds 2

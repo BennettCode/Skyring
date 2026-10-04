@@ -12,7 +12,8 @@ Run them as `powershell -ExecutionPolicy Bypass -File tools/<script>`. Shared he
 | `setup-check.ps1` | Read-only check of game exe versions, SKSE, Address Library, Crash Logger, me3, VS C++/CMake/vcpkg, Rust, git, and that EAC isn't running. |
 | `build.ps1` | `-Target all\|skse\|er`. skse: CMake in a VS dev shell → `build/skse/`. er: cargo → `build/er-plugin/` (retries the copy while a killed ER holds the DLL). |
 | `deploy.ps1` | Copies `SkyrimXER.dll/.pdb` into `Data/SKSE/Plugins/` + writes `local/deploy-manifest.json`. `-Undo` removes exactly those files. `-WhatIf`. |
-| `launch.ps1` | Backs up saves, starts ER through me3 (offline, dev save `skyrimxer.sl2`), then Skyrim through `skse64_loader.exe`. |
+| `launch.ps1` | Backs up saves, starts ER through me3 (offline, dev save `skyrimxer.sl2`), then Skyrim through `skse64_loader.exe`. `-AutoLoad`: Skyrim loads its newest save by itself (env `SKYRIMXER_AUTOLOAD`, dev only). |
+| `game-input.ps1` | `-Game skyrim\|eldenring [-Focus] [-Keys "down W; wait 800; tap LShift 60; up W"]`: brings the game to the front and plays a key script (SendInput scan codes). Stops and releases every key if the game loses focus, so keys never reach another app. Helpers in `game-input.psm1`. |
 | `backup-saves.ps1` | Both games' saves → `local/save-backups/<timestamp>/`, keeps the newest 10. |
 | `collect-logs.ps1` | Copies both plugin logs, skse64.log, the newest crash log and the me3 log into `logs/<timestamp>/`, prints `[core]`/`[link]`/`[error]` lines. |
 | `protogen/` | Rust: `protocol/schema/messages.toml` → `protocol/generated/`. `cargo run -p protogen [-- --check]`. |
@@ -26,10 +27,13 @@ Run them as `powershell -ExecutionPolicy Bypass -File tools/<script>`. Shared he
 | `-Game both\|eldenring\|skyrim` | What to launch (default both). |
 | `-NoLaunch` | Build + deploy only. |
 | `-Restart` | Close the game(s) about to be launched first. |
-| `-WaitInWorld N` | After ER reports in, wait for the player to press Continue (up to 5 min), let ER run N seconds, then print the ER log's `-Show` lines. |
+| (default) | Loads in by itself: ER gets E/Enter at the title until its player spawns; Skyrim loads its newest save and gets the focus. |
+| `-Manual` | The user loads in (presses Continue / loads the save). |
+| `-SkyrimKeys "<script>"` | Once Skyrim is in the world, play a key script on it and print its `[input/move/state/pose]` lines. |
+| `-WaitInWorld N` | Once the ER player is in the world, let ER run N seconds, then print the ER log's `-Show` lines. |
 | `-Show <regex>` | Subsystems printed by `-WaitInWorld` (default `action\|state\|window\|probe\|error\|warning`). |
 | `-ErVisible` | Keep ER's window visible in-world (debugging). |
-| `-ErSelfTest dodge` | ER presses dodge by itself every 4 s and logs what happens (no Skyrim needed). |
+| `-ErSelfTest dodge\|roll` | ER presses dodge by itself every 4 s (`roll`: with a move direction) and logs what happens (no Skyrim needed). |
 | `-ErProbe` | Log ER's dodge action bits at 9 points in each frame. |
 | `-ErInjectGroup <g>` | Task group for the self-test's input write: `wprep` (default), `padstep`, `ailogic`, `prebehavior`. |
 

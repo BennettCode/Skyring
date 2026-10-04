@@ -4,6 +4,22 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: dev loop loads in without the user
+- **Changed:**
+  - `tools/game-input.psm1/.ps1` (new): window focus plus SendInput scan-code key scripts. A guard stops the script and releases
+    every key if the game isn't in front.
+  - `skse/src/bridge/AutoLoad.cpp` (new): with env `SKYRIMXER_AUTOLOAD` set, it loads that save when the main menu opens.
+  - `launch.ps1 -AutoLoad` passes the newest `.ess`.
+  - `dev.ps1` loads in by default (ER: E/Enter at the title until the player spawns; Skyrim: wait for the save, then focus).
+    `-Manual` keeps the old flow; `-SkyrimKeys` plays a key script.
+- **Tested:**
+  - Skyrim alone: save loaded ~11 s after the menu, focused; the key script showed up as `move y=1` and `Dodge down/up`.
+  - ER alone: in world after 8 presses, roll self-test as before.
+  - Both: in world, CONNECTED, `PlayerState fresh`, Skyrim focused.
+  - Guard: a script for an unfocused game sends nothing.
+- **Findings:** `LoadMostRecentSaveGame` fails at main-menu open (the save list is still empty), so the scripts pass the save by name.
+  Under Chrome Remote Desktop only `SwitchToThisWindow` takes the focus.
+
 ## 2026-10-04: POSE-PLAN step 4, ER pose writer (ER only)
 - **Changed:** `protocol/src/rig.rs` (new): quaternion math, ER → Skyrim model basis as a matrix change (handles ER's left-handed axes),
   bind deltas, model-space compose; 7 unit tests. `er-plugin/src/pose_stream.rs` (new): resolves the skeleton once (20 bones by name,

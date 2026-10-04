@@ -43,8 +43,8 @@ Docs: `STATUS.md` (now) · `docs/ROADMAP.md` (phases + accept criteria) · `docs
    The ER DLL loads from `build/er-plugin/` via the me3 profile; nothing goes into the ER folder.
 9. **Never update, downgrade or verify either game, or install/remove the user's other mods, without asking.** Version pins keep native plugins working.
 10. **You run the games and playtests yourself** (standing permission, if the user grants it): launch/kill/relaunch and run any repo script,
-    but only via `tools/dev.ps1` / `tools/launch.ps1` (me3, offline, backup first). Ask the user only for in-game input (pressing Continue,
-    playing, judging feel), as short numbered steps in **keyboard/mouse keys for both games**, then read the logs yourself.
+    but only via `tools/dev.ps1` / `tools/launch.ps1` (me3, offline, backup first). Loading in is automatic and key scripts run through
+    `tools/game-input.ps1`, so ask the user only for what needs eyes or hands (judging feel, free play), as short numbered steps in **keyboard/mouse keys for both games**, then read the logs yourself.
 
 **Engineering discipline**
 11. Find the cause before changing code: read both sides' logs, state a hypothesis, test it.
@@ -86,14 +86,14 @@ Machine paths live in `local/paths.json` (template `config/paths.example.json`);
 | Task | Command |
 |---|---|
 | **Dev loop** | `tools/dev.ps1 [-Target all\|skse\|er] [-Game both\|eldenring\|skyrim] [-NoLaunch] [-Restart] [-WaitInWorld N]` build → deploy → backup → launch → wait for ready lines → collect logs. |
-| **ER test without "done" round trips** | `tools/dev.ps1 -Target er -Game eldenring -Restart -WaitInWorld 20 [-ErSelfTest dodge\|roll] [-ErProbe] [-ErVisible] [-ErInjectGroup wprep\|padstep\|ailogic\|prebehavior]`. **Tell the user first:** "press Continue in Elden Ring when it reaches the title screen, then hands off". |
+| **ER test without "done" round trips** | `tools/dev.ps1 -Target er -Game eldenring -Restart -WaitInWorld 20 [-ErSelfTest dodge\|roll] [-ErProbe] [-ErVisible] [-ErInjectGroup wprep\|padstep\|ailogic\|prebehavior]`. Loads in by itself (E/Enter at the title); `-Manual` = the user presses Continue. Skyrim key tests: `-SkyrimKeys "down W; tap LShift 60; up W"`. |
 | Close games | `tools/stop-games.ps1 [-Game ...]` (ER is hidden in-world → killed; fine) |
 | Tests (no game) | `tests/run-tests.ps1` (cargo tests + C++ selftest + cross-process). **Must pass before committing protocol/link changes.** Needs the skse build. |
 | Fake peers | `cargo run -p fake-peer -- <skyrim\|er> [--seconds N] [--no-bye] [--region NAME]`; C++: `build/skse/skyrimxer_link_test.exe peer --side ...`. |
 | Build / deploy / launch / logs | `tools/build.ps1 -Target ...` (skse cold ≈ 6.5 min → background; incremental ≈ 10 s) · `tools/deploy.ps1 [-WhatIf] [-Undo]` · `tools/launch.ps1` · `tools/collect-logs.ps1` · `tools/setup-check.ps1` |
 **Logs:** Skyrim `Documents\My Games\Skyrim Special Edition\SKSE\SkyrimXER.log`; ER `build\er-plugin\logs\skyrimxer_er.log`. Format both sides:
 `<UTC ISO ms> [SKY|ER] [level] [subsystem] message`; truncated on each game start. ER dev switches → `build/er-plugin/skyrimxer_er.cfg` (rewritten by dev.ps1 each launch).
-**ER needs the user for one thing:** pressing Continue on the title screen (no auto-load yet).
+**No user needed to load in:** ER gets the confirm key at the title; Skyrim loads its newest save when `SKYRIMXER_AUTOLOAD` is set (dev launches only).
 
 ## 6. Skyrim side (`skse/`)
 - C++23, `alandtse/CommonLibVR` branch `ng` submodule at `skse/extern/CommonLibSSE-NG` (GPL-3.0; **AE runtime only**), CMake + vcpkg inside a

@@ -1,3 +1,4 @@
+#include "bridge/AutoLoad.h"
 #include "bridge/Bridge.h"
 
 namespace
@@ -26,6 +27,7 @@ namespace
 		case SKSE::MessagingInterface::kDataLoaded:
 			SKSE::log::info("[core] kDataLoaded: game data ready (main menu)");
 			sxer::bridge::Start();
+			sxer::autoload::Install();
 			break;
 		case SKSE::MessagingInterface::kNewGame:
 			SKSE::log::info("[core] new game started");

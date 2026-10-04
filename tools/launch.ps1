@@ -9,6 +9,8 @@
   Skyrim starts through skse64_loader.exe directly (default). Skyrim then gets no Steam Input, so no DualSense: keyboard/mouse only
   for now. -SkyrimVia steam starts it with steam://rungameid/489830 instead (needs a Steam launch option that runs SKSE; the plain
   `"...\skse64_loader.exe" %command%` form fails: the loader rejects the appended path, "too many free args"). Controller: later.
+  -AutoLoad (dev, loader only): sets SKYRIMXER_AUTOLOAD=<newest save name> for Skyrim, so the plugin loads it when the main menu
+  opens (skse/src/bridge/AutoLoad.cpp). Without it nothing changes.
 #>
 [CmdletBinding()]
 param(
@@ -16,7 +18,8 @@ param(
     [string]$Game = 'both',
     [switch]$SkipBackup,
     [ValidateSet('steam', 'loader')]
-    [string]$SkyrimVia = 'loader'
+    [string]$SkyrimVia = 'loader',
+    [switch]$AutoLoad
 )
 
 Set-StrictMode -Version Latest
@@ -52,7 +55,14 @@ if ($Game -in 'both', 'skyrim') {
         Start-Process 'steam://rungameid/489830'
         Write-Host 'Skyrim launching through Steam (launch option -> skse64_loader). If SkyrimXER.log never appears, the launch option is missing.' -ForegroundColor Green
     } else {
+        # skse64_loader passes its environment on to SkyrimSE.exe.
+        # The newest save by name: at the moment the main menu opens, LoadMostRecentSaveGame still finds no saves (2026-10-04).
+        $newest = Get-ChildItem -LiteralPath $paths.SkyrimSaves -Filter *.ess -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if ($AutoLoad -and -not $newest) { Write-Warning "no Skyrim saves in $($paths.SkyrimSaves); load one by hand" }
+        if ($AutoLoad -and $newest) { $env:SKYRIMXER_AUTOLOAD = $newest.BaseName } else { Remove-Item Env:SKYRIMXER_AUTOLOAD -ErrorAction SilentlyContinue }
         Start-Process -FilePath $paths.SkseLoader -WorkingDirectory $paths.SkyrimDir
+        Remove-Item Env:SKYRIMXER_AUTOLOAD -ErrorAction SilentlyContinue
+        if ($AutoLoad -and $newest) { Write-Host "Skyrim will load the newest save by itself ($($newest.Name))" -ForegroundColor Green }
         Write-Host 'Skyrim launching through skse64_loader.exe (no Steam Input: keyboard/mouse only)' -ForegroundColor Green
     }
 }

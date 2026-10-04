@@ -90,3 +90,12 @@ before use (a missing id makes CommonLib abort the game at load).
   - The default body has 26 bones, with the pelvis at index 0.
   - Pelvis skinToBone: rotation = identity, t = (0, 0, −68.91) Skyrim units.
   - Pelvis world scale is 1.03 (race height).
+
+## Dev auto-load (2026-10-04)
+- `skse/src/bridge/AutoLoad.cpp`: `BSTEventSink<MenuOpenCloseEvent>` on `RE::UI` (singleton AE 400327). When "Main Menu" opens, an SKSE task
+  calls `BGSSaveLoadManager` (singleton AE 403340) `Load(name, false)` (AE 35757). All ids checked with `tools/addrlib-check.ps1`.
+- `LoadMostRecentSaveGame` (AE 35766) returned **false** when called right as the main menu opened: the menu hadn't listed the saves yet.
+  So `launch.ps1 -AutoLoad` passes the newest `.ess` file's name in `SKYRIMXER_AUTOLOAD` instead. Load time: ~11 s from the menu.
+- Input: SendInput with scan codes reaches Skyrim's input sink (`[input] user event 'Forward'/'Sprint'` from the key script).
+- Focus: under Chrome Remote Desktop, SetForegroundWindow, AttachThreadInput and the Alt trick all fail (the foreground belongs to
+  `remoting_desktop`); `SwitchToThisWindow` works.
