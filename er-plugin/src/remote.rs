@@ -22,6 +22,8 @@ fn flag(f: PlayerFlag) -> u32 {
 
 pub struct DodgeFromSkyrim {
     reader: Option<SlotReader<InputState>>,
+    /// Last good read: a failed read (every try torn, writer pre-empted mid-write) must not release a held Dodge for a frame.
+    last_input: Option<InputState>,
     fresh: bool,
     held: bool,
     held_frames: u32,
@@ -29,7 +31,7 @@ pub struct DodgeFromSkyrim {
 
 impl DodgeFromSkyrim {
     pub fn new() -> Self {
-        Self { reader: None, fresh: false, held: false, held_frames: 0 }
+        Self { reader: None, last_input: None, fresh: false, held: false, held_frames: 0 }
     }
 
     pub fn run(&mut self) {
@@ -39,7 +41,8 @@ impl DodgeFromSkyrim {
         }
         let Some(reader) = &self.reader else { return };
         let now = now_ms();
-        let input = reader.read();
+        self.last_input = reader.read().or(self.last_input);
+        let input = self.last_input;
         let connected = shared.connected();
         let is_fresh = connected && input.is_some_and(|i| fresh(i.time_ms, now));
         if is_fresh != self.fresh {

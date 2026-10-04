@@ -32,7 +32,7 @@ Both plugins share the region `Local\SkyrimXER_v2`, handshake, exchange heartbea
 2. ~~Injected dodge in hidden ER~~ ✔ (`er-plugin/src/actions.rs`, `pad.rs`, `window.rs`).
 3. ~~Protocol v2 (InputState + PlayerState seqlock slots)~~ ✔ (`protocol/src/slot.rs`, `skse/src/bridge/Slot.h`).
 4. ~~Wire the loop~~ ✔ both games: Skyrim Sprint (keyboard) → hidden ER backsteps → anim/state back in Skyrim's log (~170 ms).
-   Open for the P3 accept: stamina doesn't drop (out of combat?) and no i-frame flag found (`docs/research/elden-ring-state.md`).
+   P3 accept: stamina drop ✔ in combat (136→128 in Skyrim's log and HUD); the i-frame flag is still not found (`docs/research/elden-ring-state.md`).
 
 ## Handoff notes
 **P3 step 3 done (2026-10-04).** Protocol v2 slots are in, and the tests/fake peers exercise them. The plugins were only rebuilt against v2

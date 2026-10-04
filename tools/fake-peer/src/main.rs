@@ -54,16 +54,20 @@ impl Logger {
     }
 }
 
-/// Logs PlayerState edges on the Skyrim side (same wording as skse/tests/link_test.cpp): fresh/stale transitions,
-/// stamina changes, IFrame on/off, anim changes.
+/// Logs PlayerState edges on the Skyrim side (same wording as skse/src/bridge/PlayerWatch.h): fresh/stale transitions,
+/// stamina drops (regen squashed into one line when it reaches max or is interrupted), IFrame on/off, anim changes.
 #[derive(Default)]
 struct PlayerWatch {
     fresh: bool,
     last: Option<PlayerState>,
+    /// Stamina where the current regen started.
+    regen_from: Option<i32>,
 }
 
 impl PlayerWatch {
     fn update(&mut self, log: Logger, state: Option<PlayerState>, connected: bool, now: u64) {
+        // A failed read (every try torn: the writer was pre-empted mid-write) is not staleness: judge the last good copy by its age.
+        let state = state.or(self.last);
         let is_fresh = connected && state.is_some_and(|s| fresh(s.time_ms, now));
         if is_fresh != self.fresh {
             self.fresh = is_fresh;
@@ -83,13 +87,23 @@ impl PlayerWatch {
                     };
                     log.log(Level::Warn, "state", &format!("PlayerState stale ({why}); ignoring it"));
                     self.last = None;
+                    self.regen_from = None;
                 }
             }
         }
         let Some(s) = state.filter(|_| is_fresh) else { return };
         if let Some(prev) = self.last {
-            if s.stamina != prev.stamina {
+            if s.stamina < prev.stamina {
+                if let Some(from) = self.regen_from.take() {
+                    log.info("state", &format!("stamina regen {from}→{} (interrupted)", prev.stamina));
+                }
                 log.info("state", &format!("stamina {}→{} er_frame={}", prev.stamina, s.stamina, s.frame));
+            } else if s.stamina > prev.stamina {
+                let from = *self.regen_from.get_or_insert(prev.stamina);
+                if s.stamina >= s.max_stamina {
+                    log.info("state", &format!("stamina regen {from}→{} er_frame={}", s.stamina, s.frame));
+                    self.regen_from = None;
+                }
             }
             if (s.flags ^ prev.flags) & IFRAME != 0 {
                 log.info("state", &format!("IFrame {} er_frame={}", if s.flags & IFRAME != 0 { "on" } else { "off" }, s.frame));
@@ -138,6 +152,7 @@ impl FakeSky {
 /// Fake ER: a dodge costs 20 stamina and gives 1 s of i-frames.
 struct FakeEr {
     reader: SlotReader<InputState>,
+    last_input: Option<InputState>,
     writer: SlotWriter<PlayerState>,
     held: bool,
     stamina: i32,
@@ -147,7 +162,9 @@ struct FakeEr {
 
 impl FakeEr {
     fn frame(&mut self, log: Logger, shared: &LinkShared, frame: u64, now: u64) {
-        let input = self.reader.read().filter(|i| shared.connected() && fresh(i.time_ms, now));
+        // A torn read keeps the last good copy (see PlayerWatch::update).
+        self.last_input = self.reader.read().or(self.last_input);
+        let input = self.last_input.filter(|i| shared.connected() && fresh(i.time_ms, now));
         let held = input.is_some_and(|i| i.buttons & DODGE != 0);
         if held && !self.held {
             let i = input.unwrap();
@@ -263,6 +280,7 @@ fn main() {
                 }),
                 Side::EldenRing => Role::Er(FakeEr {
                     reader: SlotReader::new(r.clone(), OFF_SLOT_INPUT),
+                    last_input: None,
                     writer: SlotWriter::new(r, OFF_SLOT_PLAYER),
                     held: false,
                     stamina: 100,

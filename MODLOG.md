@@ -4,6 +4,17 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P3: stamina drop shows in Skyrim (combat); torn-read fix; regen log squashed
+- **Tested in-game (both games, ER visible, enemy aggroed in m60_42_37_00):** Left Shift in Skyrim → ER backstep 12027010 → Skyrim log + HUD
+  `stamina 136→128` (a backstep costs 8 stamina in combat; out of combat it costs 0, which is why earlier runs showed none). The enemy's hits showed as
+  HP 1450→1186. **I-frame flag still not found:** the action-flag word diff in combat shows only the anim-length markers (+0x10 bit 0,
+  +0x40 bit 15 `disable_turning`, +0x1d8) and a combat bit (+0x10 bit 4).
+- **Fixed:** a slot read can fail when the writer is pre-empted mid-write (all 64 tries torn). `run-tests` caught the watcher logging a false
+  `stale` because of this. All readers (PlayerWatch C++/Rust, ER `DodgeFromSkyrim`, fake ER) now keep the last good copy and judge staleness by its age;
+  before, ER would also have released a held Dodge for a frame. Stamina regen is now one `stamina regen A→B` line instead of one line per frame.
+- **Tested:** `tests/run-tests.ps1` green 3× in a row; both plugins build.
+- **Result:** the P3 accept's stamina part ✔ (with timestamps). The i-frame window is still open.
+
 ## 2026-10-04: P3: Skyrim HUD feedback for playtests
 - **Changed:** `skse/src/bridge/Hud.cpp` (ShowHUDMessage, AE id 52933, checked with addrlib-check). `Bridge.cpp` `UpdateHud`: top-left
   notifications for ER connected/lost, ER character in/out of the world, and one summary per Dodge press 0.6 s later (ER anim reaction,
