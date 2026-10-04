@@ -4,6 +4,14 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: hands and feet follow the roll (finger/toe transforms carried)
+- **User:** "the hands, wrists and feet stay in place when rolling, causing it to stretch".
+- **Cause (probe):** fingers and toes aren't nodes in the player's tree. The skinned meshes skin them through loose animation-output
+  transforms (hands: 34 of 36 bones outside the tree), which kept Skyrim's animation.
+- **Fix:** `Pose.cpp` Carry moves each one rigidly with its nearest posed bone every frame. Pointers are re-read live.
+- **Tested:** contact sheet of a forward roll: hands and feet stay on the limbs through the tumble; limb check 0°; hook ≤ 0.17 ms.
+  A first probe that read nodes out of those pointers crashed Skyrim (they aren't nodes); removed.
+
 ## 2026-10-05: LOCO-PLAN stage A (partial): smoother pose, v5, whole-roll follow; movement smoothing stuck
 - **Why:** the user's playtest said the roll is jittery, the distance is off, the arms stretch and running after a roll is weird.
   The user chose full ER locomotion (`docs/LOCO-PLAN.md`).

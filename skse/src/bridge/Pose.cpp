@@ -7,6 +7,7 @@
 #include <format>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "bridge/Coords.h"
@@ -127,6 +128,7 @@ namespace sxer::pose
 			// one node that gets the UpdateDownwardPass.
 			RE::NiAVObject* mover = nullptr;
 			std::vector<Helper> helpers;
+			std::unordered_set<const RE::NiTransform*> treeWorlds;  // world transforms of every node in the third-person tree
 		};
 
 		struct State
@@ -253,6 +255,23 @@ namespace sxer::pose
 					helpers += std::format(" {}", node->name.c_str());
 				}
 			}
+			// Third-person scene-graph transforms: anything a skinned mesh skins with that isn't one of these is a loose animation output
+			// (fingers, toes: see Carry), 2026-10-05 probe.
+			{
+				std::vector<RE::NiAVObject*> stack{ a_root };
+				while (!stack.empty()) {
+					auto* n = stack.back();
+					stack.pop_back();
+					r.treeWorlds.insert(&n->world);
+					if (auto* node = n->AsNode()) {
+						for (auto& c : node->GetChildren()) {
+							if (c) {
+								stack.push_back(c.get());
+							}
+						}
+					}
+				}
+			}
 			r.pelvisBind = ToVec(bind[0]->translate);
 			r.heightRatio = r.pelvisBind[2] / (kErPelvisHeightM * coords::kSkyrimUnitsPerM);
 			const auto pos = [&](std::size_t k) { return Fmt(ToVec(bind[k]->translate)); };
@@ -261,6 +280,49 @@ namespace sxer::pose
 				kBones, geometries, pos(0), pos(5), pos(9), pos(13), pos(16), r.heightRatio, derived.empty() ? " none" : derived);
 			SKSE::log::info("[pose] helpers held at bind ({}):{}", r.helpers.size(), helpers.empty() ? " none" : helpers);
 			return r.ok = true;
+		}
+
+		// Fingers and toes aren't nodes in the player's tree (51 nodes): the skinned hands, feet and body skin them through loose world
+		// transforms the animation writes directly (boneWorldTransforms entries outside the tree, 0x80 apart, at the hands and feet;
+		// probe 2026-10-05). Re-posing a hand left its fingers where Skyrim's animation put them: hands, wrists and feet stretched.
+		// Each frame, every such transform is carried rigidly with the nearest posed bone (its change from the animation's world to ours),
+		// so fingers keep Skyrim's grip relative to the hand. Pointers are read from the live skin instances every frame (an equipment
+		// change rebuilds them).
+		void Carry(RE::NiAVObject* a_root, const std::array<RE::NiTransform, kBones>& a_before)
+		{
+			const auto& r = g.rig;
+			std::array<RE::NiTransform, kBones> change;
+			for (std::size_t k = 0; k < kBones; ++k) {
+				change[k] = r.nodes[k]->world * a_before[k].Invert();
+			}
+			std::array<const RE::NiTransform*, 256> seen{};
+			std::size_t nSeen = 0;
+			RE::BSVisit::TraverseScenegraphGeometries(a_root, [&](RE::BSGeometry* a_geom) {
+				auto* skin = a_geom->GetGeometryRuntimeData().skinInstance.get();
+				auto* data = skin ? skin->skinData.get() : nullptr;
+				if (!data || !skin->boneWorldTransforms) {
+					return RE::BSVisit::BSVisitControl::kContinue;
+				}
+				for (std::uint32_t i = 0; i < data->bones; ++i) {
+					const auto* t = skin->boneWorldTransforms[i];
+					if (!t || r.treeWorlds.contains(t) || std::find(seen.begin(), seen.begin() + nSeen, t) != seen.begin() + nSeen) {
+						continue;
+					}
+					if (nSeen < seen.size()) {
+						seen[nSeen++] = t;
+					}
+					std::size_t best = 0;
+					float bestD = 1e30f;
+					for (std::size_t k = 0; k < kBones; ++k) {
+						const float d = (a_before[k].translate - t->translate).SqrLength();
+						if (d < bestD) {
+							bestD = d, best = k;
+						}
+					}
+					*const_cast<RE::NiTransform*>(t) = change[best] * *t;
+				}
+				return RE::BSVisit::BSVisitControl::kContinue;
+			});
 		}
 
 		// Fits from ER's bind directions (PoseBind), limbs only.
@@ -354,6 +416,10 @@ namespace sxer::pose
 		// SetHeading. Heading grows when turning right = negative rotation about +Z.
 		const float rootHeading = std::atan2(rootRot.entry[0][1], rootRot.entry[1][1]);
 		const auto yaw = rig::AxisAngle({ 0.0f, 0.0f, 1.0f }, -std::remainder(g.facing - rootHeading, 2.0f * 3.14159265f));
+		std::array<RE::NiTransform, kBones> before;  // the animation's world transforms, for Carry
+		for (std::size_t k = 0; k < kBones; ++k) {
+			before[k] = r.nodes[k]->world;
+		}
 		Done done;
 		for (std::size_t k = 0; k < kBones; ++k) {
 			auto* node = r.nodes[k];
@@ -382,6 +448,7 @@ namespace sxer::pose
 		}
 		RE::NiUpdateData update{};
 		r.mover->UpdateDownwardPass(update, 0);
+		Carry(root, before);
 		// Check (first frames of each stretch, then every 300): the posed segment (bone → end) in model space vs ER's, after the yaw
 		// and delta, for every bone with a segment. Big errors mean a wrong bind, fit or basis; the numbers say which bone.
 		if (g.weight >= 1.0f && (g.applied == 10 || g.applied % 300 == 299)) {

@@ -127,3 +127,14 @@ before use (a missing id makes CommonLib abort the game at load).
   - The drawn 3D root stalls exactly like `GetPosition()`, so this is real, not a measuring artefact.
 - Both references move their player with `SetPosition` each frame (controller velocity zeroed): SkyCraft `Game.cpp:790`, FalloutCraft
   `fo_game.cpp:786`. They rely on the hidden game's collision, which we can't (ER's world isn't Skyrim's).
+
+## Fingers and toes are not nodes (2026-10-05)
+- The player's third-person tree has 51 nodes and no finger or toe nodes. The skinned hands (36 bones), feet (6) and body (24) still skin
+  fingers and toes, through `NiSkinInstance::boneWorldTransforms` entries that point **outside the tree**: loose world transforms the
+  animation writes directly, 0x80 apart, sitting at the hands and feet.
+- They are not `NiAVObject::world` members: reading a node out of one crashed (access violation).
+- Posing the hands and feet without them left the fingers and toes where Skyrim's animation put them, so the hands, wrists and feet
+  stretched during rolls.
+- **Fix** (`Pose.cpp` Carry): after posing, each such transform is moved rigidly with its nearest posed bone (posed world × animation
+  world⁻¹). The pointers are read from the live skin instances every frame. Verified on a contact sheet: hands and feet follow
+  through the whole tumble.
