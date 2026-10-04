@@ -14,6 +14,10 @@ pub struct Config {
     pub inject_group: String,
     /// Log sp_move bits at several task groups each frame (actions::probe).
     pub probe: bool,
+    /// Research: dump player memory snapshots to logs/combat_dump.bin (combat::Dump) and log SpEffect changes (combat::SpEffectWatch).
+    pub dump: bool,
+    /// `on` / `off`: force ER's combat state every frame (combat::ForceCombat, P4 step 2 research). Empty = leave it to the game.
+    pub force_combat: String,
 }
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
@@ -30,6 +34,8 @@ pub fn load(dir: &Path) {
                 "selftest" => config.selftest = value.to_string(),
                 "inject_group" => config.inject_group = value.to_string(),
                 "probe" => config.probe = value == "1",
+                "dump" => config.dump = value == "1",
+                "force_combat" => config.force_combat = value.to_string(),
                 other => crate::error!("core", "skyrimxer_er.cfg: unknown key `{other}`"),
             }
         }

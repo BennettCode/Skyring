@@ -4,6 +4,17 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P4 step 2: ER combat flag found and forced (ER self-test)
+- **Changed:** `er-plugin/src/combat.rs`: `in_combat`/`set_in_combat` (CSChrDataModule +0x19a bit 0x40 = out of combat), `CombatWatch`
+  (logs ER's combat-state edges every session), `ForceCombat` (`-ErForceCombat on|off`, one write per frame in ChrIns_AILogic), research
+  tools behind `-ErDump`: `Dump` (raw PlayerIns/PlayerGameData/module snapshots → `logs/combat_dump.bin`) and `SpEffectWatch`.
+  `log.rs` remembers the log dir; `config.rs` + `tools/dev.ps1` got the new switches.
+- **Tested:** (1) SpEffect watch while the user rolled calm/in combat: no SpEffect explains it (ruled out). (2) Memory dump of the same
+  sequence, analysed offline: one bit separates 7 free from 8 costly rolls. (3) Self-tests: written in every group, only ChrIns_NaviCache
+  changes it back; forced in combat with no enemy, 5/5 rolls cost 12 stamina. The final single-group write (AILogic) follows from (3)
+  and gets re-checked in step 3's both-games test.
+- **Result:** ✔ step 2. Next: step 3, protocol v3 carries Skyrim's combat state to ER.
+
 ## 2026-10-04: P4 step 1: Sprint swallowed, F10 toggle, ER stick only around dodges
 - **Changed:** P4 plan (`docs/P4-PLAN.md`, ROADMAP P4/P5 edited after the user's choices). New `skse/src/hooks/SprintSwallow.cpp`:
   `SprintHandler::CanProcess` (vtable AE 208717, vfunc 0x1) refuses Sprint presses while `bridge::SwallowSprint()` (bridge on + connected +

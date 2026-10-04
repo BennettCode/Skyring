@@ -13,8 +13,19 @@ Game/version: eldenring.exe 2.7.1.0 (1.17.1), eldenring-rs `59fbd3b`. Read in `e
 
 ## Stamina: dodges are free out of combat
 - Out of combat, stamina never drops on a backstep (real and injected, many runs). With an enemy aggroed (m60_42_37_00), a backstep costs
-  **8** (136→128), then it regenerates in ~0.5 s.
+  **8** (136→128) and a roll **12** (136→124), then it regenerates in ~0.5 s.
 - Confidence: verified by test (2026-10-04).
+
+## Combat flag: `CSChrDataModule` byte +0x19a, bit 0x40 (set = out of combat)
+- eldenring-rs maps these bytes as `unk198` (the u32 at +0x198 reads 0x20400050 calm, 0x20000050 in combat). `er-plugin/src/combat.rs`.
+- **Found by:** a raw memory dump every 15 frames (PlayerIns, PlayerGameData, 10 typed modules) while the user rolled calm, then near an
+  aggroed enemy, then after resting at a grace. Of all words, this bit alone separated the 7 free rolls from the 8 costly ones with only
+  4 changes: cleared 15 frames before the first costly roll (enemy aggro), set again while sitting at the grace.
+- **Not a SpEffect:** no active effect has `consume_stamina_rate` ≠ 1, and combat began with no SpEffect change (effects 26/4202 don't match).
+- **Recomputed every frame in ChrIns_NaviCache:** written in every task group from WorldChrMan_Prepare to ChrIns_PostPhysics, only
+  NaviCache found it changed back (300/300 frames). A write in ChrIns_AILogic holds through behavior.
+- **Forcing works:** with the bit cleared every frame and no enemy near, 5/5 injected rolls cost 12 stamina (136→124, then regen).
+- Confidence: verified by test (2026-10-04, ER self-test `-ErSelfTest roll -ErForceCombat on`).
 
 ## I-frame flag: `action_modifiers_flags` bit 1 (FLAG_AS_DODGING), rolls only
 - **Rolls set it, backsteps don't.** `CSChrActionFlagModule.action_modifiers_flags` (u64, module +0x40) bit 1 (eldenring-rs `dodging`,

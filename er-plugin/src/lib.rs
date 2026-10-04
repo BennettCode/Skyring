@@ -6,6 +6,7 @@
 
 mod actions;
 mod bridge;
+mod combat;
 mod config;
 mod focus;
 mod game;
@@ -97,6 +98,26 @@ fn init(module: usize) {
     std::mem::forget(task.run_recurring(move |_: &FD4TaskData| watcher.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
     std::mem::forget(task.run_recurring(|_: &FD4TaskData| remote::publish_state(false), CSTaskGroupIndex::ChrIns_PostPhysics));
     std::mem::forget(task.run_recurring(|_: &FD4TaskData| remote::sample_coords(), CSTaskGroupIndex::ChrIns_PostPhysics));
+    if config::get().dump {
+        let mut speffects = combat::SpEffectWatch::new();
+        std::mem::forget(task.run_recurring(move |_: &FD4TaskData| speffects.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
+        info!("core", "SpEffect watch in ChrIns_PostPhysics (research, dump=1)");
+    }
+    let mut combat_watch = combat::CombatWatch::new();
+    std::mem::forget(task.run_recurring(move |_: &FD4TaskData| combat_watch.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
+    let force = config::get().force_combat.as_str();
+    if force == "on" || force == "off" {
+        let on = force == "on";
+        // ER recomputes the flag every frame in ChrIns_NaviCache (P4 step 2: written in every group WorldChrMan_Prepare..PostPhysics,
+        // only NaviCache found it changed back). Written once per frame in ChrIns_AILogic, it holds through behavior, where dodges are charged.
+        let mut f = combat::ForceCombat::new("ChrIns_AILogic", on);
+        std::mem::forget(task.run_recurring(move |_: &FD4TaskData| f.run(), CSTaskGroupIndex::ChrIns_AILogic));
+        info!("combat", "FORCE combat state {force} (ChrIns_AILogic, every frame)");
+    }
+    if config::get().dump {
+        let mut dump = combat::Dump::new();
+        std::mem::forget(task.run_recurring(move |_: &FD4TaskData| dump.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
+    }
     info!("core", "PlayerState publisher in ChrIns_PostPhysics (FrameBegin while not in world), dodge watcher in ChrIns_PostPhysics");
     if config::get().probe {
         let last = actions::probe::GROUPS.len() - 1;

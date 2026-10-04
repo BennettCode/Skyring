@@ -8,6 +8,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock, TryLockError};
 
 static LOG_FILE: OnceLock<Mutex<File>> = OnceLock::new();
+/// The log directory, for probe dumps written next to the log.
+pub static LOG_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
 /// Set during process exit: other threads may have been killed while holding the lock, so never block on it then.
 pub static EXITING: AtomicBool = AtomicBool::new(false);
 
@@ -20,6 +22,7 @@ pub fn init(dir: &Path) -> std::io::Result<()> {
         .truncate(true)
         .open(dir.join("skyrimxer_er.log"))?;
     let _ = LOG_FILE.set(Mutex::new(file));
+    let _ = LOG_DIR.set(dir.to_path_buf());
     Ok(())
 }
 

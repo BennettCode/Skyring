@@ -37,6 +37,10 @@ First: copy this plan to `docs/P4-PLAN.md`, ROADMAP P4/P5 edits (swallow list, v
   `docs/research/elden-ring-state.md`.
 - Then a self-test switch (`-ErSelfTest combat`) that forces the found state with no enemy and checks a roll costs stamina.
 - Afterwards the user moves the ER test character once to **flat open ground with no enemies** (ER-side walls shorten rolls; enemies hurt it).
+- **Result (2026-10-04):** attempt 1 (SpEffect watch: an out-of-combat effect with `consume_stamina_rate` 0) ruled out. Attempt 2 (raw
+  memory dump, analysed offline) found it: `CSChrDataModule` +0x19a bit 0x40 = out of combat. ER recomputes it in ChrIns_NaviCache every
+  frame; written in ChrIns_AILogic it holds, and forced "in combat" with no enemy 5/5 rolls cost 12 stamina. `combat::set_in_combat`,
+  `-ErForceCombat on|off`, `-ErDump`. Details: `docs/research/elden-ring-state.md`.
 
 ### 3. Protocol v3 (no game; `tests/run-tests.ps1` green)
 - `messages.toml`: version 3 / `Local\SkyrimXER_v3`; InputState `_pad1` → `flags` (new enum `InputFlag`: `InCombat`, `BridgeOn`);
