@@ -66,7 +66,8 @@ All development and playtesting happens on this exact setup. Other versions are 
 | me3 (Elden Ring mod loader) | **0.13.0** |
 | OS | Windows 11 x64 |
 
-**Controller notes:** Elden Ring supports the DualSense natively. Skyrim only speaks XInput, so it sees the DualSense through Steam Input.
+**Controller notes:** Elden Ring supports the DualSense natively. Skyrim only speaks XInput, so it sees the DualSense through Steam Input,
+which doesn't apply when SKSE is started outside Steam. Until that's solved, Skyrim is tested with the keyboard (Sprint = Left Shift).
 
 You need your own legal copies of both games. This repository contains **no game files**.
 

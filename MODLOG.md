@@ -4,6 +4,18 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P3 step 4a: Skyrim frame hook + Sprint → InputState (vs fake ER)
+- **Changed:** `skse/src/hooks/PlayerUpdate.cpp` (PlayerCharacter::Update vfunc 0xAD), `skse/src/bridge/Input.cpp` (input sink: Sprint
+  user event held → Dodge; logs the first event per device and each user event once), `Bridge.cpp` `OnFrame` (writes InputState, reads
+  PlayerState through `PlayerWatch.h`, `[perf]` p50/p95/p99 every 5 s, frames now in Heartbeat). `tools/addrlib-check.ps1` checks
+  Address Library ids. `launch.ps1 -SkyrimVia steam|loader` (default loader).
+- **Tested in-game (Skyrim + `fake-peer er`, keyboard):** the ids were checked first (all present). Sprint (Left Shift) taps → `Dodge down` →
+  PlayerState stamina 100→80 + IFrame on ~17 ms later, IFrame off after 1 s, regen; a hold works as well. Frame time p50 16.8 ms, hook ≈ 2 µs.
+  Clean exit → fake ER saw Bye. `tests/run-tests.ps1` passes.
+- **Found:** Skyrim gets **no gamepad events** when started by skse64_loader outside Steam (no Steam Input). The Steam launch option
+  `"...skse64_loader.exe" %command%` fails ("too many free args"). The controller is deferred (user decision). Notes: `docs/research/skyrim-hooks.md`.
+- **Result:** step 4 Skyrim side ✔ (keyboard). Next: ER side (injector from InputState, PlayerState publisher).
+
 ## 2026-10-04: P3 step 3 done: protocol v2 seqlock slots
 - **Changed:** schema v2 (`Local\SkyrimXER_v2`): `InputState` slot @0x200 (sky→er), `PlayerState` slot @0x300 (er→sky), `Button`/`PlayerFlag`
   bit enums, `SLOT_STALE_MS`/`SLOT_READ_TRIES`. protogen requires `SLOT_*` structs to start with `seq: u32`. New `protocol/src/slot.rs` + C++ mirror

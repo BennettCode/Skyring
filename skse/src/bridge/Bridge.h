@@ -1,8 +1,10 @@
 #pragma once
 
-// Owns the plugin's Link and the thread that ticks it every LINK_TICK_MS.
+// Owns the plugin's Link and the thread that ticks it every LINK_TICK_MS, and the per-frame slot traffic.
 namespace sxer::bridge
 {
-	// Starts the link thread (called on kDataLoaded). Later calls do nothing.
+	// Starts the link thread and installs the frame hook + input sink (called on kDataLoaded). Later calls do nothing.
 	void Start();
+	// Main thread, once per game frame (hooks/PlayerUpdate.cpp): Sprint → InputState, PlayerState → log edges, perf every 5 s.
+	void OnFrame(float a_delta);
 }

@@ -22,6 +22,8 @@ Both plugins share the region `Local\SkyrimXER_v2`, handshake, exchange heartbea
 - Installed in the game (see `local/install-manifest.json` + `local/deploy-manifest.json`): SKSE 2.3.1, Address Library v13, Crash Logger, SkyrimXER.dll.
 
 ## Blockers / open questions
+- **Skyrim + DualSense:** Skyrim sees no gamepad when started by skse64_loader (no Steam Input). Keyboard Sprint (Left Shift) is used for
+  P3; controller support comes later (`docs/research/skyrim-hooks.md`).
 - None blocking. Arena settled: the test character is parked in m10_01_00_00 and the user presses
   Continue each run (no warp in P3). The user tests with a DualSense (PS5) over USB in both games.
 
@@ -29,8 +31,8 @@ Both plugins share the region `Local\SkyrimXER_v2`, handshake, exchange heartbea
 1. ~~ER keeps running hidden~~ ✔ (60 fps hidden, `er-plugin/src/window.rs`).
 2. ~~Injected dodge in hidden ER~~ ✔ (`er-plugin/src/actions.rs`, `pad.rs`, `window.rs`).
 3. ~~Protocol v2 (InputState + PlayerState seqlock slots)~~ ✔ (`protocol/src/slot.rs`, `skse/src/bridge/Slot.h`).
-4. Wire the loop: Skyrim Sprint → InputState → ER injector → PlayerState back to Skyrim (`docs/P3-PLAN.md` step 4; new engine hook +
-   Address Library check, so plan mode).
+4. Wire the loop: Skyrim side ✔ (frame hook + Sprint → InputState, tested vs fake ER). Next: ER injector from InputState + PlayerState
+   publisher, then both games (P3 accept).
 
 ## Handoff notes
 **P3 step 3 done (2026-10-04).** Protocol v2 slots are in, and the tests/fake peers exercise them. The plugins were only rebuilt against v2

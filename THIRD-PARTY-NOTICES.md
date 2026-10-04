@@ -7,7 +7,7 @@ If code is copied, also keep the original license text in `licenses/<project>.tx
 
 | Project | Used for | License | Link |
 |---|---|---|---|
-| SkyCraft (chasmlol) | Reference architecture: shared-memory protocol, seqlock slot pattern, authority split, frame lockstep, CMake/CommonLib setup, fake-peer testing | MIT | https://github.com/chasmlol/SkyCraft |
+| SkyCraft (chasmlol) | Reference architecture: shared-memory protocol, seqlock slot pattern, PlayerCharacter::Update hook + input sink pattern, authority split, frame lockstep, CMake/CommonLib setup, fake-peer testing | MIT | https://github.com/chasmlol/SkyCraft |
 | FalloutCraft (zeyvu) | Reference port of the SkyCraft design | MIT | https://github.com/zeyvu/FalloutCraft |
 | GTA San AnSkateas (ryglizzy) | Reference: plugin + Rust FFI engine bridge (study only; no LICENSE file, so **don't copy code**) | none found | https://github.com/ryglizzy/GTA-San-AnSkateas |
 | AI Game Modding Guides (trevaintdead) | Workflow, rules and publishing guidance | MIT | https://github.com/trevaintdead/ai-game-modding-guides |

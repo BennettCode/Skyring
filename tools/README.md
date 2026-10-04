@@ -8,6 +8,7 @@ Run them as `powershell -ExecutionPolicy Bypass -File tools/<script>`. Shared he
 |---|---|
 | `dev.ps1` | **The dev loop in one command:** build → deploy → back up saves → launch → wait for each plugin's ready line → collect logs. See the flags below. |
 | `stop-games.ps1` | Closes Skyrim and/or ER (`-Game both\|eldenring\|skyrim`): clean close first, then kill (ER is hidden in-world, so it gets killed). |
+| `addrlib-check.ps1` | `-Id 208040,402776`: checks Address Library ids against the installed `versionlib-*.bin` (format 5). Run it before using any new id: a missing one aborts Skyrim at load. |
 | `setup-check.ps1` | Read-only check of game exe versions, SKSE, Address Library, Crash Logger, me3, VS C++/CMake/vcpkg, Rust, git, and that EAC isn't running. |
 | `build.ps1` | `-Target all\|skse\|er`. skse: CMake in a VS dev shell → `build/skse/`. er: cargo → `build/er-plugin/` (retries the copy while a killed ER holds the DLL). |
 | `deploy.ps1` | Copies `SkyrimXER.dll/.pdb` into `Data/SKSE/Plugins/` + writes `local/deploy-manifest.json`. `-Undo` removes exactly those files. `-WhatIf`. |

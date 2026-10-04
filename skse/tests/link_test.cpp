@@ -8,11 +8,12 @@
 //       Real-time peer, for cross-language tests against `cargo run -p fake-peer`. Same thread shape as the plugin: the link
 //       ticks on its own thread, the main thread runs ~60 "frames"/s and touches only the slots. As skyrim it holds Dodge
 //       for 250 ms (first 1 s after connecting, then every S seconds, default 4) and logs PlayerState edges with the
-//       same wording as tools/fake-peer.
+//       same wording as tools/fake-peer (bridge/PlayerWatch.h).
 //
 // The generated header's static_asserts also make this target the C++ layout test.
 
 #include "bridge/Link.h"
+#include "bridge/PlayerWatch.h"
 #include "bridge/Slot.h"
 
 #include <array>
@@ -43,7 +44,6 @@ namespace
 	using sxer::proto::PlayerState;
 
 	constexpr std::uint32_t kDodge = 1u << static_cast<std::uint32_t>(sxer::proto::Button::Dodge);
-	constexpr std::uint32_t kIFrame = 1u << static_cast<std::uint32_t>(sxer::proto::PlayerFlag::IFrame);
 
 	int g_failures = 0;
 
@@ -194,51 +194,6 @@ namespace
 		std::exit(2);
 	}
 
-	// Logs PlayerState edges on the Skyrim side (same wording as tools/fake-peer): fresh/stale transitions, stamina changes,
-	// IFrame on/off, anim changes. Step 4 moves this into the plugin.
-	class PlayerWatch
-	{
-	public:
-		void Update(std::optional<PlayerState> a_state, bool a_connected, std::uint64_t a_now)
-		{
-			const bool fresh = a_connected && a_state && sxer::Fresh(a_state->time_ms, a_now);
-			if (fresh != fresh_) {
-				fresh_ = fresh;
-				if (fresh) {
-					const auto& s = *a_state;
-					spdlog::info("[state] PlayerState fresh: stamina={}/{} hp={}/{} flags={:#x} anim={} er_frame={}", s.stamina, s.max_stamina, s.hp,
-						s.max_hp, s.flags, s.anim_id, s.frame);
-				} else {
-					const auto why = !a_connected ? std::string("link not connected") :
-					                 !a_state     ? std::string("never written") :
-					                                std::format("last write {} ms ago", a_now > a_state->time_ms ? a_now - a_state->time_ms : 0);
-					spdlog::warn("[state] PlayerState stale ({}); ignoring it", why);
-					last_.reset();
-				}
-			}
-			if (!fresh) {
-				return;
-			}
-			const auto& s = *a_state;
-			if (last_) {
-				if (s.stamina != last_->stamina) {
-					spdlog::info("[state] stamina {}→{} er_frame={}", last_->stamina, s.stamina, s.frame);
-				}
-				if ((s.flags ^ last_->flags) & kIFrame) {
-					spdlog::info("[state] IFrame {} er_frame={}", (s.flags & kIFrame) ? "on" : "off", s.frame);
-				}
-				if (s.anim_id != last_->anim_id) {
-					spdlog::info("[state] anim {}→{} er_frame={}", last_->anim_id, s.anim_id, s.frame);
-				}
-			}
-			last_ = s;
-		}
-
-	private:
-		bool fresh_ = false;
-		std::optional<PlayerState> last_;
-	};
-
 	int Peer(int a_argc, char** a_argv)
 	{
 		Side side = Side::Skyrim;
@@ -293,7 +248,7 @@ namespace
 		// "Game" thread: slots only (Skyrim side; the C++ ER peer only runs the link).
 		std::optional<sxer::SlotWriter<InputState>> input;
 		std::optional<sxer::SlotReader<PlayerState>> player;
-		PlayerWatch watch;
+		sxer::PlayerWatch watch;
 		std::optional<std::uint64_t> nextPulse;
 		bool held = false;
 		const auto everyMs = static_cast<std::uint64_t>(dodgeEvery * 1000);

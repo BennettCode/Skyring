@@ -5,12 +5,18 @@
   powershell -ExecutionPolicy Bypass -File tools/launch.ps1 -Game eldenring
   powershell -ExecutionPolicy Bypass -File tools/launch.ps1 -Game skyrim
   powershell -ExecutionPolicy Bypass -File tools/launch.ps1            # both: ER first, then Skyrim
+.NOTES
+  Skyrim starts through skse64_loader.exe directly (default). Skyrim then gets no Steam Input, so no DualSense: keyboard/mouse only
+  for now. -SkyrimVia steam starts it with steam://rungameid/489830 instead (needs a Steam launch option that runs SKSE; the plain
+  `"...\skse64_loader.exe" %command%` form fails: the loader rejects the appended path, "too many free args"). Controller: later.
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('both', 'eldenring', 'skyrim')]
     [string]$Game = 'both',
-    [switch]$SkipBackup
+    [switch]$SkipBackup,
+    [ValidateSet('steam', 'loader')]
+    [string]$SkyrimVia = 'loader'
 )
 
 Set-StrictMode -Version Latest
@@ -40,6 +46,13 @@ if ($Game -in 'both', 'skyrim') {
     if (-not (Test-Path -LiteralPath (Join-Path $paths.SksePlugins 'SkyrimXER.dll'))) {
         Write-Warning 'SkyrimXER.dll is not deployed; Skyrim will start without the mod. Run tools/deploy.ps1.'
     }
-    Start-Process -FilePath $paths.SkseLoader -WorkingDirectory $paths.SkyrimDir
-    Write-Host 'Skyrim launching through SKSE' -ForegroundColor Green
+    if ($SkyrimVia -eq 'steam') {
+        if (-not (Get-Process -Name steam -ErrorAction SilentlyContinue)) { throw 'Steam is not running. Start Steam (offline mode is fine) and rerun.' }
+        # Steam runs the launch option (skse64_loader.exe %command%), so SKSE loads AND Steam Input feeds the DualSense as XInput.
+        Start-Process 'steam://rungameid/489830'
+        Write-Host 'Skyrim launching through Steam (launch option -> skse64_loader). If SkyrimXER.log never appears, the launch option is missing.' -ForegroundColor Green
+    } else {
+        Start-Process -FilePath $paths.SkseLoader -WorkingDirectory $paths.SkyrimDir
+        Write-Host 'Skyrim launching through skse64_loader.exe (no Steam Input: keyboard/mouse only)' -ForegroundColor Green
+    }
 }
