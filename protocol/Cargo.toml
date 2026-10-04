@@ -13,6 +13,7 @@ name = "skyrimxer_protocol"
 windows = { workspace = true, features = [
     "Win32_Security",
     "Win32_System_Memory",
+    "Win32_System_Performance",
     "Win32_System_SystemInformation",
     "Win32_System_Threading",
 ] }

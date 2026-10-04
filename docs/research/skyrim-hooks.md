@@ -117,3 +117,13 @@ before use (a missing id makes CommonLib abort the game at load).
 - **Cost:** ≤ 0.14 ms per frame while posing (hook p99 ~0.1 ms, 0.01 ms idle); frame time unchanged (17 ms p99).
 - **Polish later:** prefer the body mesh's bind (today the first skinned mesh wins, so armour with another bind can tilt a bone), finger and toe bones, foot planting/IK, smoothing between ER frames when Skyrim runs above 60 fps,
   ending the pose at ER's move-cancel window instead of the end of the animation (101 frames).
+
+## ApplyCurrent is uneven frame to frame (LOCO-PLAN stage A, 2026-10-05)
+- `ApplyCurrent(velocityTime, v)` returns **false and ignores the call while a previous current is still running**. Probe, roll, 60 frames:
+  - 1-frame currents: accepted on alternate frames, so the motion comes in bursts (the playtest judder).
+  - 2-frame currents: frame 1 accepted, frames 2-4 refused. Stalls 23 (frames with no movement while ER moves), biggest frame-to-frame
+    change 45% of peak, 89% of ER's distance.
+  - 0.75-frame currents with the velocity scaled up: stalls 25-27, spikes up to 89% of peak, 94% of the distance.
+  - The drawn 3D root stalls exactly like `GetPosition()`, so this is real, not a measuring artefact.
+- Both references move their player with `SetPosition` each frame (controller velocity zeroed): SkyCraft `Game.cpp:790`, FalloutCraft
+  `fo_game.cpp:786`. They rely on the hidden game's collision, which we can't (ER's world isn't Skyrim's).

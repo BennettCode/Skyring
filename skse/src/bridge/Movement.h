@@ -11,7 +11,7 @@
 // Skyrim's character controller (and its collision) moves the player. Main thread only.
 namespace sxer::movement
 {
-	// Every frame, after PlayerState was read. a_state = fresh PlayerState (nullopt when stale/disconnected); a_enabled = bridge on;
+	// Every frame. a_state = ER's PlayerState interpolated on Skyrim's clock (bridge/Timeline; nullopt when stale/disconnected); a_enabled = bridge on;
 	// a_pressed = Dodge was pressed this frame.
 	void Update(RE::PlayerCharacter* a_player, const std::optional<proto::PlayerState>& a_state, const input::Move& a_move, bool a_enabled,
 		bool a_pressed, float a_delta, std::uint64_t a_frame);
@@ -19,4 +19,7 @@ namespace sxer::movement
 	bool Active();
 	// The roll direction (heading convention) while a dodge moves the player: ER's forward is laid along it, so the posed body faces it.
 	std::optional<float> RollHeading();
+	// True from the moment the player steered out of a dodge (ER's move-cancel window) until that dodge animation ends: Skyrim moves the
+	// player again, so the ER pose must not keep playing the recovery.
+	bool HandedBack();
 }

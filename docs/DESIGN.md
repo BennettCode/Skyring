@@ -33,13 +33,13 @@ Alternatives considered (if the draft fails the tests):
 - **ER owns position too** (like SkyCraft's Minecraft): would need Skyrim collision streamed into ER's Havok world. Very hard, deferred.
 - **No hidden ER, re-implement the rules in SKSE**: simpler, but it's not a merge and loses ER's exact timing/math. Fallback only.
 
-## 4. Protocol (`Local\SkyrimXER_v4`)
+## 4. Protocol (`Local\SkyrimXER_v5`)
 
 Source of truth: `protocol/schema/messages.toml` → `cargo run -p protogen` → `protocol/generated/skyrimxer_protocol.{h,rs}`.
 Fixed-size little-endian plain structs, explicit padding only (protogen rejects implicit padding), size/offset asserts in both
 languages, `version` + region name bump for any layout change.
 
-**v4 region (P4, 0x21000 bytes; v4 = v3 + PoseState slot; v3 = v2 + InputState `flags` + PlayerFlag InCombat; v1 = v2 without the slots):**
+**v5 region (P4, 0x21000 bytes; v5 = v4 + time_us stamps, PlayerState cam_yaw, 24 pose bones, PoseBind slot; v4 = v3 + PoseState slot; v3 = v2 + InputState `flags` + PlayerFlag InCombat; v1 = v2 without the slots):**
 ```
 0x00000 Header       magic 'SXER' (written last by the creator), version, header_size, region_size,
                      sky_/er_ pid, state (SideState), heartbeat_ms (GetTickCount64), attach_count   (64 B)
@@ -47,10 +47,12 @@ languages, `version` + region name bump for any layout change.
 0x00140 RingHeader   er→sky
 0x00200 InputState   sky→er   seqlock slot (48 B): frame, time_ms, buttons (Button bits), flags (InputFlag: InCombat,
                               BridgeOn), move_x/y, cam_yaw
-0x00300 PlayerState  er→sky   seqlock slot (80 B): flags (PlayerFlag bits), frame, time_ms, hp/fp/stamina + maxes,
+0x00300 PlayerState  er→sky   seqlock slot (96 B; + time_us, cam_yaw): flags (PlayerFlag bits), frame, time_ms, hp/fp/stamina + maxes,
                               anim_id, block_id, poise(+max), pos[3], yaw
-0x00400 PoseState    er→sky   seqlock slot (368 B): flags (PoseFlag Active), frame, time_ms, bone_count, yaw,
-                              pelvis_offset[3], rot[4 × 20] (PoseBone order; model-space delta from bind, Skyrim basis)
+0x00400 PoseState    er→sky   seqlock slot (440 B): flags (PoseFlag Active), frame, time_ms, time_us, bone_count, yaw,
+                              pelvis_offset[3], rot[4 × 24] (PoseBone order; model-space delta from bind, Skyrim basis)
+0x00800 PoseBind     er→sky   seqlock slot (304 B), written once per ER skeleton: ER bind segment direction per bone
+                              (Skyrim basis) → Skyrim's limb fits
 0x01000 ring data    sky→er   64 KiB
 0x11000 ring data    er→sky   64 KiB
 ```
@@ -58,6 +60,7 @@ languages, `version` + region name bump for any layout change.
   then checks magic/version/sizes. On a mismatch it logs `PROTOCOL MISMATCH` once and writes nothing. Each side writes only its own `sky_*`/`er_*` fields.
 - **Rings:** exactly one writer and one reader each. Message = `{u16 msg_type, u16 size, u32 seq}` + payload, padded to 8 B, may wrap.
   A full ring drops the message and counts it in `dropped`. On (re)attach, a reader skips stale bytes and the writer restarts `seq` at 1.
+- **time_us** = QueryPerformanceCounter µs (one clock for both processes): Skyrim interpolates ER's samples on it (`skse/src/bridge/Timeline.cpp`).
 - **Slots** (`protocol/src/slot.rs`, mirrored in `skse/src/bridge/Slot.h`): latest value only, one writer (that side's game thread),
   any readers. The struct starts with `seq` (odd = being written). Writer: seq+1, release fence, copy, seq+2 (release). Reader: seq (acquire),
   retry while odd, copy, acquire fence, accept if unchanged (≤ 64 tries). The body is copied as u32 atomics, so there are no data races. A new writer

@@ -8,6 +8,7 @@
 #include "bridge/PlayerWatch.h"
 #include "bridge/Pose.h"
 #include "bridge/Slot.h"
+#include "bridge/Timeline.h"
 #include "hooks/PlayerUpdate.h"
 #include "hooks/MoveSwallow.h"
 #include "hooks/SprintSwallow.h"
@@ -69,6 +70,8 @@ namespace sxer::bridge
 			std::optional<SlotReader<proto::PlayerState>> player;
 			std::optional<SlotReader<proto::PoseState>> pose;
 			std::optional<proto::PoseState> lastPose;  // last good copy (a torn read keeps it, like PlayerWatch)
+			std::optional<SlotReader<proto::PoseBind>> poseBind;
+			std::optional<proto::PoseBind> lastBind;
 			PlayerWatch watch;
 			bool bridgeOn = true;
 			bool swallow = false;
@@ -184,8 +187,9 @@ namespace sxer::bridge
 			const auto n = a_f.frameMs.size();
 			const auto p50 = Percentile(a_f.frameMs, 0.50), p95 = Percentile(a_f.frameMs, 0.95), p99 = Percentile(a_f.frameMs, 0.99);
 			const auto hook99 = Percentile(a_f.hookUs, 0.99), hookMax = a_f.hookUs.empty() ? 0.f : *std::max_element(a_f.hookUs.begin(), a_f.hookUs.end());
-			SKSE::log::info("[perf] frame={} n={} frame_ms p50={:.2f} p95={:.2f} p99={:.2f} | our hook us p99={:.1f} max={:.1f}", a_frame, n, p50, p95,
-				p99, hook99, hookMax);
+			SKSE::log::info("[perf] frame={} n={} frame_ms p50={:.2f} p95={:.2f} p99={:.2f} | our hook us p99={:.1f} max={:.1f} | ER timeline delay "
+							"{:.1f} ms, late frames {}",
+				a_frame, n, p50, p95, p99, hook99, hookMax, timeline::DelayMs(), timeline::TakeLateFrames());
 			if (const auto& s = a_f.watch.Last()) {
 				SKSE::log::info("[state] sample: connected={} sprint={} move={},{} | ER stamina={}/{} hp={}/{} fp={}/{} flags={:#x} anim={} er_frame={}",
 					a_connected, a_f.held, a_f.move.x, a_f.move.y, s->stamina, s->max_stamina, s->hp, s->max_hp, s->fp, s->max_fp, s->flags, s->anim_id, s->frame);
@@ -243,6 +247,7 @@ namespace sxer::bridge
 			f.input.emplace(base, proto::kOffSlotInput);
 			f.player.emplace(base, proto::kOffSlotPlayer);
 			f.pose.emplace(base, proto::kOffSlotPose);
+			f.poseBind.emplace(base, proto::kOffSlotPoseBind);
 			f.nextReportMs = now + kReportMs;
 			SKSE::log::info("[core] slots ready (frame={})", frame);
 		}
@@ -303,12 +308,28 @@ namespace sxer::bridge
 		f.input->Write(state);
 		SampleCoords(f, a_player, frame, move);
 		f.watch.Update(f.player->Read(), connected, now);
-		movement::Update(a_player, f.watch.Last(), move, on, pressed, a_delta, frame);
 		if (auto p = f.pose->Read()) {
 			f.lastPose = p;
 		}
+		if (auto b = f.poseBind->Read()) {
+			f.lastBind = b;
+		}
+		// ER's state on Skyrim's clock (LOCO-PLAN stage A): interpolated between stamped samples, a little in the past, so neither the
+		// movement nor the pose judders when the two games' frames drift against each other.
+		const auto nowUs = NowUs();
+		const auto& fresh = f.watch.Last();
 		const bool poseFresh = on && connected && f.lastPose && Fresh(f.lastPose->time_ms, now);
-		pose::Apply(a_player, poseFresh ? f.lastPose : std::nullopt, movement::RollHeading().value_or(a_player->GetAngleZ()), frame);
+		timeline::View view;
+		if (on && fresh) {
+			timeline::Push(fresh, poseFresh ? f.lastPose : std::nullopt, nowUs);
+			view = timeline::At(nowUs);
+		} else {
+			timeline::Reset();
+		}
+		movement::Update(a_player, on ? view.player : fresh, move, on, pressed, a_delta, frame);
+		// Steering out of a roll hands the body back to Skyrim at ER's move-cancel window (the pose would otherwise keep playing the recovery).
+		const bool showPose = poseFresh && view.pose && !movement::HandedBack();
+		pose::Apply(a_player, showPose ? view.pose : std::nullopt, f.lastBind, movement::RollHeading().value_or(a_player->GetAngleZ()), frame);
 		animprobe::Update(a_player, frame);
 		UpdateHud(f, connected, pressed, now);
 

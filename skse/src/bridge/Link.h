@@ -48,6 +48,8 @@ namespace sxer
 
 	// GetTickCount64(): the clock both sides use for heartbeats.
 	std::uint64_t NowMs();
+	// Microseconds on the QueryPerformanceCounter clock (shared by both processes): interpolation stamps (time_us). Rust twin: now_us.
+	std::uint64_t NowUs();
 
 	class Link
 	{

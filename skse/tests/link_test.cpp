@@ -238,7 +238,7 @@ namespace
 		}
 		SlotWriter<PoseState>(a_base, proto::kOffSlotPose).Write(pose);
 		const auto gotPose = poseReader.Read();
-		Check(gotPose && gotPose->seq == 2 && gotPose->bone_count == proto::kPoseBoneCount && gotPose->rot[79] == 79 * 0.25f &&
+		Check(gotPose && gotPose->seq == 2 && gotPose->bone_count == proto::kPoseBoneCount && gotPose->rot[std::size(pose.rot) - 1] == (std::size(pose.rot) - 1) * 0.25f &&
 				  inputReader.Read()->frame == 7,
 			"pose slot: round trip, last word intact, input slot untouched");
 

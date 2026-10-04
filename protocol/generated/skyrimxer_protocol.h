@@ -7,9 +7,9 @@
 
 namespace sxer::proto
 {
-	inline constexpr std::uint32_t kVersion = 4;
+	inline constexpr std::uint32_t kVersion = 5;
 	inline constexpr std::uint32_t kMagic = 0x52455853;  // "SXER" as little-endian bytes
-	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v4";
+	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v5";
 
 	// Peer counts as gone when its heartbeat is older than this.
 	inline constexpr std::uint64_t kHeartbeatTimeoutMs = 2000;
@@ -28,7 +28,7 @@ namespace sxer::proto
 	// A slot reader gives up after this many torn reads in a row.
 	inline constexpr std::uint32_t kSlotReadTries = 64;
 	// PoseBone values; PoseState.rot holds 4 floats per bone.
-	inline constexpr std::uint32_t kPoseBoneCount = 20;
+	inline constexpr std::uint32_t kPoseBoneCount = 24;
 
 	inline constexpr std::size_t kOffHeader = 0x0;
 	inline constexpr std::size_t kOffRingSkyToEr = 0x100;
@@ -36,6 +36,7 @@ namespace sxer::proto
 	inline constexpr std::size_t kOffSlotInput = 0x200;
 	inline constexpr std::size_t kOffSlotPlayer = 0x300;
 	inline constexpr std::size_t kOffSlotPose = 0x400;
+	inline constexpr std::size_t kOffSlotPoseBind = 0x800;
 	inline constexpr std::size_t kOffRingSkyToErData = 0x1000;
 	inline constexpr std::size_t kOffRingErToSkyData = 0x11000;
 	inline constexpr std::size_t kRegionSize = 0x21000;
@@ -119,6 +120,10 @@ namespace sxer::proto
 		RThigh = 17,  // NPC R Thigh
 		RCalf = 18,  // NPC R Calf
 		RFoot = 19,  // NPC R Foot
+		LUpperArmTwist1 = 20,  // NPC L UpperarmTwist1 (ER L_UpArmTwist)
+		LUpperArmTwist2 = 21,  // NPC L UpperarmTwist2 (ER L_UpArmTwist1)
+		RUpperArmTwist1 = 22,  // NPC R UpperarmTwist1 (ER R_UpArmTwist)
+		RUpperArmTwist2 = 23,  // NPC R UpperarmTwist2 (ER R_UpArmTwist1)
 	};
 
 	// At OFF_HEADER. Each side writes only its own sky_* / er_* fields; the creator writes the rest, magic last.
@@ -234,9 +239,12 @@ namespace sxer::proto
 		float poise_max;
 		float pos[3];  // ER world position (Y-up, metres).
 		float yaw;  // ER yaw, radians.
+		std::uint64_t time_us;  // QueryPerformanceCounter time when written, microseconds (one clock for both processes): interpolation.
+		float cam_yaw;  // ER camera yaw, radians (same convention as yaw): maps Skyrim's look onto ER's stick.
+		std::uint32_t _pad1;
 	};
 	static_assert(std::is_trivially_copyable_v<PlayerState> && std::is_standard_layout_v<PlayerState>);
-	static_assert(sizeof(PlayerState) == 80);
+	static_assert(sizeof(PlayerState) == 96);
 	static_assert(alignof(PlayerState) == 8);
 	static_assert(offsetof(PlayerState, seq) == 0);
 	static_assert(offsetof(PlayerState, flags) == 4);
@@ -254,6 +262,9 @@ namespace sxer::proto
 	static_assert(offsetof(PlayerState, poise_max) == 60);
 	static_assert(offsetof(PlayerState, pos) == 64);
 	static_assert(offsetof(PlayerState, yaw) == 76);
+	static_assert(offsetof(PlayerState, time_us) == 80);
+	static_assert(offsetof(PlayerState, cam_yaw) == 88);
+	static_assert(offsetof(PlayerState, _pad1) == 92);
 
 	// At OFF_SLOT_POSE. Written by ER's game thread every frame, read by Skyrim's.
 	struct PoseState
@@ -262,24 +273,42 @@ namespace sxer::proto
 		std::uint32_t flags;  // PoseFlag bits.
 		std::uint64_t frame;  // ER frame counter.
 		std::uint64_t time_ms;  // GetTickCount64() when written.
+		std::uint64_t time_us;  // QueryPerformanceCounter time when written, microseconds (one clock for both processes): interpolation.
 		std::uint32_t bone_count;  // POSE_BONE_COUNT of the writer.
 		float yaw;  // ER body yaw, radians (same convention as PlayerState.yaw).
 		float pelvis_offset[3];  // Pelvis offset from its bind position, Skyrim model basis (x right, y forward, z up), metres.
 		std::uint32_t _pad0;
-		float rot[80];  // Per PoseBone: model-space delta from bind (q_model * q_bind_model^-1), Skyrim model basis, x y z w.
+		float rot[96];  // Per PoseBone: model-space delta from bind (q_model * q_bind_model^-1), Skyrim model basis, x y z w.
 	};
 	static_assert(std::is_trivially_copyable_v<PoseState> && std::is_standard_layout_v<PoseState>);
-	static_assert(sizeof(PoseState) == 368);
+	static_assert(sizeof(PoseState) == 440);
 	static_assert(alignof(PoseState) == 8);
 	static_assert(offsetof(PoseState, seq) == 0);
 	static_assert(offsetof(PoseState, flags) == 4);
 	static_assert(offsetof(PoseState, frame) == 8);
 	static_assert(offsetof(PoseState, time_ms) == 16);
-	static_assert(offsetof(PoseState, bone_count) == 24);
-	static_assert(offsetof(PoseState, yaw) == 28);
-	static_assert(offsetof(PoseState, pelvis_offset) == 32);
-	static_assert(offsetof(PoseState, _pad0) == 44);
-	static_assert(offsetof(PoseState, rot) == 48);
+	static_assert(offsetof(PoseState, time_us) == 24);
+	static_assert(offsetof(PoseState, bone_count) == 32);
+	static_assert(offsetof(PoseState, yaw) == 36);
+	static_assert(offsetof(PoseState, pelvis_offset) == 40);
+	static_assert(offsetof(PoseState, _pad0) == 52);
+	static_assert(offsetof(PoseState, rot) == 56);
+
+	// At OFF_SLOT_POSE_BIND. Written by ER once per skeleton (when it resolves), read by Skyrim to fit its bind pose to ER's.
+	struct PoseBind
+	{
+		std::uint32_t seq;  // Seqlock counter (odd = being written).
+		std::uint32_t bone_count;  // POSE_BONE_COUNT of the writer.
+		std::uint64_t frame;  // ER frame when the skeleton resolved (changes = a new skeleton: refit).
+		float dir[72];  // Per PoseBone: unit bind segment direction (bone to its child), Skyrim model basis; (0,0,0) = none (use the parent's fit).
+	};
+	static_assert(std::is_trivially_copyable_v<PoseBind> && std::is_standard_layout_v<PoseBind>);
+	static_assert(sizeof(PoseBind) == 304);
+	static_assert(alignof(PoseBind) == 8);
+	static_assert(offsetof(PoseBind, seq) == 0);
+	static_assert(offsetof(PoseBind, bone_count) == 4);
+	static_assert(offsetof(PoseBind, frame) == 8);
+	static_assert(offsetof(PoseBind, dir) == 16);
 
 	// Sent on attach and whenever a new peer appears. The receiver checks protocol_version.
 	struct Hello

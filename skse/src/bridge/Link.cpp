@@ -98,6 +98,19 @@ namespace sxer
 
 	std::uint64_t NowMs() { return ::GetTickCount64(); }
 
+	std::uint64_t NowUs()
+	{
+		static const std::uint64_t freq = [] {
+			LARGE_INTEGER f{};
+			::QueryPerformanceFrequency(&f);
+			return static_cast<std::uint64_t>(std::max<LONGLONG>(f.QuadPart, 1));
+		}();
+		LARGE_INTEGER c{};
+		::QueryPerformanceCounter(&c);
+		const auto ticks = static_cast<std::uint64_t>(c.QuadPart);
+		return ticks / freq * 1'000'000 + ticks % freq * 1'000'000 / freq;  // split: no overflow, same result as Rust's u128 math
+	}
+
 	Link::Link(Side a_side, Identity a_identity, std::wstring a_regionName) :
 		side_(a_side), identity_(a_identity), regionName_(std::move(a_regionName))
 	{}

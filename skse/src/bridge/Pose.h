@@ -12,5 +12,8 @@ namespace sxer::pose
 	// Every frame from bridge::OnFrame, after movement::Update.
 	// a_pose = the fresh PoseState (nullopt when stale, disconnected or the bridge is off: the body blends back to Skyrim's animation).
 	// a_facing = heading (GetAngleZ convention) the posed body faces: the roll direction during a dodge, else the body's own heading.
-	void Apply(RE::PlayerCharacter* a_player, const std::optional<proto::PoseState>& a_pose, float a_facing, std::uint64_t a_frame);
+	// a_bind = the latest PoseBind (ER's bind segment directions): the limb fits are (re)computed whenever its frame changes; no pose
+	// is shown before one arrived.
+	void Apply(RE::PlayerCharacter* a_player, const std::optional<proto::PoseState>& a_pose, const std::optional<proto::PoseBind>& a_bind,
+		float a_facing, std::uint64_t a_frame);
 }

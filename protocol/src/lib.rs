@@ -47,3 +47,21 @@ pub fn read_plain<T: Plain>(bytes: &[u8]) -> Option<T> {
 pub fn now_ms() -> u64 {
     unsafe { windows::Win32::System::SystemInformation::GetTickCount64() }
 }
+
+/// Microseconds on the QueryPerformanceCounter clock: one clock for every process on the machine, for interpolation stamps
+/// (`time_us`). `skse/src/bridge/Link.cpp` NowUs is the C++ twin.
+pub fn now_us() -> u64 {
+    use std::sync::OnceLock;
+    use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
+    static FREQ: OnceLock<u64> = OnceLock::new();
+    let freq = *FREQ.get_or_init(|| {
+        let mut f = 0i64;
+        // SAFETY: plain Win32 call writing into our local.
+        let _ = unsafe { QueryPerformanceFrequency(&mut f) };
+        f.max(1) as u64
+    });
+    let mut c = 0i64;
+    // SAFETY: as above.
+    let _ = unsafe { QueryPerformanceCounter(&mut c) };
+    (c as u128 * 1_000_000 / freq as u128) as u64
+}

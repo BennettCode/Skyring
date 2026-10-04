@@ -205,7 +205,12 @@ pub fn publish_state(from_frame_begin: bool) {
         *writer = bridge::shared().and_then(|s| s.region()).map(|r| SlotWriter::new(r, OFF_SLOT_PLAYER));
     }
     let Some(writer) = writer.as_mut() else { return };
-    let mut state = PlayerState { frame: bridge::FRAMES.load(Ordering::Relaxed), time_ms: now_ms(), ..Default::default() };
+    let mut state = PlayerState {
+        frame: bridge::FRAMES.load(Ordering::Relaxed),
+        time_ms: now_ms(),
+        time_us: skyrimxer_protocol::now_us(),
+        ..Default::default()
+    };
     // No player (title screen / loading) = flags 0: Skyrim sees "not in world", not stale.
     if let Some(player) = player {
         let s = game::snapshot(player);

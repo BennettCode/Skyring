@@ -4,6 +4,26 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: LOCO-PLAN stage A (partial): smoother pose, v5, whole-roll follow; movement smoothing stuck
+- **Why:** the user's playtest said the roll is jittery, the distance is off, the arms stretch and running after a roll is weird.
+  The user chose full ER locomotion (`docs/LOCO-PLAN.md`).
+- **Changed:**
+  - **Protocol v5:** `time_us` (QPC µs) in PlayerState/PoseState, PlayerState `cam_yaw`, PoseBone 20 → 24 (upper-arm twist), new
+    `PoseBind` slot (ER bind directions → Skyrim fits).
+  - `skse/src/bridge/Timeline.*` (new, adapted from SkyCraft): interpolates ER's stamped samples on Skyrim's clock.
+  - Pose: limb-only fits, twist bones posed, pauldrons held at bind, fits from PoseBind.
+  - Movement: interpolated steps, feed-forward steering, follows the whole roll unless the player steers (then hands back with the pose),
+    `[move] smooth` stats.
+  - `now_us`/`NowUs`.
+- **Tested (agent-run):**
+  - `run-tests.ps1` green.
+  - Timeline delay 17-18 ms, **0 late frames** (was 90-222 per 5 s).
+  - Limb check 0°; fits on limbs only (21/26/5-7°).
+  - Skyrim follows the whole roll: ER 3.5 m, Skyrim 3.15-3.3 m (90-94%).
+  - Contact sheets: rolls turn and tumble correctly.
+- **Not solved:** the player's own motion still stalls on ~23 of 60 roll frames (ApplyCurrent refuses currents; 3 attempts,
+  `docs/research/skyrim-hooks.md`). Stuck-rule handoff in STATUS. Stage B (ER locomotion) not started.
+
 ## 2026-10-04: POSE-PLAN step 5, ER roll animation plays in Skyrim
 - **Changed:**
   - `skse/src/bridge/Pose.cpp` (rewritten from the F7 proof): the applier.

@@ -41,6 +41,14 @@ namespace sxer::movement
 		// (a wall stops the player, so the target stops too), and the push is capped at kMaxSpeed.
 		constexpr float kMaxLeadUnits = 60.0f;
 		constexpr float kMaxSpeed = 1500.0f;
+		// LOCO-PLAN stage A: velocity = this frame's ER step (feed-forward) + this share of the remaining gap per second. Closing the whole
+		// gap every frame overshot and stuttered (2026-10-04 playtest: 93 → 355 → −90 u/s).
+		constexpr float kCorrectionPerS = 8.0f;
+		// ApplyCurrent refuses a new current while the last one still runs (returns false). Measured 2026-10-04 (roll, 60 frames):
+		// 1-frame currents: applied on alternate frames, bursts. 2-frame: stalls 23, biggest frame-to-frame change 45% of peak, 89% of
+		// ER's distance. 0.75-frame scaled up: stalls 25-27, spikes 74-89%, 94%. Kept at 2: smoothing this needs another way to move
+		// the player (STATUS handoff: inject the velocity where Skyrim's own movement sets it).
+		constexpr float kCurrentFrames = 2.0f;
 		// Roll animation (P4 step 5): the vanilla Silent Roll is sneak + sprint. Attempt 3: Sneak is pressed through the game's own
 		// SneakHandler (vanilla::PressSneak, so HUD/stealth follow), sprint starts once the player sneaks, and the move input holds the
 		// roll's key direction so the game keeps the sprint going. The vanilla roll only goes where the body faces, so in third person the
@@ -70,6 +78,18 @@ namespace sxer::movement
 			// Current dodge.
 			float rollHeading = 0;
 			std::int32_t anim = 0;
+			std::uint64_t startErFrame = 0;
+			// The player steered out of the dodge at ER's move-cancel window: Skyrim moves again and the pose blends out (until the anim ends).
+			bool handedBack = false;
+			// Smoothness of the realized motion (per dodge): stalled frames, biggest frame-to-frame speed change, peak speed (units/s).
+			RE::NiPoint3 lastHere;
+			RE::NiPoint3 lastDrawn;  // the 3D root's position: what's on screen (GetPosition may update in another phase)
+			int drawnStalls = 0;
+			float drawnJump = 0, lastDrawnSpeed = 0;
+			float lastRealSpeed = 0;
+			float peakSpeed = 0;
+			float maxSpeedJump = 0;
+			int stalls = 0;
 			RE::NiPoint3 startPos;
 			float erDistM = 0;
 			// Where ER's movement says the player should be (Skyrim world XY).
@@ -198,13 +218,28 @@ namespace sxer::movement
 			const float skyM = std::hypot(pos.x - g.startPos.x, pos.y - g.startPos.y) / coords::kSkyrimUnitsPerM;
 			SKSE::log::info("[move] dodge end ({}): anim={} frames={} er_frames={} | ER {:.2f} m, Skyrim {:.2f} m ({:.0f}%) frame={}", a_why, g.anim,
 				g.frames, g.erFrames, g.erDistM, skyM, g.erDistM > 0.01f ? 100.0f * skyM / g.erDistM : 0.0f, a_frame);
+			SKSE::log::info("[move] smooth: frames={} stalls={} peak={:.0f} u/s biggest frame-to-frame change={:.0f} u/s ({:.0f}% of peak) | drawn "
+							"(3D root): stalls={} biggest change={:.0f} u/s",
+				g.frames, g.stalls, g.peakSpeed, g.maxSpeedJump, g.peakSpeed > 1.0f ? 100.0f * g.maxSpeedJump / g.peakSpeed : 0.0f, g.drawnStalls,
+				g.drawnJump);
 			g.active = false;
 			g.spent = true;
 			EndTrick(a_player, "dodge end", a_keepSneak);
 		}
 
-		void Start(RE::PlayerCharacter* a_player, std::int32_t a_anim, const input::Move& a_move, std::uint64_t a_frame, const char* a_why)
+		void Start(RE::PlayerCharacter* a_player, std::int32_t a_anim, const input::Move& a_move, std::uint64_t a_frame, std::uint64_t a_erFrame,
+			const char* a_why)
 		{
+			g.startErFrame = a_erFrame;
+			g.handedBack = false;
+			g.lastHere = a_player->GetPosition();
+			if (auto* root = a_player->Get3D(false)) {
+				g.lastDrawn = root->world.translate;
+			}
+			g.lastRealSpeed = g.peakSpeed = g.maxSpeedJump = 0;
+			g.stalls = 0;
+			g.drawnStalls = 0;
+			g.drawnJump = g.lastDrawnSpeed = 0;
 			// Roll direction: where the player is steering (camera yaw + move-key angle), like an ER roll without lock-on.
 			// With no key held (backstep) it's the body's heading: ER's backwards motion maps onto it.
 			const bool steering = a_move.x != 0 || a_move.y != 0;
@@ -251,6 +286,8 @@ namespace sxer::movement
 
 	std::optional<float> RollHeading() { return g.active ? std::optional<float>(g.rollHeading) : std::nullopt; }
 
+	bool HandedBack() { return g.handedBack; }
+
 	void Update(RE::PlayerCharacter* a_player, const std::optional<proto::PlayerState>& a_state, const input::Move& a_move, bool a_enabled,
 		bool a_pressed, float a_delta, std::uint64_t a_frame)
 	{
@@ -283,47 +320,49 @@ namespace sxer::movement
 				End(a_player, a_frame, "anim over");
 			}
 			g.spent = false;
+			g.handedBack = false;
 		} else if (!g.active && !g.spent) {
-			Start(a_player, s.anim_id, a_move, a_frame, "new dodge anim");
+			Start(a_player, s.anim_id, a_move, a_frame, s.frame, "new dodge anim");
 		} else if (iframeRise && g.pressed && a_frame - g.pressFrame <= kChainPressFrames && (!g.active || g.erFrames >= kMinChainErFrames)) {
 			// Rolls chained by spamming keep the same animation id (27110 → 27110); each one opens a new i-frame window.
 			if (g.active) {
 				End(a_player, a_frame, "chained", true);
 			}
-			Start(a_player, s.anim_id, a_move, a_frame, "chained roll");
+			Start(a_player, s.anim_id, a_move, a_frame, s.frame, "chained roll");
 		} else if (!g.active && IsBackstepAnim(s.anim_id) && g.pressed && a_frame - g.pressFrame <= kChainPressFrames && g.erSpeedMs > kChainSpeedMs) {
 			// Chained backsteps keep the animation id and have no i-frames: a fresh press plus ER moving again starts the next one.
 			// (Backsteps only: a roll's recovery still moves ER a little, and a press then is the next roll, which opens i-frames.)
-			Start(a_player, s.anim_id, a_move, a_frame, "chained (press + ER moving)");
+			Start(a_player, s.anim_id, a_move, a_frame, s.frame, "chained (press + ER moving)");
 		}
 
+		// a_state is interpolated on Skyrim's clock (bridge/Timeline): its position moves a little every Skyrim frame, so the step is
+		// taken every frame (no more "new ER frame" steps, which came in bursts).
 		RE::NiPoint3 step;
 		bool fresh = false;
-		if (g.haveLast && s.frame != g.lastErFrame) {
+		if (g.haveLast) {
 			const coords::Vec3 d{ pos[0] - g.lastErPos[0], 0.0f, pos[2] - g.lastErPos[2] };
 			const float m = std::hypot(d[0], d[2]);
-			g.erSpeedMs = m <= kMaxStepM ? m * kErFps / static_cast<float>(s.frame - g.lastErFrame) : 0.0f;
+			g.erSpeedMs = m <= kMaxStepM && a_delta > 0 ? m / a_delta : 0.0f;
 			if (g.active && m <= kMaxStepM) {
 				auto local = coords::ErDeltaToLocal(d, s.yaw);
 				local.up = 0;
 				const auto sky = coords::LocalToSkyrimDelta(local, g.rollHeading);
 				step = RE::NiPoint3{ sky[0], sky[1], 0.0f };
-				const auto n = static_cast<float>(s.frame - g.lastErFrame);
 				g.target += step;
 				g.erDistM += m;
-				g.erFrames += static_cast<int>(n);
-				fresh = true;
-				const float speedMs = m * kErFps / n;
-				g.slowFrames = (g.erFrames >= kMinErFrames && speedMs < kStopSpeedMs) ? g.slowFrames + 1 : 0;
+				g.erFrames = static_cast<int>(s.frame - g.startErFrame);
+				fresh = m > 0;
+				g.slowFrames = (g.erFrames >= kMinErFrames && g.erSpeedMs < kStopSpeedMs) ? g.slowFrames + 1 : 0;
 			}
 		}
-		if (s.frame != g.lastErFrame || !g.haveLast) {
-			g.lastErPos = pos;
-			g.lastErFrame = s.frame;
-			g.haveLast = true;
-		}
-		if (g.active && (s.flags & kMoveCancel) && g.erFrames >= kMinCancelErFrames) {
-			End(a_player, a_frame, "ER move-cancel window");
+		g.lastErPos = pos;
+		g.lastErFrame = s.frame;
+		g.haveLast = true;
+		const bool steering = a_move.x != 0 || a_move.y != 0;
+		if (g.active && (s.flags & kMoveCancel) && g.erFrames >= kMinCancelErFrames && steering) {
+			// The player wants to move on: in ER the recovery would cancel into running here.
+			End(a_player, a_frame, "ER move-cancel window, player steering");
+			g.handedBack = true;
 		} else if (g.active && g.slowFrames >= kStopFrames) {
 			End(a_player, a_frame, "ER motion over");
 		}
@@ -364,20 +403,41 @@ namespace sxer::movement
 		}
 		// Steer onto the target: the velocity that closes the gap this frame, capped; a blocked player drags the target along.
 		const auto here = a_player->GetPosition();
+		// Realized motion since last frame (smoothness stats).
+		const float real = std::hypot(here.x - g.lastHere.x, here.y - g.lastHere.y) / a_delta;
+		if (g.frames > 2) {
+			g.stalls += (real < 5.0f && g.erSpeedMs > 0.5f) ? 1 : 0;
+			g.maxSpeedJump = std::max(g.maxSpeedJump, std::fabs(real - g.lastRealSpeed));
+		}
+		g.peakSpeed = std::max(g.peakSpeed, real);
+		if (auto* root = a_player->Get3D(false)) {
+			const auto& d = root->world.translate;
+			const float drawn = std::hypot(d.x - g.lastDrawn.x, d.y - g.lastDrawn.y) / a_delta;
+			if (g.frames > 2) {
+				g.drawnStalls += (drawn < 5.0f && g.erSpeedMs > 0.5f) ? 1 : 0;
+				g.drawnJump = std::max(g.drawnJump, std::fabs(drawn - g.lastDrawnSpeed));
+			}
+			g.lastDrawnSpeed = drawn;
+			g.lastDrawn = d;
+		}
+		g.lastRealSpeed = real;
+		g.lastHere = here;
 		RE::NiPoint3 err{ g.target.x - here.x, g.target.y - here.y, 0.0f };
 		const float lead = std::hypot(err.x, err.y);
 		if (lead > kMaxLeadUnits) {
 			err = err * (kMaxLeadUnits / lead);
 			g.target = { here.x + err.x, here.y + err.y, g.target.z };
 		}
-		auto speed = err * (1.0f / a_delta);
+		// Feed-forward: this frame's ER step, plus a gentle pull on whatever gap is left from before.
+		const RE::NiPoint3 gap{ err.x - step.x, err.y - step.y, 0.0f };
+		auto speed = step * (1.0f / a_delta) + gap * kCorrectionPerS;
 		const float v = std::hypot(speed.x, speed.y);
 		if (v > kMaxSpeed) {
 			speed = speed * (kMaxSpeed / v);
 		}
 		const float scale = RE::bhkWorld::GetWorldScale();
 		const RE::hkVector4 velocity(speed.x * scale, speed.y * scale, 0.0f, 0.0f);
-		const bool applied = a_player->ApplyCurrent(a_delta, velocity);
+		const bool applied = a_player->ApplyCurrent(a_delta * kCurrentFrames, velocity);
 		if (g.frames <= kDetailFrames) {
 			SKSE::log::info("[move] frame+{}: step=({:.1f},{:.1f}) units{} lead={:.1f} speed=({:.0f},{:.0f}) u/s dt={:.4f} applied={} er_frame={}", g.frames,
 				step.x, step.y, fresh ? "" : " (no new ER frame)", lead, speed.x, speed.y, a_delta, applied, s.frame);

@@ -42,6 +42,26 @@ window come back every frame; coordinate conversion measured (`protocol/src/coor
 3. Step 7: NPC hits during ER i-frames are cancelled.
 
 ## Handoff notes
+**LOCO-PLAN stage A, smooth player movement: stuck after 3 attempts (2026-10-05, stuck rule).**
+- **Goal:** the Skyrim player follows ER's (now perfectly interpolated) roll path smoothly, with Skyrim collision.
+- **Tried:**
+  1. Close the whole gap each frame with `ApplyCurrent(dt)`: bursts, 93 → 355 → −90 u/s.
+  2. Feed-forward plus an 8/s correction with 2-frame currents: 23/60 stalls, frame-to-frame change 45% of peak.
+  3. 0.75-frame currents with the velocity scaled up: 25-27 stalls, spikes.
+- **Cause found:** `ApplyCurrent` refuses a new current while one runs (`[move] frame+N ... applied=false`), and the drawn root stalls
+  with it (`[move] smooth ... drawn (3D root)`).
+- **References checked:** SkyCraft `Game.cpp:662-800` (SetPosition each frame + controller velocity 0), FalloutCraft `fo_game.cpp:586-800`
+  (same), CommonLib `bhkCharacterController` (`SetLinearVelocityImpl` vfunc 0x07, `velocityMod`, `outVelocity`).
+- **Hypothesis:** we need to feed velocity where Skyrim's own locomotion does, since vanilla running is smooth.
+- **Alternatives (pick one in plan mode, probe first):**
+  - **(a)** Find where Skyrim sets the player controller's velocity each frame (e.g. the movement update before the Havok step) and
+    substitute ER's velocity there, so Skyrim's own smooth path integrates it with collision.
+  - **(b)** `SetPosition` along the interpolated path (like SkyCraft/FalloutCraft), with collision from a ray or capsule cast
+    (`bhkWorld` pick) that clamps at walls.
+  - **(c)** Keep ApplyCurrent for the real position, but draw the body (3D root offset) and point the camera at the interpolated
+    target, so the stalls don't show.
+- Pose smoothing, protocol v5 and the pose fixes are done and committed.
+
 **P4 step 5, roll animation: vanilla route stopped after 3 attempts (2026-10-04, stuck rule).** Attempt 3 (Sneak through the game's
 SneakHandler, forward move input, Silent Roll perk added while bridged; `skse/src/bridge/VanillaInput.cpp`, `kSneakRollTrick` now off):
 the roll plays and sneak toggles cleanly, but **only forward**: the third-person camera re-aligns the body to the camera yaw every frame

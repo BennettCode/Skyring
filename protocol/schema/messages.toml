@@ -13,9 +13,9 @@
 # All values are little-endian (both games are x64 Windows).
 
 [protocol]
-version = 4
+version = 5
 magic = "SXER"                      # stored as a little-endian u32: bytes 'S' 'X' 'E' 'R'
-region_name = 'Local\SkyrimXER_v4'  # must end in _v<version>
+region_name = 'Local\SkyrimXER_v5'  # must end in _v<version>
 
 [constants]
 HEARTBEAT_TIMEOUT_MS = { type = "u64", value = 2000, doc = "Peer counts as gone when its heartbeat is older than this." }
@@ -26,7 +26,7 @@ MSG_ALIGN = { type = "u32", value = 8, doc = "Each message (header + payload) is
 MSG_MAX_PAYLOAD = { type = "u32", value = 1024, doc = "Largest payload a message may carry." }
 SLOT_STALE_MS = { type = "u64", value = 250, doc = "Slot data whose time_ms is older than this is stale (the reader ignores it)." }
 SLOT_READ_TRIES = { type = "u32", value = 64, doc = "A slot reader gives up after this many torn reads in a row." }
-POSE_BONE_COUNT = { type = "u32", value = 20, doc = "PoseBone values; PoseState.rot holds 4 floats per bone." }
+POSE_BONE_COUNT = { type = "u32", value = 24, doc = "PoseBone values; PoseState.rot holds 4 floats per bone." }
 
 [[enums]]
 name = "SideState"
@@ -123,6 +123,10 @@ values = [
   { name = "RThigh", value = 17, doc = "NPC R Thigh" },
   { name = "RCalf", value = 18, doc = "NPC R Calf" },
   { name = "RFoot", value = 19, doc = "NPC R Foot" },
+  { name = "LUpperArmTwist1", value = 20, doc = "NPC L UpperarmTwist1 (ER L_UpArmTwist)" },
+  { name = "LUpperArmTwist2", value = 21, doc = "NPC L UpperarmTwist2 (ER L_UpArmTwist1)" },
+  { name = "RUpperArmTwist1", value = 22, doc = "NPC R UpperarmTwist1 (ER R_UpArmTwist)" },
+  { name = "RUpperArmTwist2", value = 23, doc = "NPC R UpperarmTwist2 (ER R_UpArmTwist1)" },
 ]
 
 # ---- region layout ------------------------------------------------------------------------------------------------
@@ -193,7 +197,7 @@ fields = [
 
 [[structs]]
 name = "PlayerState"
-size = 80
+size = 96
 doc = "At OFF_SLOT_PLAYER. Written by ER's game thread every frame, read by Skyrim's."
 fields = [
   { name = "seq", type = "u32", doc = "Seqlock counter (odd = being written)." },
@@ -212,22 +216,37 @@ fields = [
   { name = "poise_max", type = "f32" },
   { name = "pos", type = "f32[3]", doc = "ER world position (Y-up, metres)." },
   { name = "yaw", type = "f32", doc = "ER yaw, radians." },
+  { name = "time_us", type = "u64", doc = "QueryPerformanceCounter time when written, microseconds (one clock for both processes): interpolation." },
+  { name = "cam_yaw", type = "f32", doc = "ER camera yaw, radians (same convention as yaw): maps Skyrim's look onto ER's stick." },
+  { name = "_pad1", type = "u32" },
 ]
 
 [[structs]]
 name = "PoseState"
-size = 368
+size = 440
 doc = "At OFF_SLOT_POSE. Written by ER's game thread every frame, read by Skyrim's."
 fields = [
   { name = "seq", type = "u32", doc = "Seqlock counter (odd = being written)." },
   { name = "flags", type = "u32", doc = "PoseFlag bits." },
   { name = "frame", type = "u64", doc = "ER frame counter." },
   { name = "time_ms", type = "u64", doc = "GetTickCount64() when written." },
+  { name = "time_us", type = "u64", doc = "QueryPerformanceCounter time when written, microseconds (one clock for both processes): interpolation." },
   { name = "bone_count", type = "u32", doc = "POSE_BONE_COUNT of the writer." },
   { name = "yaw", type = "f32", doc = "ER body yaw, radians (same convention as PlayerState.yaw)." },
   { name = "pelvis_offset", type = "f32[3]", doc = "Pelvis offset from its bind position, Skyrim model basis (x right, y forward, z up), metres." },
   { name = "_pad0", type = "u32" },
-  { name = "rot", type = "f32[80]", doc = "Per PoseBone: model-space delta from bind (q_model * q_bind_model^-1), Skyrim model basis, x y z w." },
+  { name = "rot", type = "f32[96]", doc = "Per PoseBone: model-space delta from bind (q_model * q_bind_model^-1), Skyrim model basis, x y z w." },
+]
+
+[[structs]]
+name = "PoseBind"
+size = 304
+doc = "At OFF_SLOT_POSE_BIND. Written by ER once per skeleton (when it resolves), read by Skyrim to fit its bind pose to ER's."
+fields = [
+  { name = "seq", type = "u32", doc = "Seqlock counter (odd = being written)." },
+  { name = "bone_count", type = "u32", doc = "POSE_BONE_COUNT of the writer." },
+  { name = "frame", type = "u64", doc = "ER frame when the skeleton resolved (changes = a new skeleton: refit)." },
+  { name = "dir", type = "f32[72]", doc = "Per PoseBone: unit bind segment direction (bone to its child), Skyrim model basis; (0,0,0) = none (use the parent's fit)." },
 ]
 
 [region]
@@ -238,6 +257,7 @@ blocks = [
   { name = "SLOT_INPUT", offset = 0x200, struct = "InputState" },
   { name = "SLOT_PLAYER", offset = 0x300, struct = "PlayerState" },
   { name = "SLOT_POSE", offset = 0x400, struct = "PoseState" },
+  { name = "SLOT_POSE_BIND", offset = 0x800, struct = "PoseBind" },
   { name = "RING_SKY_TO_ER_DATA", offset = 0x1000, bytes = 0x10000 },
   { name = "RING_ER_TO_SKY_DATA", offset = 0x11000, bytes = 0x10000 },
 ]

@@ -21,10 +21,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use skyrimxer_protocol::link::{Identity, Level, Link, LinkShared, Side};
-use skyrimxer_protocol::now_ms;
+use skyrimxer_protocol::{now_ms, now_us};
 use skyrimxer_protocol::proto::{
-    Button, InputState, LINK_TICK_MS, OFF_SLOT_INPUT, OFF_SLOT_PLAYER, OFF_SLOT_POSE, POSE_BONE_COUNT, PlayerFlag, PlayerState,
-    PoseBone, PoseFlag, PoseState, REGION_NAME,
+    Button, InputState, LINK_TICK_MS, OFF_SLOT_INPUT, OFF_SLOT_PLAYER, OFF_SLOT_POSE, OFF_SLOT_POSE_BIND, POSE_BONE_COUNT, PlayerFlag, PlayerState,
+    PoseBind, PoseBone, PoseFlag, PoseState, REGION_NAME,
 };
 use skyrimxer_protocol::slot::{SlotReader, SlotWriter, fresh};
 
@@ -160,12 +160,29 @@ fn axis_angle(axis: [f32; 3], angle: f32) -> [f32; 4] {
 
 /// The fake ER pose at `now`: identity everywhere except a 1 Hz swing of the pelvis (yaw ±30°), right upper arm (pitch ±60°)
 /// and left thigh (pitch ±45°).
+/// ER's c0000 bind segment directions in Skyrim's basis (measured 2026-10-04, docs/research/elden-ring-pose.md "Streaming it"):
+/// what the real writer sends in PoseBind. Twist bones: none (they reuse the upper arm's fit).
+fn fake_bind(frame: u64) -> PoseBind {
+    const DIRS: [[f32; 3]; 20] = [
+        [0.0, 0.0, 1.0], [0.0, 0.0, 1.0], [0.0, -0.001, 1.0], [0.0, -0.116, 0.993], [0.0, 0.175, 0.985], [0.0, 0.0, 0.0],
+        [-1.0, 0.0, 0.0], [-0.707, -0.016, -0.707], [-0.705, 0.097, -0.703], [-0.735, 0.107, -0.670],
+        [1.0, 0.0, 0.0], [0.707, -0.016, -0.707], [0.705, 0.097, -0.703], [0.735, 0.107, -0.670],
+        [0.0, 0.020, -1.0], [0.0, -0.169, -0.986], [0.0, 0.774, -0.634], [0.0, 0.020, -1.0], [0.0, -0.169, -0.986], [0.0, 0.774, -0.634],
+    ];
+    let mut bind = PoseBind { bone_count: POSE_BONE_COUNT, frame, ..Default::default() };
+    for (i, d) in DIRS.iter().enumerate() {
+        bind.dir[i * 3..i * 3 + 3].copy_from_slice(d);
+    }
+    bind
+}
+
 fn swing_pose(frame: u64, now: u64, active: bool) -> PoseState {
     let phase = (now % 1000) as f32 / 1000.0 * std::f32::consts::TAU;
     let mut pose = PoseState {
         flags: if active { 1 << PoseFlag::Active as u32 } else { 0 },
         frame,
         time_ms: now,
+        time_us: now_us(),
         bone_count: POSE_BONE_COUNT,
         ..Default::default()
     };
@@ -186,6 +203,7 @@ struct FakeEr {
     last_input: Option<InputState>,
     writer: SlotWriter<PlayerState>,
     pose: SlotWriter<PoseState>,
+    bind: Option<SlotWriter<PoseBind>>,
     pose_always: bool,
     held: bool,
     stamina: i32,
@@ -230,6 +248,7 @@ impl FakeEr {
             flags,
             frame,
             time_ms: now,
+            time_us: now_us(),
             hp: 500,
             max_hp: 500,
             fp: 80,
@@ -240,6 +259,9 @@ impl FakeEr {
             block_id: 0x0A01_0000,
             ..Default::default()
         });
+        if let Some(mut bind) = self.bind.take() {
+            bind.write(&fake_bind(frame)); // once, like the real writer when its skeleton resolves
+        }
         self.pose.write(&swing_pose(frame, now, dodging || self.pose_always));
     }
 }
@@ -317,7 +339,8 @@ fn main() {
                     reader: SlotReader::new(r.clone(), OFF_SLOT_INPUT),
                     last_input: None,
                     writer: SlotWriter::new(r.clone(), OFF_SLOT_PLAYER),
-                    pose: SlotWriter::new(r, OFF_SLOT_POSE),
+                    pose: SlotWriter::new(r.clone(), OFF_SLOT_POSE),
+                    bind: Some(SlotWriter::new(r, OFF_SLOT_POSE_BIND)),
                     pose_always,
                     held: false,
                     stamina: 100,

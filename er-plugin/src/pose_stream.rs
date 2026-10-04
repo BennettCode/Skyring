@@ -10,8 +10,8 @@
 use std::sync::atomic::Ordering;
 use std::time::Instant;
 
-use skyrimxer_protocol::now_ms;
-use skyrimxer_protocol::proto::{OFF_SLOT_POSE, POSE_BONE_COUNT, PoseBone, PoseFlag, PoseState};
+use skyrimxer_protocol::proto::{OFF_SLOT_POSE, OFF_SLOT_POSE_BIND, POSE_BONE_COUNT, PoseBind, PoseBone, PoseFlag, PoseState};
+use skyrimxer_protocol::{now_ms, now_us};
 use skyrimxer_protocol::rig::{self, Basis, Quat, Vec3};
 use skyrimxer_protocol::slot::SlotWriter;
 
@@ -27,12 +27,14 @@ const RETRY_FRAMES: u64 = 120;
 /// ER bone per PoseBone (same order as the enum; c0000 names from the step 1 probe).
 const ER_NAMES: [&str; N] = [
     "Pelvis", "Spine", "Spine1", "Spine2", "Neck", "Head", "L_Clavicle", "L_UpperArm", "L_Forearm", "L_Hand", "R_Clavicle", "R_UpperArm",
-    "R_Forearm", "R_Hand", "L_Thigh", "L_Calf", "L_Foot", "R_Thigh", "R_Calf", "R_Foot",
+    "R_Forearm", "R_Hand", "L_Thigh", "L_Calf", "L_Foot", "R_Thigh", "R_Calf", "R_Foot", "L_UpArmTwist", "L_UpArmTwist1", "R_UpArmTwist",
+    "R_UpArmTwist1",
 ];
-/// Bone each PoseBone points at in bind (its segment), for the `[pose] bind dir` line Skyrim's fit will need (step 5).
+/// Bone each PoseBone points at in bind (its segment): PoseBind directions, which Skyrim fits its own bind to ("" = none: the
+/// parent's fit; twist bones share the upper arm's).
 const SEGMENT_TO: [&str; N] = [
     "Spine", "Spine1", "Spine2", "Neck", "Head", "", "L_UpperArm", "L_Forearm", "L_Hand", "L_Finger2", "R_UpperArm", "R_Forearm", "R_Hand",
-    "R_Finger2", "L_Calf", "L_Foot", "L_Toe0", "R_Calf", "R_Foot", "R_Toe0",
+    "R_Finger2", "L_Calf", "L_Foot", "L_Toe0", "R_Calf", "R_Foot", "R_Toe0", "", "", "", "",
 ];
 
 fn quat(f: &[f32]) -> Quat {
@@ -70,6 +72,8 @@ struct Rig {
     bind: [Quat; N],
     pelvis_bind: Vec3,
     basis: Basis,
+    /// PoseBind directions (Skyrim basis, unit; zero = none).
+    dirs: [Vec3; N],
 }
 
 impl Rig {
@@ -154,7 +158,23 @@ impl Rig {
             })
             .collect();
         crate::info!("pose", "bind dir (Skyrim basis, unit): {}", dirs.join(" "));
-        Ok(Self { skeleton: skel, bones: n, index, bind, pelvis_bind, basis })
+        let mut seg = [[0.0f32; 3]; N];
+        for (k, (from, to)) in ER_NAMES.iter().zip(SEGMENT_TO).enumerate() {
+            if let (false, Ok(a), Ok(b)) = (to.is_empty(), at(from), at(to)) {
+                let d = basis.vec(sub(b, a));
+                let l = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+                if l > 1e-6 {
+                    seg[k] = [d[0] / l, d[1] / l, d[2] / l];
+                }
+            }
+        }
+        // Which ER twist bone sits nearer the shoulder decides the Twist1/Twist2 mapping (logged; the order above is a guess).
+        let twist: Vec<String> = ["L_UpperArm", "L_UpArmTwist", "L_UpArmTwist1", "L_Forearm"]
+            .iter()
+            .filter_map(|name| Some(format!("{name}={}", fmt(basis.vec(sub(at(name).ok()?, feet))))))
+            .collect();
+        crate::info!("pose", "left arm twist chain bind (Skyrim basis, m from mid-feet): {}", twist.join(" "));
+        Ok(Self { skeleton: skel, bones: n, index, bind, pelvis_bind, basis, dirs: seg })
     }
 
     /// This frame's pose from the model-pose array, or why not.
@@ -191,6 +211,9 @@ struct Stats {
 
 pub struct PoseStream {
     writer: Option<SlotWriter<PoseState>>,
+    bind_writer: Option<SlotWriter<PoseBind>>,
+    /// The rig's skeleton whose PoseBind was last written (0 = none yet).
+    bind_written: usize,
     rig: Option<Rig>,
     retry_at: u64,
     active: bool,
@@ -202,14 +225,17 @@ pub struct PoseStream {
 
 impl PoseStream {
     pub fn new() -> Self {
-        Self { writer: None, rig: None, retry_at: 0, active: false, stats: Stats::default(), error: None, repeats: 0 }
+        Self { writer: None, bind_writer: None, bind_written: 0, rig: None, retry_at: 0, active: false, stats: Stats::default(), error: None, repeats: 0 }
     }
 
     pub fn run(&mut self) {
         let started = Instant::now();
         let frame = bridge::FRAMES.load(Ordering::Relaxed);
         if self.writer.is_none() {
-            self.writer = bridge::shared().and_then(|s| s.region()).map(|r| SlotWriter::new(r, OFF_SLOT_POSE));
+            if let Some(r) = bridge::shared().and_then(|s| s.region()) {
+                self.writer = Some(SlotWriter::new(r.clone(), OFF_SLOT_POSE));
+                self.bind_writer = Some(SlotWriter::new(r, OFF_SLOT_POSE_BIND));
+            }
         }
         if self.writer.is_none() {
             return;
@@ -244,8 +270,20 @@ impl PoseStream {
             }
         }
         // No player / no pose: flags 0 (Skyrim plays its own animation), still written so it isn't stale.
+        if let (Some(rig), Some(w)) = (self.rig.as_ref(), self.bind_writer.as_mut())
+            && rig.skeleton != self.bind_written
+        {
+            let mut bind = PoseBind { bone_count: POSE_BONE_COUNT, frame, ..Default::default() };
+            for (k, d) in rig.dirs.iter().enumerate() {
+                bind.dir[k * 3..k * 3 + 3].copy_from_slice(d);
+            }
+            w.write(&bind);
+            self.bind_written = rig.skeleton;
+            crate::info!("pose", "PoseBind written (skeleton {:#x}, er_frame={frame})", rig.skeleton);
+        }
         pose.frame = frame;
         pose.time_ms = now_ms();
+        pose.time_us = now_us();
         let active = pose.flags != 0;
         if active && !self.active {
             crate::info!("pose", "Active on anim={anim} er_frame={frame}");
