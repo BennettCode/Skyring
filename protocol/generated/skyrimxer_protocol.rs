@@ -153,6 +153,8 @@ pub enum PlayerFlag {
     PoiseBroken = 4,
     /// ER's own combat state (CSChrDataModule +0x19a bit 0x40 clear): dodges cost stamina.
     InCombat = 5,
+    /// ER's TAE movement-cancel window (CANCEL_LS_MOVEMENT): movement may end the current animation.
+    MoveCancel = 6,
 }
 
 impl PlayerFlag {
@@ -164,6 +166,7 @@ impl PlayerFlag {
             3 => Some(Self::HyperArmor),
             4 => Some(Self::PoiseBroken),
             5 => Some(Self::InCombat),
+            6 => Some(Self::MoveCancel),
             _ => None,
         }
     }

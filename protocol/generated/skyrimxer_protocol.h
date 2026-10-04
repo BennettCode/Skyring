@@ -84,6 +84,7 @@ namespace sxer::proto
 		HyperArmor = 3,
 		PoiseBroken = 4,
 		InCombat = 5,  // ER's own combat state (CSChrDataModule +0x19a bit 0x40 clear): dodges cost stamina.
+		MoveCancel = 6,  // ER's TAE movement-cancel window (CANCEL_LS_MOVEMENT): movement may end the current animation.
 	};
 
 	// At OFF_HEADER. Each side writes only its own sky_* / er_* fields; the creator writes the rest, magic last.

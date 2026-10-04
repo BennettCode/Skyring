@@ -22,6 +22,12 @@ const IN_COMBAT: u32 = 1 << InputFlag::InCombat as u32;
 const BRIDGE_ON: u32 = 1 << InputFlag::BridgeOn as u32;
 /// Frames the move stick stays forwarded after Dodge is released (ER picks the roll direction on the release frame or just after).
 const STICK_AFTER_RELEASE: u32 = 10;
+/// A Dodge held longer than this is a sprint, not a dodge: the stick is dropped so ER doesn't dash the hidden character away (Skyrim
+/// lets its own sprint through after the same time, hooks/SprintSwallow.cpp). Taps are 5-15 frames.
+const DASH_AFTER: u32 = 20;
+
+/// True while Skyrim input drives the ER character (Dodge held or the move stick forwarded); park.rs keeps the parking spot still then.
+pub static DRIVING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 fn flag(f: PlayerFlag) -> u32 {
     1 << f as u32
@@ -36,13 +42,15 @@ pub struct DodgeFromSkyrim {
     held_frames: u32,
     /// Frames since Dodge was released (0 while held, saturates).
     since_release: u32,
+    /// The current/last press was held past DASH_AFTER (a sprint): no stick for it, not even after the release.
+    long_press: bool,
     /// Move stick we hold (x right, y forward); (0, 0) = not holding, so a real keyboard still works with `-ErVisible`.
     moving: (f32, f32),
 }
 
 impl DodgeFromSkyrim {
     pub fn new() -> Self {
-        Self { reader: None, last_input: None, fresh: false, held: false, held_frames: 0, since_release: u32::MAX, moving: (0.0, 0.0) }
+        Self { reader: None, last_input: None, fresh: false, held: false, held_frames: 0, since_release: u32::MAX, long_press: false, moving: (0.0, 0.0) }
     }
 
     pub fn run(&mut self) {
@@ -81,14 +89,20 @@ impl DodgeFromSkyrim {
         let player = unsafe { game::main_player() };
         let held = is_fresh && player.is_some() && input.is_some_and(|i| i.buttons & DODGE != 0);
         self.since_release = if held { 0 } else { self.since_release.saturating_add(1) };
-        let stick_window = self.since_release <= STICK_AFTER_RELEASE;
+        if held && !self.held {
+            self.long_press = false;
+        } else if held && self.held_frames >= DASH_AFTER && !self.long_press {
+            self.long_press = true;
+            crate::info!("input", "frame={frame} Dodge held {} frames: sprint, not a dodge (stick dropped, ER character stays)", self.held_frames);
+        }
+        let stick_window = self.since_release <= STICK_AFTER_RELEASE && !self.long_press;
         let moving = match input {
             Some(i) if is_fresh && player.is_some() && stick_window => (i.move_x.clamp(-1.0, 1.0), i.move_y.clamp(-1.0, 1.0)),
             _ => (0.0, 0.0),
         };
         if moving != self.moving {
             let seq = input.map_or(0, |i| i.seq);
-            let why = if stick_window { "dodge window" } else { "dodge window over" };
+            let why = if stick_window { "dodge window" } else if self.long_press { "sprint hold" } else { "dodge window over" };
             crate::info!("input", "frame={frame} move x={:.2} y={:.2} (InputState seq={seq}, {why})", moving.0, moving.1);
             // SAFETY: main thread. The edge to (0, 0) writes the release once.
             unsafe { pad::set_move(moving.0, moving.1) };
@@ -98,6 +112,7 @@ impl DodgeFromSkyrim {
             // SAFETY: main thread. PadStep re-copies the device data each frame, so a held stick is written every frame.
             unsafe { pad::set_move(moving.0, moving.1) };
         }
+        DRIVING.store(held || moving != (0.0, 0.0), Ordering::Relaxed);
         // SAFETY (all pad calls): main thread.
         if held && !self.held {
             let (i, s) = (input.unwrap(), game::snapshot(player.unwrap()));
@@ -199,7 +214,8 @@ pub fn publish_state(from_frame_begin: bool) {
             | if s.dodging { flag(PlayerFlag::Dodging) } else { 0 }
             | if s.hyperarmor { flag(PlayerFlag::HyperArmor) } else { 0 }
             | if s.poise_broken { flag(PlayerFlag::PoiseBroken) } else { 0 }
-            | if combat::in_combat(player) { flag(PlayerFlag::InCombat) } else { 0 };
+            | if combat::in_combat(player) { flag(PlayerFlag::InCombat) } else { 0 }
+            | if s.move_cancel { flag(PlayerFlag::MoveCancel) } else { 0 };
         state.hp = s.hp;
         state.max_hp = s.max_hp;
         state.fp = s.fp;

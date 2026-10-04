@@ -66,10 +66,12 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
 - **Elden Ring's state comes back to Skyrim every frame:** stamina (a dodge costs stamina in combat), HP, animation.
   Skyrim shows a short on-screen message after each dodge, e.g. `ER dodge: anim 27110 | stamina 136->124 | i-frames yes`.
 - **Rolls cost stamina only while your Skyrim character is in combat**, like in Elden Ring (exploring, they're free).
+- **Your Skyrim character moves with the roll:** the same distance as Elden Ring's roll, in the direction you're looking + holding,
+  stopped by walls. Spamming chains rolls. **Tap** Sprint to dodge, **hold** it to sprint.
 - **Roll i-frames reach Skyrim:** Skyrim knows the exact window (about 0.45 s) in which the Elden Ring roll makes you invincible.
 - Fail-safe: if either game closes, crashes or pauses, the other one notices within a moment and stops acting on stale input.
 
-**Not working yet:** your Skyrim character doesn't move or fight differently yet (that's P4/P5). **Controller support isn't added yet:**
+**Not working yet:** there's no roll animation in Skyrim yet (your character slides), and fighting is still vanilla (P5). **Controller support isn't added yet:**
 Skyrim is keyboard-and-mouse only for now (details below). The i-frames are known to Skyrim but don't protect your Skyrim character yet (P4).
 
 ## Progress
@@ -80,7 +82,7 @@ Skyrim is keyboard-and-mouse only for now (details below). The i-frames are know
 | P1 | Both plugins load and log | ✅ done |
 | P2 | Shared memory link: handshake, heartbeats, crash fail-safe | ✅ done |
 | P3 | Dodge in Skyrim → Elden Ring dodges → its stamina and i-frames come back | ✅ done |
-| **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 in progress (2/7: Sprint = dodge, F10 toggle, combat stamina) |
+| **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 in progress (3/7: Sprint = dodge, F10 toggle, combat stamina, rolls move you) |
 | P5 | Damage both ways uses Elden Ring's math (poise, stagger) | ⏳ |
 | P6 | Elden Ring-style HUD | ⏳ |
 | P7 | Runes from kills, leveling, flasks refill at "graces" | ⏳ |

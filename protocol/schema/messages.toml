@@ -86,6 +86,7 @@ values = [
   { name = "HyperArmor", value = 3 },
   { name = "PoiseBroken", value = 4 },
   { name = "InCombat", value = 5, doc = "ER's own combat state (CSChrDataModule +0x19a bit 0x40 clear): dodges cost stamina." },
+  { name = "MoveCancel", value = 6, doc = "ER's TAE movement-cancel window (CANCEL_LS_MOVEMENT): movement may end the current animation." },
 ]
 
 # ---- region layout ------------------------------------------------------------------------------------------------

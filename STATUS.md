@@ -7,6 +7,9 @@ _Last updated: 2026-10-04_
 ER dodge), F10 toggles the bridge, and the hidden ER character only gets the move stick around a dodge (stays parked).
 Step 2 done: ER's combat flag found (`CSChrDataModule` +0x19a bit 0x40) and forced from code (rolls then cost stamina with no enemy).
 Step 3 done: protocol v3; Skyrim's combat state drives ER's, so rolls cost stamina only while the Skyrim player fights.
+Step 4 done: the Skyrim player follows ER's rolls (closed loop through `Actor::ApplyCurrent`, 96–99 % of ER's distance, camera-relative,
+chains, tap = dodge / hold = sprint, movement back at ER's move-cancel window); the hidden ER character returns to its spot after dodges.
+Step 5 (vanilla roll animation) is stuck after 2 attempts: see Handoff notes.
 P3 (done): ER runs hidden at 60 fps; Sprint (+ W/A/S/D) → ER backsteps/rolls by ER's rules; stamina, animation and the roll i-frame
 window come back every frame; coordinate conversion measured (`protocol/src/coords.rs`). Region `Local\SkyrimXER_v3`.
 
@@ -30,11 +33,21 @@ window come back every frame; coordinate conversion measured (`protocol/src/coor
   Continue each run (no warp in P3). The user tests with a DualSense (PS5) over USB in both games.
 
 ## Next 3 steps (P4, `docs/P4-PLAN.md`)
-1. Step 4: the Skyrim player follows ER's roll (ER displacement → coords → Skyrim, with Skyrim collision).
-2. Step 5: vanilla Silent Roll animation.
+1. Pin the hidden ER character (it still rolls into ER walls): hold it on its spot every frame and take the roll from ER's root
+   motion (`CSChrPhysicsModule.root_motion`) instead of its position. Research first (self-test: log root motion vs position).
+2. Step 5 roll animation, fresh attempt (Handoff notes).
 3. Step 6: Skyrim's stamina bar mirrors ER's.
 
 ## Handoff notes
+**P4 step 5, roll animation: stuck after 2 attempts (2026-10-04).** Goal: a roll animation in Skyrim with vanilla files only.
+Tried: (1) `NotifyAnimationGraph("SneakSprintStartRoll")` → returns true, nothing plays. (2) Sneak trick in `Movement.cpp`
+(`kSneakRollTrick`, now off): SneakStart, SprintStart one frame later → the roll starts but is cut after ~8 frames (we zero
+`moveInputVec` during dodges, so the sprint ends), half the tries only crouch, the sneak eye stays on the HUD afterwards.
+Hypothesis: the sneak-sprint roll needs forward move input for its ~29 frames. Alternatives: (a) keep `moveInputVec` = (0,1) during
+the trick and leave sneak through the game's own sneak toggle (not the actorState bit); (b) play the roll another way (a vanilla
+IdleForm / `PlayAnimation`); (c) user-installed dodge animations once players accept an animation dependency. Logs: `[anim]` probe
+lines (`bridge/AnimProbe.cpp`), `[move] roll animation` lines.
+
 **I-frame search solved (2026-10-04, attempt 3).** Attempts 1–2 diffed memory only during *backsteps*, which set no invincibility at
 all. A roll sets `action_modifiers_flags` bit 1 for 26–27 frames; a play test with 46 logged hits had none land while it was set.
 `game.rs` publishes it as `PlayerFlag::IFrame`. The Watcher's `[probe] HIT` lines (every HP loss with bits + frame offset into the last

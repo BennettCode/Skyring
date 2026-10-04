@@ -60,11 +60,27 @@ First: copy this plan to `docs/P4-PLAN.md`, ROADMAP P4/P5 edits (swallow list, v
   clamped by a collision cast. Log per roll: ER distance vs Skyrim distance, frames, blocked-by-wall.
 - **Test (both games, keyboard):** 8 directional rolls + 2 backsteps in the open + 1 roll into a wall. Accept: distance within ±10 % of
   ER's, no clipping, heading correct.
+- **Result (2026-10-04, many both-games runs):** `skse/src/bridge/Movement.cpp`. Apply method (a) works: `Actor::ApplyCurrent` (vfunc 0x9D)
+  with a closed loop (a target point moves with ER's per-frame delta; the player is steered onto it, lead capped at 60 units so walls stop
+  it) → rolls land at **96–99 %** of ER's distance; a roll into a wall stops at the wall. Open-loop versions were 79–150 %.
+  What the playtests changed: no body rotation (turning the player flips the third-person camera); the roll direction = **camera yaw** +
+  move-key angle (the body lags a turning camera); Skyrim's movement keys are swallowed during a dodge (`hooks/MoveSwallow.cpp`,
+  MovementHandler::CanProcess, AE 208715) and given back at ER's **TAE movement-cancel window** (new PlayerFlag MoveCancel, ~43 frames)
+  or when ER stops moving; chained rolls = new i-frame window after a press, chained backsteps = press + ER moving again.
+  **Tap = dodge, hold = sprint:** past 20 frames ER drops the stick and Skyrim's own sprint is let through (presented as a fresh press).
+  **Parking (`er-plugin/src/park.rs`):** the hidden character returns to its spot after every dodge (physics position +
+  `chr_proxy_pos_update_requested`); the spot only follows the character while Skyrim isn't driving it.
+  Open: ER-side walls still shorten rolls that start near one (next: pin the ER character and take the roll from root motion).
 
 ### 5. Roll animation, vanilla (Skyrim; experiment, 2 tries)
 - Find the Silent Roll graph event: `BSTEventSink<BSAnimationGraphEvent>` on the player logs events while the user does a vanilla sneak
   roll (bridge off, perk added once via console on the test save). Then send it with `NotifyAnimationGraph` at our roll start and cancel its
   root motion so step 4's movement isn't doubled. Fallback: slide (documented in README "Not working yet").
+- **Status (2026-10-04): 2 attempts, not working, handed off.** (1) `NotifyAnimationGraph("SneakSprintStartRoll")` returns true but
+  nothing plays. (2) Sneak trick (SneakStart, SprintStart next frame, undone at the end) starts the roll (graph notifies `tailSprint`,
+  `StartAnimatedCameraDelta`) but `SprintStop` follows after ~8 frames (vanilla ~29) because the dodge zeroes the move input; about half
+  the tries only crouch, and the HUD sneak eye stays up. Switched off (`kSneakRollTrick`). Vanilla sneak roll (Silent Roll perk, user's
+  test save) notifies only `tailSneakLocomotion` → `tailSprint` → `SprintStop` ~0.48 s later.
 
 ### 6. Stamina bar mirrors ER (Skyrim)
 - Every frame with fresh PlayerState: Skyrim Stamina current = Skyrim max × ER stamina/max (damage-modifier delta via

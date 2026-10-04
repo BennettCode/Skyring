@@ -38,3 +38,23 @@ before use (a missing id makes CommonLib abort the game at load).
   our `BSInputDeviceManager` sink still sees the key. Releases are let through so a sprint begun before the swallow still ends.
 - Hook: `skse/src/hooks/SprintSwallow.cpp`. Confidence: verified by test (2026-10-04: bridged Shift+W ≈ 366 u/s = run speed, unswallowed
   sprint ≈ 499 u/s).
+
+## Moving the player with collision: Actor::ApplyCurrent (P4 step 4)
+- `Actor::ApplyCurrent(velocityTime, hkVector4 velocity)` = Actor vfunc **0x9D** (CommonLib, through the player's own vtable, no id): a
+  velocity the character controller applies (Havok units/s = Skyrim units/s × `bhkWorld::GetWorldScale()`), with collision.
+- Open loop it realizes an uneven share of the velocity (79–150 % over a roll). Closed loop (steer onto a target that moves with ER,
+  lead capped) gives 96–99 %. Confidence: verified by test (2026-10-04).
+
+## MovementHandler::CanProcess, PlayerControls, PlayerCamera
+- `RE::VTABLE_MovementHandler[0]` = AE **208715**, vfunc 0x1: refusing events keeps held movement keys from setting
+  `PlayerControls::data.moveInputVec` (zeroed by us); held keys send an event every frame, so movement resumes right after.
+- `PlayerControls` singleton AE **400864**; `PlayerCamera` singleton AE **400802**, `GetRuntimeData2().yaw` = camera yaw in the same
+  convention as `GetAngleZ()`.
+- Turning the player (`Actor::SetHeading`, AE 37230) during a roll turns the third-person camera with it: don't.
+- SprintHandler only starts sprinting on a fresh press: to start it mid-hold, set the held event's `heldDownSecs` to 0 once.
+- Confidence: verified by test (2026-10-04).
+
+## Vanilla sneak roll (research, P4 step 5)
+- With the Silent Roll perk, sneak + sprint plays a forward roll. Graph notifications: `tailSneakLocomotion` → `tailSprint` →
+  `SprintStop` (~0.48 s). Forcing it (SneakStart, then SprintStart, actorState sneaking/sprinting bits) starts it, but it ends after
+  ~8 frames when the move input is zero. Confidence: likely (one session, 2026-10-04).

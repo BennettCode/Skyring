@@ -44,3 +44,11 @@ Game/version: eldenring.exe 2.7.1.0 (1.17.1), eldenring-rs `59fbd3b`. Read in `e
   `ChrIns.chr_flags1c4..1cb` bits flip irregularly (render/visibility-like). **Special effects:** no effect is added during a backstep.
   A roll adds 100240 (+0..+6), 100390 (+5..+8) and 430 (+0..+33), all shorter or longer than the i-frame window, so they aren't it.
 - Confidence: verified by test (rolls + hit timing, 2026-10-04). Exact roll weights (light/heavy) not measured yet.
+
+## Movement-cancel window and moving the character (P4 step 4)
+- `CSChrActionRequestModule.tae_cancels` bit 1 (`movement_cancel`, TAE CANCEL_LS_MOVEMENT) or bit 2 (previous frame) = movement may end
+  the current animation. In a roll (27110) it opens ~43 frames in (the animation runs ~99). Published as PlayerFlag MoveCancel.
+- Rolls chained by spamming keep anim id 27110 (each opens a new dodge-flag window); chained backsteps keep 27010 with no flag.
+- A Sprint hold past the tap window dashes (12020110/12020210); with the move stick dropped after 20 frames the character stands.
+- Teleport: write `CSChrPhysicsModule.position` and set `chr_proxy_pos_update_requested` (ChrIns_PostPhysics) → the character is there
+  next frame (`er-plugin/src/park.rs`). Confidence: verified by test (2026-10-04).

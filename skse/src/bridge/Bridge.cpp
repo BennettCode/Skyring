@@ -1,11 +1,14 @@
 #include "bridge/Bridge.h"
 
+#include "bridge/AnimProbe.h"
 #include "bridge/Hud.h"
 #include "bridge/Input.h"
 #include "bridge/Link.h"
+#include "bridge/Movement.h"
 #include "bridge/PlayerWatch.h"
 #include "bridge/Slot.h"
 #include "hooks/PlayerUpdate.h"
+#include "hooks/MoveSwallow.h"
 #include "hooks/SprintSwallow.h"
 
 #include <algorithm>
@@ -29,6 +32,8 @@ namespace sxer::bridge
 		std::atomic<std::uint64_t> g_frames{ 0 };
 		// See SwallowSprint().
 		std::atomic<bool> g_swallowSprint{ false };
+		// See TakeSprintKick().
+		std::atomic<bool> g_sprintKick{ false };
 
 		constexpr std::uint32_t kDodge = 1u << static_cast<std::uint32_t>(proto::Button::Dodge);
 		constexpr std::uint32_t kInWorld = 1u << static_cast<std::uint32_t>(proto::PlayerFlag::InWorld);
@@ -36,6 +41,8 @@ namespace sxer::bridge
 		constexpr std::uint32_t kInCombat = 1u << static_cast<std::uint32_t>(proto::InputFlag::InCombat);
 		constexpr std::uint32_t kBridgeOn = 1u << static_cast<std::uint32_t>(proto::InputFlag::BridgeOn);
 		constexpr std::uint64_t kReportMs = 5000;
+		// Sprint held longer than this (frames) is Skyrim's sprint, not an ER dodge (matches er-plugin remote.rs DASH_AFTER).
+		constexpr std::uint32_t kSprintAfterFrames = 20;
 		// How long after a Dodge press the HUD summary waits for ER's reaction (ER starts a backstep ~9 frames after the press).
 		constexpr std::uint64_t kDodgeReportMs = 600;
 		// Coordinate test probe: one sample every kCoordsEvery frames while moving, at most kCoordsMaxLines per session.
@@ -63,6 +70,7 @@ namespace sxer::bridge
 			bool bridgeOn = true;
 			bool swallow = false;
 			bool held = false;
+			std::uint32_t heldFrames = 0;
 			bool inCombat = false;
 			bool erInCombat = false;
 			input::Move move;
@@ -206,14 +214,17 @@ namespace sxer::bridge
 
 		hooks::InstallPlayerUpdate();
 		hooks::InstallSprintSwallow();
+		hooks::InstallMoveSwallow();
 		input::Install();
 		SKSE::log::info("[core] hooks installed: PlayerCharacter::Update (vfunc 0xAD) → InputState/PlayerState slots, SprintHandler::CanProcess "
-		                "(vfunc 0x1, vanilla sprint off while bridged), input sink (Sprint → Dodge, movement keys → move stick, F10 toggle)");
+		                "(vfunc 0x1, vanilla sprint off while bridged), MovementHandler::CanProcess (vfunc 0x1, keys off during a dodge), input sink (Sprint → Dodge, movement keys → move stick, F10 toggle)");
 	}
 
 	bool SwallowSprint() { return g_swallowSprint.load(std::memory_order_relaxed); }
 
-	void OnFrame(const RE::PlayerCharacter* a_player, float a_delta)
+	bool TakeSprintKick() { return g_sprintKick.exchange(false, std::memory_order_relaxed); }
+
+	void OnFrame(RE::PlayerCharacter* a_player, float a_delta)
 	{
 		const auto start = std::chrono::steady_clock::now();
 		auto& f = g_frame;
@@ -238,18 +249,27 @@ namespace sxer::bridge
 			f.bridgeOn = on;
 			hud::Notify(on ? "SkyrimXER: bridge ON (Sprint = Elden Ring dodge), F10 toggles" : "SkyrimXER: bridge OFF (vanilla Skyrim), F10 toggles");
 		}
-		const auto& last = f.watch.Last();
-		const bool swallow = on && connected && last && (last->flags & kInWorld);
-		if (swallow != f.swallow) {
-			f.swallow = swallow;
-			g_swallowSprint.store(swallow, std::memory_order_relaxed);
-			SKSE::log::info("[input] vanilla Sprint {} frame={}", swallow ? "swallowed (Sprint = ER dodge only)" : "restored", frame);
-		}
 		const bool held = on && input::SprintHeld();
 		const bool pressed = held && !f.held;
 		if (held != f.held) {
 			f.held = held;
+			f.heldFrames = 0;
 			SKSE::log::info("[input] Dodge {} frame={} (Sprint from {})", held ? "down" : "up", frame, input::SprintDevice());
+		}
+		if (held) {
+			++f.heldFrames;
+		}
+		// Tap = ER dodge, hold = Skyrim's own sprint: past kSprintAfterFrames ER drops the stick (er-plugin remote.rs DASH_AFTER) and
+		// vanilla sprint is let through.
+		const auto& last = f.watch.Last();
+		const bool sprintHold = held && f.heldFrames > kSprintAfterFrames;
+		const bool swallow = on && connected && last && (last->flags & kInWorld) && !sprintHold;
+		if (swallow != f.swallow) {
+			f.swallow = swallow;
+			g_swallowSprint.store(swallow, std::memory_order_relaxed);
+			g_sprintKick.store(sprintHold, std::memory_order_relaxed);
+			SKSE::log::info("[input] vanilla Sprint {} frame={}", swallow ? "swallowed (Sprint = ER dodge only)" :
+			                                                        sprintHold ? "let through (Sprint held: Skyrim sprints)" : "restored", frame);
 		}
 		const auto move = on ? input::MoveAxes() : input::Move{};
 		if (move != f.move) {
@@ -279,6 +299,8 @@ namespace sxer::bridge
 		f.input->Write(state);
 		SampleCoords(f, a_player, frame, move);
 		f.watch.Update(f.player->Read(), connected, now);
+		movement::Update(a_player, f.watch.Last(), move, on, pressed, a_delta, frame);
+		animprobe::Update(a_player, frame);
 		UpdateHud(f, connected, pressed, now);
 
 		f.frameMs.push_back(a_delta * 1000.0f);

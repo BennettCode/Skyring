@@ -4,6 +4,19 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P4 step 4: the Skyrim player follows ER's rolls (both games)
+- **Changed:** `skse/src/bridge/Movement.cpp` (new): while ER plays a dodge, ER's per-frame delta → character frame → Skyrim along the
+  roll direction (camera yaw + move keys), applied closed-loop through `Actor::ApplyCurrent`; ends at ER's TAE movement-cancel window
+  (new PlayerFlag MoveCancel, ER `game.rs`) or when ER stops; chained rolls/backsteps detected. `hooks/MoveSwallow.cpp`
+  (MovementHandler::CanProcess, AE 208715): movement keys off during a dodge. Tap = dodge / hold = sprint: ER drops the stick after
+  20 frames (`remote.rs` DASH_AFTER), Skyrim lets its sprint through as a fresh press (`SprintSwallow.cpp`). ER `park.rs`: the hidden
+  character returns to its spot after each dodge. `bridge/AnimProbe.cpp`: bounded `[anim]` graph-event log. Roll-animation experiments
+  (step 5) are in `Movement.cpp`, switched off.
+- **Tested:** both games, keyboard, ~10 user runs. Final: rolls 96–99 % of ER's distance, a wall stops the roll, camera calm, rolls follow
+  the camera, spam chains, backsteps chain, Shift hold sprints at ~510 u/s (vanilla sprint), the hidden character snaps back.
+  `tests/run-tests.ps1` green (MoveCancel enum).
+- **Result:** ✔ step 4. Step 5 (animation) stuck after 2 attempts, handoff in STATUS. Open: ER walls still shorten some rolls.
+
 ## 2026-10-04: P4 step 3: protocol v3, Skyrim's combat state drives ER's
 - **Changed:** protocol v3 (`Local\SkyrimXER_v3`): InputState `_pad1` → `flags` (InputFlag InCombat, BridgeOn), PlayerFlag InCombat.
   Skyrim `Bridge.cpp` writes them (`IsInCombat()`, F10) and logs `[combat]` edges of both games. ER: `remote.rs` hands the wanted state to

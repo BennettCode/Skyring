@@ -21,6 +21,8 @@ pub struct Snapshot {
     pub dodging: bool,
     /// TAE SUPER_ARMOR.
     pub hyperarmor: bool,
+    /// TAE CANCEL_LS_MOVEMENT this or the previous frame: movement may cancel the current animation (end of a roll's recovery).
+    pub move_cancel: bool,
     pub poise: f32,
     pub poise_max: f32,
     pub poise_broken: bool,
@@ -58,6 +60,10 @@ pub fn snapshot(player: &PlayerIns) -> Snapshot {
             || flags.invincible_excluding_throw_attacks_defender()
             || flags.pve_only_iframes(),
         dodging: flags.dodging(),
+        move_cancel: {
+            let c = m.action_request.tae_cancels;
+            c.movement_cancel() || c.movement_cancel_prev()
+        },
         hyperarmor: flags.super_armor(),
         poise: m.super_armor.sa_durability,
         poise_max: m.super_armor.sa_durability_max,

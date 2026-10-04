@@ -12,6 +12,7 @@ mod focus;
 mod game;
 mod log;
 mod pad;
+mod park;
 mod remote;
 mod window;
 
@@ -103,6 +104,9 @@ fn init(module: usize) {
         std::mem::forget(task.run_recurring(move |_: &FD4TaskData| speffects.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
         info!("core", "SpEffect watch in ChrIns_PostPhysics (research, dump=1)");
     }
+    let mut park = park::Park::new();
+    std::mem::forget(task.run_recurring(move |_: &FD4TaskData| park.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
+    info!("core", "parking: the character returns to its spot after each dodge (ChrIns_PostPhysics)");
     let mut combat_watch = combat::CombatWatch::new();
     std::mem::forget(task.run_recurring(move |_: &FD4TaskData| combat_watch.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
     let force = config::get().force_combat.as_str();
