@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
-  Copies every relevant log from both games into logs/<timestamp>/ and prints the [core] lines from both plugins.
+  Copies every relevant log from both games into logs/<timestamp>/ and prints the [core]/[link]/error lines from both plugins
+  (periodic "heartbeat seq=" lines are summarised: count + the last one).
 #>
 [CmdletBinding()]
 param()
@@ -32,9 +33,14 @@ foreach ($src in $sources) {
     }
 }
 
-Write-Host "`n== plugin [core] lines ==" -ForegroundColor Cyan
+Write-Host "`n== plugin [core]/[link] lines ==" -ForegroundColor Cyan
 foreach ($name in 'SkyrimXER.log', 'skyrimxer_er.log') {
     $file = Join-Path $dest $name
-    if (Test-Path -LiteralPath $file) { Select-String -LiteralPath $file -Pattern '\[core\]|\[error\]|\[critical\]' | ForEach-Object { $_.Line } }
+    if (-not (Test-Path -LiteralPath $file)) { continue }
+    $lines = @(Select-String -LiteralPath $file -Pattern '\[core\]|\[link\]|\[error\]|\[critical\]|\[warn(ing)?\]' | ForEach-Object { $_.Line })
+    # Heartbeat events arrive every 5 s; show how many plus the last one instead of all of them.
+    $beats = @($lines | Where-Object { $_ -match 'heartbeat seq=' })
+    $lines | Where-Object { $_ -notmatch 'heartbeat seq=' }
+    if ($beats.Count) { Write-Host "  ($name`: $($beats.Count) heartbeat events received, last one:)" -ForegroundColor DarkGray; $beats[-1] }
 }
 Write-Host "`nlogs saved to $dest" -ForegroundColor Green

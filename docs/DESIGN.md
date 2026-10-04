@@ -35,20 +35,43 @@ Alternatives considered (if the draft fails the tests):
 
 ## 4. Protocol (`Local\SkyrimXER_v1`)
 
+Source of truth: `protocol/schema/messages.toml` → `cargo run -p protogen` → `protocol/generated/skyrimxer_protocol.{h,rs}`.
+Fixed-size little-endian plain structs, explicit padding only (protogen rejects implicit padding), size/offset asserts in both
+languages, `version` + region name bump for any layout change.
+
+**v1 region (P2, 0x21000 bytes):**
 ```
-SharedRegion {
-  Header        { magic 'SXER', u32 version, u32 header_size, u32 sky_pid, u32 er_pid,
-                  u64 sky_heartbeat_ms, u64 er_heartbeat_ms, u32 sky_state, u32 er_state }
-  Slot<InputState>    sky→er   seqlock   per Skyrim frame   (buttons, sticks, camera yaw/pitch)
-  Slot<CameraState>   sky→er   seqlock   per Skyrim frame
-  Slot<PlayerState>   er→sky   seqlock   per ER frame       (hp, fp, stamina, maxes, action_state, anim_id,
-                                                              iframe, hyperarmor, poise, move_delta_xyz, yaw)
-  Ring<Event> sky→er  (Hello, Bye, PlayerHurt{dmg types, attacker level, hit dir}, Toggle, ...)
-  Ring<Event> er→sky  (Hello, Bye, HitResult{target formid, dmg, poise dmg, status}, FlaskUsed, RunesChanged, Died, ...)
-}
+0x00000 Header       magic 'SXER' (written last by the creator), version, header_size, region_size,
+                     sky_/er_ pid, state (SideState), heartbeat_ms (GetTickCount64), attach_count   (64 B)
+0x00100 RingHeader   sky→er   write_pos, read_pos (u64 byte totals, never wrap), capacity, dropped
+0x00140 RingHeader   er→sky
+0x01000 ring data    sky→er   64 KiB
+0x11000 ring data    er→sky   64 KiB
 ```
-Rules: fixed-size little-endian plain structs, explicit padding, size/offset asserts on both sides, schema is the single source of truth,
-`version` bump for any layout change. Heartbeat timeout of 2 s → fail-safe (Skyrim goes back to vanilla combat).
+- **Either side may create the region.** The creator fills the shared fields and publishes `magic` last (release). An opener waits for it,
+  then checks magic/version/sizes. On a mismatch it logs `PROTOCOL MISMATCH` once and writes nothing. Each side writes only its own `sky_*`/`er_*` fields.
+- **Rings:** exactly one writer and one reader each. Message = `{u16 msg_type, u16 size, u32 seq}` + payload, padded to 8 B, may wrap.
+  A full ring drops the message and counts it in `dropped`. On (re)attach, a reader skips stale bytes and the writer restarts `seq` at 1.
+- **Events v1:** `Hello` (protocol version, pid, plugin + game version), `Bye` (reason), `Heartbeat` (uptime, frames; every 5 s).
+- **Link state machine** (`protocol/src/link.rs`, mirrored in `skse/src/bridge/Link.cpp`; same steps and log wording), ticked by a
+  dedicated 50 ms thread on each side, not by the game loop:
+  attach (retry 1 s) → write own heartbeat → check peer → read events → maybe send a Heartbeat event.
+  - Peer **alive** = state Starting/Ready/Running and heartbeat ≤ 2 s old. A **new peer** (became alive, or its attach count changed) gets a Hello.
+    Its Hello back = **CONNECTED**. A Hello received while connected means the peer lost us, so we answer it.
+  - **LOST** (fail-safe → idle, keep waiting): heartbeat timeout, peer state ShuttingDown/Faulted, or Bye.
+  - Bye is best effort at process exit (DLL detach, never blocks or logs there). A crash is covered by the timeout.
+- Why a thread, not the frame task: the heartbeat must keep going through loading screens and ER's unfocused pauses. Whether ER's game loop
+  is advancing shows up separately as `frames` in its Heartbeat events.
+
+**Planned (P3+, will bump the version):**
+```
+Slot<InputState>    sky→er   seqlock   per Skyrim frame   (buttons, sticks, camera yaw/pitch)
+Slot<CameraState>   sky→er   seqlock   per Skyrim frame
+Slot<PlayerState>   er→sky   seqlock   per ER frame       (hp, fp, stamina, maxes, action_state, anim_id,
+                                                           iframe, hyperarmor, poise, move_delta_xyz, yaw)
+Events sky→er: PlayerHurt{dmg types, attacker level, hit dir}, Toggle, ...
+Events er→sky: HitResult{target formid, dmg, poise dmg, status}, FlaskUsed, RunesChanged, Died, ...
+```
 
 ## 5. Launch / lifecycle
 1. `tools/launch.ps1` → back up saves → `me3 launch` ER with the profile (EAC never starts, offline only).

@@ -14,3 +14,4 @@ eldenring.workspace = true
 fromsoftware-shared.workspace = true
 windows.workspace = true
 chrono.workspace = true
+skyrimxer-protocol = { path = "../protocol" }

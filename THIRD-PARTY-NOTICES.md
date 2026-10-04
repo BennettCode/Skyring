@@ -17,6 +17,7 @@ If code is copied, also keep the original license text in `licenses/<project>.tx
 | Address Library for SKSE Plugins | Version-independent addresses (runtime requirement, not redistributed) | Nexus permissions | https://www.nexusmods.com/skyrimspecialedition/mods/32444 |
 | me3 | Elden Ring mod loader (runtime requirement, not redistributed) | Apache-2.0 / MIT | https://github.com/garyttierney/me3 |
 | eldenring-rs / fromsoftware-rs (vswarte) | Elden Ring native bindings (Rust crates `eldenring`, `fromsoftware-shared`) | MIT OR Apache-2.0 | https://github.com/vswarte/eldenring-rs |
+| Rust crates: `windows` (Microsoft), `chrono`, `serde`, `toml` | Win32 bindings + log timestamps in the ER plugin and protocol crate; schema parsing in `tools/protogen` (build tool only) | MIT OR Apache-2.0 | https://crates.io
 
 Game content belongs to its owners: *The Elder Scrolls V: Skyrim* © Bethesda Softworks/ZeniMax. *ELDEN RING* © FromSoftware/Bandai Namco.
 This repository contains none of it.

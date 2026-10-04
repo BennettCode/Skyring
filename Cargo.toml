@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["er-plugin"]
+members = ["er-plugin", "protocol", "tools/protogen", "tools/fake-peer"]
 
 [workspace.package]
 version = "0.1.0"

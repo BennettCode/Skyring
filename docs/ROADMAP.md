@@ -19,10 +19,10 @@ Tick boxes as you go. Keep each phase small. If a phase grows, split it.
 **Accept:** ✔ **DONE 2026-10-04.** Both log lines present after one `tools/launch.ps1` run with both games at once. Logs in `logs/20261004-000407/`.
 
 ## P2: Shared memory + heartbeat
-- [ ] `protocol/schema` v1 header + Hello/Bye. Generator writes `.h` + `.rs`. Layout tests pass on both sides
-- [ ] `fake-skyrim` / `fake-er` stand-in processes (Rust, `tools/`) so each side can be tested without the other game
-- [ ] Both sides open the region, exchange Hello, and log the other side's heartbeat every 5 s
-- [ ] Kill ER → Skyrim logs a timeout and stays stable. Kill Skyrim → ER goes idle
+- [x] `protocol/schema` v1 header + Hello/Bye/Heartbeat. Generator writes `.h` + `.rs`. Layout tests pass on both sides
+- [x] Stand-in peers (`tools/fake-peer`, Rust; `skyrimxer_link_test.exe peer`, C++) so each side can be tested without the other game
+- [x] Both sides open the region, exchange Hello, and log the other side's heartbeat every 5 s (2026-10-04)
+- [x] Kill ER → Skyrim logs a timeout and stays stable. Quit Skyrim → ER goes idle (2026-10-04)
 **Accept:** the logs show the handshake, heartbeats and a clean timeout.
 
 ## P3: One value across, then the loop

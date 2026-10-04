@@ -1,7 +1,9 @@
 //! skyrimxer_er: the Elden Ring half of Skyrim X Elden Ring. Loaded by me3 (see me3/skyrim-x-er.me3).
 //!
-//! Phase 1: prove the DLL loads, eldenring-rs accepts this game version, and a per-frame task runs.
+//! Phase 1: the DLL loads, eldenring-rs accepts this game version, and a per-frame task runs.
+//! Phase 2: a link thread keeps the shared-memory heartbeat/handshake with Skyrim going (skyrimxer-protocol).
 
+mod bridge;
 mod log;
 
 use std::ffi::c_void;
@@ -16,16 +18,22 @@ use fromsoftware_shared::{FromStatic, SharedTaskImpExt};
 use windows::Win32::Foundation::HMODULE;
 use windows::Win32::System::LibraryLoader::GetModuleFileNameW;
 
+const DLL_PROCESS_DETACH: u32 = 0;
 const DLL_PROCESS_ATTACH: u32 = 1;
 
 /// # Safety
 /// Called by the Windows loader only.
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn DllMain(hmodule: HMODULE, reason: u32, _reserved: *mut c_void) -> bool {
-    if reason == DLL_PROCESS_ATTACH {
-        // Never do real work under the loader lock; hand off to a thread.
-        let module = hmodule.0 as usize;
-        std::thread::spawn(move || init(module));
+    match reason {
+        DLL_PROCESS_ATTACH => {
+            // Never do real work under the loader lock; hand off to a thread.
+            let module = hmodule.0 as usize;
+            std::thread::spawn(move || init(module));
+        }
+        // Clean game exit: tell Skyrim with a Bye (best effort; a crash is covered by the heartbeat timeout).
+        DLL_PROCESS_DETACH => bridge::on_process_exit(),
+        _ => {}
     }
     true
 }
@@ -53,9 +61,13 @@ fn init(module: usize) {
     };
     info!("core", "game version supported, task system ready");
 
+    // Only after the version check: an unsupported ER never shows up as a peer, so Skyrim stays vanilla.
+    bridge::start();
+
     let player_present = AtomicBool::new(false);
     task.run_recurring(
         move |_: &FD4TaskData| {
+            bridge::FRAMES.fetch_add(1, Ordering::Relaxed);
             let present = unsafe { WorldChrMan::instance() }
                 .map(|world| world.main_player.is_some())
                 .unwrap_or(false);

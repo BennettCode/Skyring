@@ -1,0 +1,18 @@
+[package]
+name = "skyrimxer-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Shared-memory protocol (generated types) and link state machine, used by the ER plugin and the fake peers"
+
+[lib]
+name = "skyrimxer_protocol"
+
+[dependencies]
+windows = { workspace = true, features = [
+    "Win32_Security",
+    "Win32_System_Memory",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+] }

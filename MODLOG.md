@@ -4,6 +4,23 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: Phase 2 complete (shared memory + heartbeat)
+- **Changed:** Protocol schema v1 (`protocol/schema/messages.toml`) + generator `tools/protogen` (rejects implicit padding, checks the region
+  map, emits size/offset asserts for C++ and Rust, `--check` stale test). Rust crate `skyrimxer-protocol` (region, SPSC rings, link state
+  machine) used by `er-plugin` and `tools/fake-peer`. C++ mirror `skse/src/bridge/Link.cpp` + `Bridge.cpp`, and `skyrimxer_link_test.exe`.
+  `tests/run-tests.ps1`. `collect-logs.ps1` now prints `[link]` lines (heartbeat lines summarised).
+- **Tested without games:** `tests/run-tests.ps1` passes: 10 Rust tests (ring wrap/full/corrupt, handshake, timeout, reconnect, Bye, restart,
+  header mismatch), 9 C++ selftest checks, Rust↔C++ cross-process (crash → timeout; clean exit → Bye).
+- **Tested in-game (agent-run, both games at the main menu):**
+  - ER created the region, Skyrim opened it on kDataLoaded: `CONNECTED: handshake ok` on both sides within 50 ms.
+  - ~7 min connected: heartbeat events every 5 s both ways, 0 dropped. ER `frames` rose ~300 per 5 s (≈ 60 fps while unfocused at the title).
+  - `eldenring.exe` force-killed → Skyrim: `LOST: ER ... heartbeat timeout (last beat 2031 ms ago)`, Skyrim kept running.
+  - ER relaunched alone → `attach#2`, reconnected without restarting Skyrim.
+  - Skyrim window closed → clean exit, ER: `LOST: Skyrim ... shutting down` + `Skyrim said Bye (reason=Quit)`, ER kept running. No crash logs.
+- **Bugs fixed during the work:** Hello read before its sender was detected looked like a restart (fix: check peer before reading events, and
+  answer a Hello received while connected). ER log level name `warn` → `warning` to match spdlog.
+- **Next:** P3.
+
 ## 2026-10-04: Workflow + repo hygiene
 - **Changed:** Added `tools/dev.ps1` (build → deploy → backup → launch → wait for plugin ready lines → collect logs). AI-agent files are now
   local-only, and history was rewritten so they never appear in it. Logging format moved to `docs/DESIGN.md` §8 and the release checklist to

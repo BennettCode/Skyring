@@ -4,9 +4,12 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::Path;
-use std::sync::{Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, OnceLock, TryLockError};
 
 static LOG_FILE: OnceLock<Mutex<File>> = OnceLock::new();
+/// Set during process exit: other threads may have been killed while holding the lock, so never block on it then.
+pub static EXITING: AtomicBool = AtomicBool::new(false);
 
 /// Opens (truncating) `<dir>/skyrimxer_er.log`. Later calls are ignored.
 pub fn init(dir: &Path) -> std::io::Result<()> {
@@ -26,7 +29,15 @@ pub fn write(level: &str, subsystem: &str, message: &str) {
     };
     let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ");
     // A poisoned lock only means another thread panicked mid-write; the file is still usable.
-    let mut file = file.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut file = if EXITING.load(Ordering::Relaxed) {
+        match file.try_lock() {
+            Ok(f) => f,
+            Err(TryLockError::Poisoned(p)) => p.into_inner(),
+            Err(TryLockError::WouldBlock) => return,
+        }
+    } else {
+        file.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    };
     let _ = writeln!(file, "{timestamp} [ER] [{level}] [{subsystem}] {message}");
     let _ = file.flush();
 }

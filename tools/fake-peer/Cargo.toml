@@ -1,0 +1,11 @@
+[package]
+name = "fake-peer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Stand-in for either game on the shared-memory link, for testing without launching both games"
+
+[dependencies]
+skyrimxer-protocol = { path = "../../protocol" }
+chrono.workspace = true

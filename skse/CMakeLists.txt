@@ -33,3 +33,17 @@ if(MSVC)
 	target_compile_options(SkyrimXER PRIVATE /W4 /permissive- /Zc:preprocessor /utf-8 /MP)
 	target_link_options(SkyrimXER PRIVATE /DEBUG:FULL)
 endif()
+
+# C++ link outside Skyrim: layout asserts (generated header), in-process selftest, and a peer mode for
+# cross-language tests against `cargo run -p fake-peer` (tests/run-tests.ps1).
+find_package(spdlog CONFIG REQUIRED)
+add_executable(skyrimxer_link_test tests/link_test.cpp src/bridge/Link.cpp)
+target_include_directories(skyrimxer_link_test PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR}/../protocol/generated)
+target_link_libraries(skyrimxer_link_test PRIVATE spdlog::spdlog)
+target_compile_definitions(skyrimxer_link_test PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
+if(MSVC)
+	target_compile_options(skyrimxer_link_test PRIVATE /W4 /permissive- /Zc:preprocessor /utf-8)
+endif()
+
+enable_testing()
+add_test(NAME link_selftest COMMAND skyrimxer_link_test selftest)

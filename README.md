@@ -9,10 +9,11 @@ link the two games over shared memory.
 <!-- Screenshot / GIF goes here once something works. -->
 
 ## What works
-- Nothing yet. The project structure and design docs are in place.
+- Both plugins load (Skyrim via SKSE, Elden Ring via me3, offline) and connect over shared memory: version handshake, heartbeats,
+  and a fail-safe when either game crashes or quits (the other keeps running and reconnects when it comes back).
 
 ## What doesn't work yet
-- Everything. See the roadmap.
+- No gameplay yet: input forwarding, Elden Ring combat rules and the HUD come in later phases. See the [roadmap](docs/ROADMAP.md).
 
 ## Requirements (planned; exact versions confirmed in Phase 0)
 - **The Elder Scrolls V: Skyrim Special/Anniversary Edition** (Steam), version **TBD** (dev machine: 1.7.104)
@@ -44,6 +45,9 @@ copy config\paths.example.json local\paths.json   # then edit the paths for your
 powershell -ExecutionPolicy Bypass -File tools\setup-check.ps1
 powershell -ExecutionPolicy Bypass -File tools\build.ps1
 ```
+
+Protocol and link tests (no game needed): `powershell -ExecutionPolicy Bypass -File tests\run-tests.ps1`.
+After editing `protocol/schema/messages.toml`, regenerate with `cargo run -p protogen` and commit the schema together with `protocol/generated/`.
 
 ## Credits
 See [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).

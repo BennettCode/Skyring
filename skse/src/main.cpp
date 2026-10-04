@@ -1,3 +1,5 @@
+#include "bridge/Bridge.h"
+
 namespace
 {
 	// Line format shared with the ER plugin so logs from both sides can be merged by timestamp (docs/DESIGN.md, "Logging format").
@@ -23,6 +25,7 @@ namespace
 		switch (a_msg->type) {
 		case SKSE::MessagingInterface::kDataLoaded:
 			SKSE::log::info("[core] kDataLoaded: game data ready (main menu)");
+			sxer::bridge::Start();
 			break;
 		case SKSE::MessagingInterface::kNewGame:
 			SKSE::log::info("[core] new game started");

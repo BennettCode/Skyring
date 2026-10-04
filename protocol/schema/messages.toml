@@ -1,0 +1,142 @@
+# Skyrim X Elden Ring shared-memory protocol: the SINGLE SOURCE OF TRUTH.
+#
+# `cargo run -p protogen` turns this into protocol/generated/skyrimxer_protocol.{h,rs}. Never hand-edit those files.
+# Bump `version` (and the region name suffix) for ANY layout change, then rebuild both plugins.
+#
+# Rules the generator enforces:
+# - Field types: u8 u16 u32 u64 i8 i16 i32 i64 f32 f64, or a fixed array like "u16[3]".
+# - Every field sits at its natural alignment with NO implicit padding: add explicit `_pad*` fields.
+# - A struct's size must be a multiple of its alignment, and must equal `size` when given.
+# - Region blocks must not overlap, and each block must fit its struct.
+# Enums are listed for both languages, but struct fields store them as plain integers: an out-of-range value
+# read from shared memory must never be undefined behaviour on the Rust side.
+# All values are little-endian (both games are x64 Windows).
+
+[protocol]
+version = 1
+magic = "SXER"                      # stored as a little-endian u32: bytes 'S' 'X' 'E' 'R'
+region_name = 'Local\SkyrimXER_v1'  # must end in _v<version>
+
+[constants]
+HEARTBEAT_TIMEOUT_MS = { type = "u64", value = 2000, doc = "Peer counts as gone when its heartbeat is older than this." }
+HEARTBEAT_EVENT_INTERVAL_MS = { type = "u64", value = 5000, doc = "How often each side sends a Heartbeat event (logged by the peer)." }
+LINK_TICK_MS = { type = "u64", value = 50, doc = "Link thread period on both sides (header heartbeat is refreshed every tick)." }
+RING_CAPACITY = { type = "u32", value = 0x10000, doc = "Data bytes per ring. Power of two." }
+MSG_ALIGN = { type = "u32", value = 8, doc = "Each message (header + payload) is padded to this many bytes." }
+MSG_MAX_PAYLOAD = { type = "u32", value = 1024, doc = "Largest payload a message may carry." }
+
+[[enums]]
+name = "SideState"
+repr = "u32"
+doc = "Header sky_state / er_state."
+values = [
+  { name = "Absent", value = 0, doc = "Never attached (or the region was just created)." },
+  { name = "Starting", value = 1, doc = "Attached, initialising." },
+  { name = "Ready", value = 2, doc = "Attached, waiting for the peer." },
+  { name = "Running", value = 3, doc = "Handshake done with a live peer." },
+  { name = "ShuttingDown", value = 4, doc = "Exiting cleanly (a Bye was sent)." },
+  { name = "Faulted", value = 5, doc = "Protocol error (e.g. version mismatch); this side ignores the region." },
+]
+
+[[enums]]
+name = "ByeReason"
+repr = "u32"
+values = [
+  { name = "Quit", value = 0, doc = "The game is exiting normally." },
+  { name = "Faulted", value = 1, doc = "This side hit a protocol error and is giving up." },
+]
+
+[[enums]]
+name = "MsgType"
+repr = "u16"
+doc = "MsgHeader.msg_type. Payload structs are listed under [[messages]]."
+values = [
+  { name = "Hello", value = 1 },
+  { name = "Bye", value = 2 },
+  { name = "Heartbeat", value = 3 },
+]
+
+# ---- region layout ------------------------------------------------------------------------------------------------
+
+[[structs]]
+name = "Header"
+size = 64
+doc = "At OFF_HEADER. Each side writes only its own sky_* / er_* fields; the creator writes the rest, magic last."
+fields = [
+  { name = "magic", type = "u32", doc = "MAGIC once the creator finished initialising; 0 before." },
+  { name = "version", type = "u32", doc = "VERSION of the creator." },
+  { name = "header_size", type = "u32", doc = "size of Header." },
+  { name = "region_size", type = "u32", doc = "REGION_SIZE of the creator." },
+  { name = "sky_pid", type = "u32" },
+  { name = "er_pid", type = "u32" },
+  { name = "sky_state", type = "u32", doc = "SideState" },
+  { name = "er_state", type = "u32", doc = "SideState" },
+  { name = "sky_heartbeat_ms", type = "u64", doc = "GetTickCount64() at Skyrim's last link tick." },
+  { name = "er_heartbeat_ms", type = "u64", doc = "GetTickCount64() at ER's last link tick." },
+  { name = "sky_attach_count", type = "u32", doc = "Bumped each time Skyrim (re)attaches, so the peer notices a restart." },
+  { name = "er_attach_count", type = "u32" },
+  { name = "_reserved", type = "u64" },
+]
+
+[[structs]]
+name = "RingHeader"
+size = 64
+doc = "One-way ring: exactly one writer and one reader. Positions are total bytes ever written/read (never wrap)."
+fields = [
+  { name = "write_pos", type = "u64", doc = "Writer only. Published with release after the bytes are copied." },
+  { name = "read_pos", type = "u64", doc = "Reader only. Published with release after the bytes are consumed." },
+  { name = "capacity", type = "u32", doc = "RING_CAPACITY (written by the region creator)." },
+  { name = "dropped", type = "u32", doc = "Writer only: messages dropped because the ring was full." },
+  { name = "_reserved", type = "u64[5]" },
+]
+
+[[structs]]
+name = "MsgHeader"
+size = 8
+doc = "Precedes every payload in a ring. The whole message is padded to MSG_ALIGN."
+fields = [
+  { name = "msg_type", type = "u16", doc = "MsgType" },
+  { name = "size", type = "u16", doc = "Payload bytes (without this header or padding)." },
+  { name = "seq", type = "u32", doc = "Per-ring counter, starts at 1 each time the writer attaches." },
+]
+
+[region]
+blocks = [
+  { name = "HEADER", offset = 0x0, struct = "Header" },
+  { name = "RING_SKY_TO_ER", offset = 0x100, struct = "RingHeader" },
+  { name = "RING_ER_TO_SKY", offset = 0x140, struct = "RingHeader" },
+  { name = "RING_SKY_TO_ER_DATA", offset = 0x1000, bytes = 0x10000 },
+  { name = "RING_ER_TO_SKY_DATA", offset = 0x11000, bytes = 0x10000 },
+]
+
+# ---- event payloads (MsgType = struct name) -----------------------------------------------------------------------
+
+[[messages]]
+name = "Hello"
+size = 24
+doc = "Sent on attach and whenever a new peer appears. The receiver checks protocol_version."
+fields = [
+  { name = "protocol_version", type = "u32" },
+  { name = "pid", type = "u32" },
+  { name = "plugin_version", type = "u16[3]", doc = "major, minor, patch" },
+  { name = "_pad0", type = "u16" },
+  { name = "game_version", type = "u16[4]", doc = "Host exe version, e.g. 1.7.104.0 / 2.7.1.0" },
+]
+
+[[messages]]
+name = "Bye"
+size = 8
+doc = "Best effort on clean exit. A crash sends nothing; the heartbeat timeout covers that."
+fields = [
+  { name = "reason", type = "u32", doc = "ByeReason" },
+  { name = "_pad0", type = "u32" },
+]
+
+[[messages]]
+name = "Heartbeat"
+size = 16
+doc = "Every HEARTBEAT_EVENT_INTERVAL_MS while connected. Proves the ring works (the header heartbeat proves liveness)."
+fields = [
+  { name = "uptime_ms", type = "u64", doc = "Since this side attached." },
+  { name = "frames", type = "u64", doc = "Game frames this side has run (0 = no frame hook yet)." },
+]

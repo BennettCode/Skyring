@@ -1,0 +1,11 @@
+[package]
+name = "protogen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Generates the C++ and Rust protocol files from protocol/schema/messages.toml"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+toml = { version = "0.9", features = ["preserve_order"] }
