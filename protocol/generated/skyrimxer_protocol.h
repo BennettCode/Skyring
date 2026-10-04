@@ -7,9 +7,9 @@
 
 namespace sxer::proto
 {
-	inline constexpr std::uint32_t kVersion = 3;
+	inline constexpr std::uint32_t kVersion = 4;
 	inline constexpr std::uint32_t kMagic = 0x52455853;  // "SXER" as little-endian bytes
-	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v3";
+	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v4";
 
 	// Peer counts as gone when its heartbeat is older than this.
 	inline constexpr std::uint64_t kHeartbeatTimeoutMs = 2000;
@@ -27,12 +27,15 @@ namespace sxer::proto
 	inline constexpr std::uint64_t kSlotStaleMs = 250;
 	// A slot reader gives up after this many torn reads in a row.
 	inline constexpr std::uint32_t kSlotReadTries = 64;
+	// PoseBone values; PoseState.rot holds 4 floats per bone.
+	inline constexpr std::uint32_t kPoseBoneCount = 20;
 
 	inline constexpr std::size_t kOffHeader = 0x0;
 	inline constexpr std::size_t kOffRingSkyToEr = 0x100;
 	inline constexpr std::size_t kOffRingErToSky = 0x140;
 	inline constexpr std::size_t kOffSlotInput = 0x200;
 	inline constexpr std::size_t kOffSlotPlayer = 0x300;
+	inline constexpr std::size_t kOffSlotPose = 0x400;
 	inline constexpr std::size_t kOffRingSkyToErData = 0x1000;
 	inline constexpr std::size_t kOffRingErToSkyData = 0x11000;
 	inline constexpr std::size_t kRegionSize = 0x21000;
@@ -85,6 +88,37 @@ namespace sxer::proto
 		PoiseBroken = 4,
 		InCombat = 5,  // ER's own combat state (CSChrDataModule +0x19a bit 0x40 clear): dodges cost stamina.
 		MoveCancel = 6,  // ER's TAE movement-cancel window (CANCEL_LS_MOVEMENT): movement may end the current animation.
+	};
+
+	// PoseState.flags. Values are BIT INDICES: mask = 1 << value.
+	enum class PoseFlag : std::uint32_t
+	{
+		Active = 0,  // ER is playing an action Skyrim should show (dodge first). Off = Skyrim plays its own animation (blend out).
+	};
+
+	// Index into PoseState.rot (4 floats each). Parents come before children. Unlisted Skyrim bones ride on their parents.
+	enum class PoseBone : std::uint32_t
+	{
+		Pelvis = 0,  // NPC Pelvis
+		Spine = 1,  // NPC Spine
+		Spine1 = 2,  // NPC Spine1
+		Spine2 = 3,  // NPC Spine2
+		Neck = 4,  // NPC Neck
+		Head = 5,  // NPC Head
+		LClavicle = 6,  // NPC L Clavicle
+		LUpperArm = 7,  // NPC L UpperArm
+		LForearm = 8,  // NPC L Forearm
+		LHand = 9,  // NPC L Hand
+		RClavicle = 10,  // NPC R Clavicle
+		RUpperArm = 11,  // NPC R UpperArm
+		RForearm = 12,  // NPC R Forearm
+		RHand = 13,  // NPC R Hand
+		LThigh = 14,  // NPC L Thigh
+		LCalf = 15,  // NPC L Calf
+		LFoot = 16,  // NPC L Foot
+		RThigh = 17,  // NPC R Thigh
+		RCalf = 18,  // NPC R Calf
+		RFoot = 19,  // NPC R Foot
 	};
 
 	// At OFF_HEADER. Each side writes only its own sky_* / er_* fields; the creator writes the rest, magic last.
@@ -220,6 +254,32 @@ namespace sxer::proto
 	static_assert(offsetof(PlayerState, poise_max) == 60);
 	static_assert(offsetof(PlayerState, pos) == 64);
 	static_assert(offsetof(PlayerState, yaw) == 76);
+
+	// At OFF_SLOT_POSE. Written by ER's game thread every frame, read by Skyrim's.
+	struct PoseState
+	{
+		std::uint32_t seq;  // Seqlock counter (odd = being written).
+		std::uint32_t flags;  // PoseFlag bits.
+		std::uint64_t frame;  // ER frame counter.
+		std::uint64_t time_ms;  // GetTickCount64() when written.
+		std::uint32_t bone_count;  // POSE_BONE_COUNT of the writer.
+		float yaw;  // ER body yaw, radians (same convention as PlayerState.yaw).
+		float pelvis_offset[3];  // Pelvis offset from its bind position, Skyrim model basis (x right, y forward, z up), metres.
+		std::uint32_t _pad0;
+		float rot[80];  // Per PoseBone: model-space delta from bind (q_model * q_bind_model^-1), Skyrim model basis, x y z w.
+	};
+	static_assert(std::is_trivially_copyable_v<PoseState> && std::is_standard_layout_v<PoseState>);
+	static_assert(sizeof(PoseState) == 368);
+	static_assert(alignof(PoseState) == 8);
+	static_assert(offsetof(PoseState, seq) == 0);
+	static_assert(offsetof(PoseState, flags) == 4);
+	static_assert(offsetof(PoseState, frame) == 8);
+	static_assert(offsetof(PoseState, time_ms) == 16);
+	static_assert(offsetof(PoseState, bone_count) == 24);
+	static_assert(offsetof(PoseState, yaw) == 28);
+	static_assert(offsetof(PoseState, pelvis_offset) == 32);
+	static_assert(offsetof(PoseState, _pad0) == 44);
+	static_assert(offsetof(PoseState, rot) == 48);
 
 	// Sent on attach and whenever a new peer appears. The receiver checks protocol_version.
 	struct Hello

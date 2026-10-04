@@ -144,6 +144,25 @@ mod tests {
     }
 
     #[test]
+    fn pose_round_trip() {
+        use crate::proto::{OFF_SLOT_POSE, POSE_BONE_COUNT, PoseBone, PoseState};
+        let r = region("pose");
+        let reader = SlotReader::<PoseState>::new(r.clone(), OFF_SLOT_POSE);
+        assert_eq!(reader.read(), None, "never written");
+        let mut v = PoseState { frame: 3, time_ms: 77, bone_count: POSE_BONE_COUNT, yaw: 1.5, pelvis_offset: [0.1, 0.2, 0.3], ..Default::default() };
+        assert_eq!(v.rot.len(), 4 * POSE_BONE_COUNT as usize, "rot = 4 floats per PoseBone");
+        for (i, f) in v.rot.iter_mut().enumerate() {
+            *f = i as f32 * 0.25;
+        }
+        SlotWriter::<PoseState>::new(r.clone(), OFF_SLOT_POSE).write(&v);
+        let got = reader.read().unwrap();
+        assert_eq!(PoseState { seq: 0, ..got }, v);
+        let last = PoseBone::RFoot as usize * 4;
+        assert_eq!(got.rot[last + 3], (last + 3) as f32 * 0.25, "last bone's w is the last word");
+        assert_eq!(SlotReader::<PlayerState>::new(r, OFF_SLOT_PLAYER).read(), None, "player slot untouched");
+    }
+
+    #[test]
     fn odd_seq_from_a_dead_writer_is_repaired() {
         let r = region("odd");
         r.u32_at(OFF_SLOT_INPUT).store(5, Ordering::Relaxed);

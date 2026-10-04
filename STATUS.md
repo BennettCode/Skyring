@@ -12,7 +12,7 @@ chains, tap = dodge / hold = sprint, movement back at ER's move-cancel window). 
 every frame and Skyrim follows its virtual position, so ER walls no longer shorten rolls (`er-plugin/src/park.rs`).
 Step 5 (vanilla roll animation) is stuck after 2 attempts: see Handoff notes.
 P3 (done): ER runs hidden at 60 fps; Sprint (+ W/A/S/D) → ER backsteps/rolls by ER's rules; stamina, animation and the roll i-frame
-window come back every frame; coordinate conversion measured (`protocol/src/coords.rs`). Region `Local\SkyrimXER_v3`.
+window come back every frame; coordinate conversion measured (`protocol/src/coords.rs`). Region `Local\SkyrimXER_v4` (v4 adds the PoseState slot).
 
 ## What exists
 - `protocol/`: schema `schema/messages.toml` (v3) → `tools/protogen` → `generated/skyrimxer_protocol.{h,rs}`. Rust crate `skyrimxer-protocol`
@@ -35,7 +35,8 @@ window come back every frame; coordinate conversion measured (`protocol/src/coor
 
 ## Next 3 steps (P4, `docs/P4-PLAN.md`)
 1. Step 5 roll animation by ER pose streaming (`docs/POSE-PLAN.md`): step 1 done (ER pose found, `docs/research/elden-ring-pose.md`);
-   step 2 done (bone writes after PlayerCharacter::Update show on screen); next protocol v4 PoseState (step 3).
+   step 2 done (bone writes after PlayerCharacter::Update show on screen); step 3 done (protocol v4 PoseState slot);
+   next the ER pose writer + retarget math (step 4).
 2. Step 6: Skyrim's stamina bar mirrors ER's.
 3. Step 7: NPC hits during ER i-frames are cancelled.
 

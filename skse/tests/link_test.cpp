@@ -9,7 +9,7 @@
 //       Real-time peer, for cross-language tests against `cargo run -p fake-peer`. Same thread shape as the plugin: the link
 //       ticks on its own thread, the main thread runs ~60 "frames"/s and touches only the slots. As skyrim it holds Dodge
 //       for 250 ms (first 1 s after connecting, then every S seconds, default 4) and logs PlayerState edges with the
-//       same wording as tools/fake-peer (bridge/PlayerWatch.h).
+//       same wording as tools/fake-peer (bridge/PlayerWatch.h), plus PoseState Active edges (PoseWatch).
 //
 // The generated header's static_asserts also make this target the C++ layout test.
 
@@ -18,6 +18,7 @@
 #include "bridge/PlayerWatch.h"
 #include "bridge/Slot.h"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -45,8 +46,50 @@ namespace
 	using sxer::Side;
 	using sxer::proto::InputState;
 	using sxer::proto::PlayerState;
+	using sxer::proto::PoseState;
 
 	constexpr std::uint32_t kDodge = 1u << static_cast<std::uint32_t>(sxer::proto::Button::Dodge);
+	constexpr std::uint32_t kPoseActive = 1u << static_cast<std::uint32_t>(sxer::proto::PoseFlag::Active);
+	static_assert(std::size(PoseState{}.rot) == 4 * sxer::proto::kPoseBoneCount, "rot = 4 floats per PoseBone");
+
+	// Logs PoseState Active edges (peer mode): bone count on, and on off the frames seen, the largest pelvis swing and how
+	// many quaternions were not unit length. tests/run-tests.ps1 matches this wording.
+	class PoseWatch
+	{
+	public:
+		void Update(std::optional<PoseState> a_pose, bool a_connected, std::uint64_t a_now)
+		{
+			if (a_pose) {
+				last_ = a_pose;
+			}
+			const bool active = a_connected && last_ && sxer::Fresh(last_->time_ms, a_now) && (last_->flags & kPoseActive);
+			if (active && !active_) {
+				spdlog::info("[pose] Active on bones={} er_frame={}", last_->bone_count, last_->frame);
+				frames_ = 0, bad_ = 0, maxDeg_ = 0;
+			} else if (!active && active_) {
+				spdlog::info("[pose] Active off er_frame={} (frames={} pelvis swing max={:.0f} deg, bad quats={})", last_ ? last_->frame : 0,
+					frames_, maxDeg_, bad_);
+			}
+			active_ = active;
+			if (!active || !a_pose) {
+				return;
+			}
+			++frames_;
+			const auto& r = a_pose->rot;
+			for (std::size_t i = 0; i < std::size(r); i += 4) {
+				const float n = r[i] * r[i] + r[i + 1] * r[i + 1] + r[i + 2] * r[i + 2] + r[i + 3] * r[i + 3];
+				bad_ += std::fabs(n - 1.0f) > 1e-3f ? 1 : 0;
+			}
+			const auto p = static_cast<std::size_t>(sxer::proto::PoseBone::Pelvis) * 4;
+			maxDeg_ = std::max(maxDeg_, 2.0f * std::acos(std::clamp(std::fabs(r[p + 3]), 0.0f, 1.0f)) * 57.29578f);
+		}
+
+	private:
+		std::optional<PoseState> last_;
+		bool active_ = false;
+		std::uint64_t frames_ = 0, bad_ = 0;
+		float maxDeg_ = 0;
+	};
 
 	int g_failures = 0;
 
@@ -142,6 +185,20 @@ namespace
 		Check(got && got->seq == 2 && got->frame == 7 && got->time_ms == 1234 && got->buttons == kDodge && got->move_x == -0.5f,
 			"slot: round trip (seq from the slot)");
 		Check(Fresh(1000, 1000 + proto::kSlotStaleMs) && !Fresh(1000, 1001 + proto::kSlotStaleMs), "slot: Fresh limits");
+
+		SlotReader<PoseState> poseReader(a_base, proto::kOffSlotPose);
+		Check(!poseReader.Read(), "pose slot: never written → nothing");
+		PoseState pose{};
+		pose.frame = 3;
+		pose.bone_count = proto::kPoseBoneCount;
+		for (std::size_t i = 0; i < std::size(pose.rot); ++i) {
+			pose.rot[i] = static_cast<float>(i) * 0.25f;
+		}
+		SlotWriter<PoseState>(a_base, proto::kOffSlotPose).Write(pose);
+		const auto gotPose = poseReader.Read();
+		Check(gotPose && gotPose->seq == 2 && gotPose->bone_count == proto::kPoseBoneCount && gotPose->rot[79] == 79 * 0.25f &&
+				  inputReader.Read()->frame == 7,
+			"pose slot: round trip, last word intact, input slot untouched");
 
 		std::atomic<bool> stop{ false };
 		std::uint64_t written = 0;
@@ -285,7 +342,9 @@ namespace
 		// "Game" thread: slots only (Skyrim side; the C++ ER peer only runs the link).
 		std::optional<sxer::SlotWriter<InputState>> input;
 		std::optional<sxer::SlotReader<PlayerState>> player;
+		std::optional<sxer::SlotReader<PoseState>> pose;
 		sxer::PlayerWatch watch;
+		PoseWatch poseWatch;
 		std::optional<std::uint64_t> nextPulse;
 		bool held = false;
 		const auto everyMs = static_cast<std::uint64_t>(dodgeEvery * 1000);
@@ -297,6 +356,7 @@ namespace
 			if (side == Side::Skyrim && base && !input) {
 				input.emplace(base, sxer::proto::kOffSlotInput);
 				player.emplace(base, sxer::proto::kOffSlotPlayer);
+				pose.emplace(base, sxer::proto::kOffSlotPose);
 			}
 			if (input) {
 				const bool connected = shared.connected.load(std::memory_order_acquire);
@@ -319,6 +379,7 @@ namespace
 				state.buttons = down ? kDodge : 0;
 				input->Write(state);
 				watch.Update(player->Read(), connected, now);
+				poseWatch.Update(pose->Read(), connected, now);
 			}
 			std::this_thread::sleep_for(std::chrono::milliseconds(16));
 		}

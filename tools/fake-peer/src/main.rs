@@ -1,16 +1,18 @@
 //! fake-peer: plays one side of the link so the other side can be tested without its game.
 //!
-//! `cargo run -p fake-peer -- <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S]`
+//! `cargo run -p fake-peer -- <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always]`
 //! - `--seconds N`: run for N seconds (default: until killed), then exit.
 //! - `--no-bye`: exit without a Bye, like a crash (the other side should log a heartbeat timeout).
 //! - `--region NAME`: use another mapping name (tests use one so they never touch a running game's region).
 //! - `--dodge-every S` (skyrim): hold Dodge for 250 ms, first 1 s after connecting, then every S seconds (default 4).
+//! - `--pose-always` (er): PoseState stays Active (to watch the swing in Skyrim without dodging).
 //!
 //! Same thread shape as the plugins: the link ticks on its own thread every LINK_TICK_MS, the main thread runs ~60 "frames"
 //! per second and touches only the slots (through `LinkShared`, never the link's lock).
 //! - skyrim: writes InputState every frame (Dodge pulses), reads PlayerState and logs its edges.
 //! - er: reads InputState; each Dodge press costs 20 stamina and gives 1 s of IFrame|Dodging (anim 27010), then stamina
-//!   regenerates +10 every 250 ms. Writes PlayerState every frame.
+//!   regenerates +10 every 250 ms. Writes PlayerState and PoseState every frame: the pose is Active while dodging and swings
+//!   the pelvis (yaw), right upper arm and left thigh (pitch) once per second; every other bone is identity.
 //!
 //! Logs to stdout in the shared format with side tag FAKE-SKY / FAKE-ER.
 
@@ -21,7 +23,8 @@ use std::time::{Duration, Instant};
 use skyrimxer_protocol::link::{Identity, Level, Link, LinkShared, Side};
 use skyrimxer_protocol::now_ms;
 use skyrimxer_protocol::proto::{
-    Button, InputState, LINK_TICK_MS, OFF_SLOT_INPUT, OFF_SLOT_PLAYER, PlayerFlag, PlayerState, REGION_NAME,
+    Button, InputState, LINK_TICK_MS, OFF_SLOT_INPUT, OFF_SLOT_PLAYER, OFF_SLOT_POSE, POSE_BONE_COUNT, PlayerFlag, PlayerState,
+    PoseBone, PoseFlag, PoseState, REGION_NAME,
 };
 use skyrimxer_protocol::slot::{SlotReader, SlotWriter, fresh};
 
@@ -30,7 +33,7 @@ const DODGE: u32 = 1 << Button::Dodge as u32;
 const IFRAME: u32 = 1 << PlayerFlag::IFrame as u32;
 
 fn usage() -> ! {
-    eprintln!("usage: fake-peer <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S]");
+    eprintln!("usage: fake-peer <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always]");
     std::process::exit(2);
 }
 
@@ -149,11 +152,41 @@ impl FakeSky {
     }
 }
 
+/// Unit quaternion (x, y, z, w) for `angle` radians about the unit `axis`.
+fn axis_angle(axis: [f32; 3], angle: f32) -> [f32; 4] {
+    let (s, c) = (angle * 0.5).sin_cos();
+    [axis[0] * s, axis[1] * s, axis[2] * s, c]
+}
+
+/// The fake ER pose at `now`: identity everywhere except a 1 Hz swing of the pelvis (yaw ±30°), right upper arm (pitch ±60°)
+/// and left thigh (pitch ±45°).
+fn swing_pose(frame: u64, now: u64, active: bool) -> PoseState {
+    let phase = (now % 1000) as f32 / 1000.0 * std::f32::consts::TAU;
+    let mut pose = PoseState {
+        flags: if active { 1 << PoseFlag::Active as u32 } else { 0 },
+        frame,
+        time_ms: now,
+        bone_count: POSE_BONE_COUNT,
+        ..Default::default()
+    };
+    for bone in pose.rot.chunks_exact_mut(4) {
+        bone.copy_from_slice(&[0.0, 0.0, 0.0, 1.0]);
+    }
+    let x = [1.0, 0.0, 0.0];
+    for (bone, axis, amp) in [(PoseBone::Pelvis, [0.0, 0.0, 1.0], 30.0f32), (PoseBone::RUpperArm, x, 60.0), (PoseBone::LThigh, x, 45.0)] {
+        let i = bone as usize * 4;
+        pose.rot[i..i + 4].copy_from_slice(&axis_angle(axis, amp.to_radians() * phase.sin()));
+    }
+    pose
+}
+
 /// Fake ER: a dodge costs 20 stamina and gives 1 s of i-frames.
 struct FakeEr {
     reader: SlotReader<InputState>,
     last_input: Option<InputState>,
     writer: SlotWriter<PlayerState>,
+    pose: SlotWriter<PoseState>,
+    pose_always: bool,
     held: bool,
     stamina: i32,
     dodge_until: u64,
@@ -207,6 +240,7 @@ impl FakeEr {
             block_id: 0x0A01_0000,
             ..Default::default()
         });
+        self.pose.write(&swing_pose(frame, now, dodging || self.pose_always));
     }
 }
 
@@ -222,11 +256,12 @@ fn main() {
         Some("er") => Side::EldenRing,
         _ => usage(),
     };
-    let (mut seconds, mut bye, mut region, mut dodge_every) = (None, true, REGION_NAME.to_string(), 4.0);
+    let (mut seconds, mut bye, mut region, mut dodge_every, mut pose_always) = (None, true, REGION_NAME.to_string(), 4.0, false);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--seconds" => seconds = args.next().and_then(|s| s.parse::<f64>().ok()).or_else(|| usage()),
             "--no-bye" => bye = false,
+            "--pose-always" => pose_always = true,
             "--region" => region = args.next().unwrap_or_else(|| usage()),
             "--dodge-every" => dodge_every = args.next().and_then(|s| s.parse::<f64>().ok()).unwrap_or_else(|| usage()),
             _ => usage(),
@@ -281,7 +316,9 @@ fn main() {
                 Side::EldenRing => Role::Er(FakeEr {
                     reader: SlotReader::new(r.clone(), OFF_SLOT_INPUT),
                     last_input: None,
-                    writer: SlotWriter::new(r, OFF_SLOT_PLAYER),
+                    writer: SlotWriter::new(r.clone(), OFF_SLOT_PLAYER),
+                    pose: SlotWriter::new(r, OFF_SLOT_POSE),
+                    pose_always,
                     held: false,
                     stamina: 100,
                     dodge_until: 0,

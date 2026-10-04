@@ -13,9 +13,9 @@
 # All values are little-endian (both games are x64 Windows).
 
 [protocol]
-version = 3
+version = 4
 magic = "SXER"                      # stored as a little-endian u32: bytes 'S' 'X' 'E' 'R'
-region_name = 'Local\SkyrimXER_v3'  # must end in _v<version>
+region_name = 'Local\SkyrimXER_v4'  # must end in _v<version>
 
 [constants]
 HEARTBEAT_TIMEOUT_MS = { type = "u64", value = 2000, doc = "Peer counts as gone when its heartbeat is older than this." }
@@ -26,6 +26,7 @@ MSG_ALIGN = { type = "u32", value = 8, doc = "Each message (header + payload) is
 MSG_MAX_PAYLOAD = { type = "u32", value = 1024, doc = "Largest payload a message may carry." }
 SLOT_STALE_MS = { type = "u64", value = 250, doc = "Slot data whose time_ms is older than this is stale (the reader ignores it)." }
 SLOT_READ_TRIES = { type = "u32", value = 64, doc = "A slot reader gives up after this many torn reads in a row." }
+POSE_BONE_COUNT = { type = "u32", value = 20, doc = "PoseBone values; PoseState.rot holds 4 floats per bone." }
 
 [[enums]]
 name = "SideState"
@@ -87,6 +88,41 @@ values = [
   { name = "PoiseBroken", value = 4 },
   { name = "InCombat", value = 5, doc = "ER's own combat state (CSChrDataModule +0x19a bit 0x40 clear): dodges cost stamina." },
   { name = "MoveCancel", value = 6, doc = "ER's TAE movement-cancel window (CANCEL_LS_MOVEMENT): movement may end the current animation." },
+]
+
+[[enums]]
+name = "PoseFlag"
+repr = "u32"
+doc = "PoseState.flags. Values are BIT INDICES: mask = 1 << value."
+values = [
+  { name = "Active", value = 0, doc = "ER is playing an action Skyrim should show (dodge first). Off = Skyrim plays its own animation (blend out)." },
+]
+
+[[enums]]
+name = "PoseBone"
+repr = "u32"
+doc = "Index into PoseState.rot (4 floats each). Parents come before children. Unlisted Skyrim bones ride on their parents."
+values = [
+  { name = "Pelvis", value = 0, doc = "NPC Pelvis" },
+  { name = "Spine", value = 1, doc = "NPC Spine" },
+  { name = "Spine1", value = 2, doc = "NPC Spine1" },
+  { name = "Spine2", value = 3, doc = "NPC Spine2" },
+  { name = "Neck", value = 4, doc = "NPC Neck" },
+  { name = "Head", value = 5, doc = "NPC Head" },
+  { name = "LClavicle", value = 6, doc = "NPC L Clavicle" },
+  { name = "LUpperArm", value = 7, doc = "NPC L UpperArm" },
+  { name = "LForearm", value = 8, doc = "NPC L Forearm" },
+  { name = "LHand", value = 9, doc = "NPC L Hand" },
+  { name = "RClavicle", value = 10, doc = "NPC R Clavicle" },
+  { name = "RUpperArm", value = 11, doc = "NPC R UpperArm" },
+  { name = "RForearm", value = 12, doc = "NPC R Forearm" },
+  { name = "RHand", value = 13, doc = "NPC R Hand" },
+  { name = "LThigh", value = 14, doc = "NPC L Thigh" },
+  { name = "LCalf", value = 15, doc = "NPC L Calf" },
+  { name = "LFoot", value = 16, doc = "NPC L Foot" },
+  { name = "RThigh", value = 17, doc = "NPC R Thigh" },
+  { name = "RCalf", value = 18, doc = "NPC R Calf" },
+  { name = "RFoot", value = 19, doc = "NPC R Foot" },
 ]
 
 # ---- region layout ------------------------------------------------------------------------------------------------
@@ -178,6 +214,22 @@ fields = [
   { name = "yaw", type = "f32", doc = "ER yaw, radians." },
 ]
 
+[[structs]]
+name = "PoseState"
+size = 368
+doc = "At OFF_SLOT_POSE. Written by ER's game thread every frame, read by Skyrim's."
+fields = [
+  { name = "seq", type = "u32", doc = "Seqlock counter (odd = being written)." },
+  { name = "flags", type = "u32", doc = "PoseFlag bits." },
+  { name = "frame", type = "u64", doc = "ER frame counter." },
+  { name = "time_ms", type = "u64", doc = "GetTickCount64() when written." },
+  { name = "bone_count", type = "u32", doc = "POSE_BONE_COUNT of the writer." },
+  { name = "yaw", type = "f32", doc = "ER body yaw, radians (same convention as PlayerState.yaw)." },
+  { name = "pelvis_offset", type = "f32[3]", doc = "Pelvis offset from its bind position, Skyrim model basis (x right, y forward, z up), metres." },
+  { name = "_pad0", type = "u32" },
+  { name = "rot", type = "f32[80]", doc = "Per PoseBone: model-space delta from bind (q_model * q_bind_model^-1), Skyrim model basis, x y z w." },
+]
+
 [region]
 blocks = [
   { name = "HEADER", offset = 0x0, struct = "Header" },
@@ -185,6 +237,7 @@ blocks = [
   { name = "RING_ER_TO_SKY", offset = 0x140, struct = "RingHeader" },
   { name = "SLOT_INPUT", offset = 0x200, struct = "InputState" },
   { name = "SLOT_PLAYER", offset = 0x300, struct = "PlayerState" },
+  { name = "SLOT_POSE", offset = 0x400, struct = "PoseState" },
   { name = "RING_SKY_TO_ER_DATA", offset = 0x1000, bytes = 0x10000 },
   { name = "RING_ER_TO_SKY_DATA", offset = 0x11000, bytes = 0x10000 },
 ]

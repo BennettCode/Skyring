@@ -4,6 +4,14 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: POSE-PLAN step 3, protocol v4 PoseState (no game)
+- **Changed:** protocol v4 (`Local\SkyrimXER_v4`): seqlock slot `PoseState` at 0x400 (368 B: flags `PoseFlag::Active`, frame, time_ms,
+  bone_count, yaw, pelvis_offset[3], rot[4 × 20]), enum `PoseBone` (20 bones, parents first), constant `POSE_BONE_COUNT`. Regenerated.
+  `fake-peer er` writes a pose every frame (Active while dodging, or always with `--pose-always`): pelvis yaw ±30°, right upper arm and
+  left thigh pitch, 1 Hz. The C++ test peer logs `[pose] Active on/off` with the swing and a unit-length check.
+- **Tested:** `tests/run-tests.ps1` all green: Rust + C++ PoseState round trips, interop A (Rust ER → C++ Skyrim: 20 bones, pelvis
+  swing 30°, 0 bad quaternions per dodge). Both plugins rebuilt against v4; the Skyrim DLL deployed. Not run in either game (no behaviour change yet).
+
 ## 2026-10-04: POSE-PLAN step 2, Skyrim one-bone proof (Skyrim only)
 - **Changed:**
   - `skse/src/bridge/Pose.{h,cpp}` (new): logs the third-person bone tree and each skinned geometry's bones (the bind-pose source) once. While F7 is held it turns the pelvis 45° right after `PlayerCharacter::Update`, using `local.rotate` + `UpdateDownwardPass`, and traces whether the write is still there at the next Update.
