@@ -4,7 +4,7 @@
 stamina, dodge rolls with i-frames, poise, light/heavy/charged attacks, weapon arts, flasks and runes.
 
 ![status](https://img.shields.io/badge/status-pre--alpha-orange)
-![phase](https://img.shields.io/badge/phase-P3%20of%208-blue)
+![phase](https://img.shields.io/badge/phase-P4%20of%208-blue)
 ![platform](https://img.shields.io/badge/platform-Windows%20x64-lightgrey)
 ![input](https://img.shields.io/badge/input-keyboard%20%26%20mouse%20(controller%20planned)-yellow)
 ![offline](https://img.shields.io/badge/Elden%20Ring-offline%20only-red)
@@ -70,8 +70,8 @@ Skyrim is keyboard-and-mouse only for now (details below). The i-frames are know
 | P0 | Tooling and version research | ✅ done |
 | P1 | Both plugins load and log | ✅ done |
 | P2 | Shared memory link: handshake, heartbeats, crash fail-safe | ✅ done |
-| **P3** | **Dodge in Skyrim → Elden Ring dodges → its stamina comes back** | 🔄 almost done: hidden ER at 60 fps ✅, Skyrim Sprint → ER dodge ✅, stamina back in Skyrim ✅, on-screen feedback ✅, rolls with i-frames reach Skyrim ✅, coordinate test ⏳ |
-| P4 | Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support | ⏳ |
+| P3 | Dodge in Skyrim → Elden Ring dodges → its stamina and i-frames come back | ✅ done |
+| **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 next: planning |
 | P5 | Damage both ways uses Elden Ring's math (poise, stagger) | ⏳ |
 | P6 | Elden Ring-style HUD | ⏳ |
 | P7 | Runes from kills, leveling, flasks refill at "graces" | ⏳ |

@@ -3,10 +3,10 @@
 _Last updated: 2026-10-04_
 
 ## Current phase
-**P3: in progress** (plan: `docs/P3-PLAN.md`). Step 1 done: ER runs hidden in-world at 60 fps (focus spoof).
-Step 2 done: the hidden ER player backsteps from code (virtual `Backstep` hold + `BackstepTapped` on the press frame; focus spoof
-also after PadStep). Step 3 done: protocol v2 adds the seqlock slots `InputState` (sky→er) and `PlayerState` (er→sky), tested without the games.
-Both plugins share the region `Local\SkyrimXER_v2`, handshake, exchange heartbeats, and fail safe when the other game dies or quits.
+**P3: done (2026-10-04)** (plan + results: `docs/P3-PLAN.md`). ER runs hidden at 60 fps; Skyrim Sprint (+ W/A/S/D) → the hidden ER
+character backsteps/rolls by ER's own rules; ER's stamina, animation and roll i-frame window come back to Skyrim every frame (HUD + log);
+the coordinate conversion between the games is measured (`protocol/src/coords.rs`). Both plugins share `Local\SkyrimXER_v2`, handshake,
+exchange heartbeats, and fail safe when the other game dies or quits. **Next: P4 plan.**
 
 ## What exists
 - `protocol/`: schema `schema/messages.toml` (v2) → `tools/protogen` → `generated/skyrimxer_protocol.{h,rs}`. Rust crate `skyrimxer-protocol`
@@ -27,16 +27,11 @@ Both plugins share the region `Local\SkyrimXER_v2`, handshake, exchange heartbea
 - None blocking. Arena settled: the test character is parked in m10_01_00_00 and the user presses
   Continue each run (no warp in P3). The user tests with a DualSense (PS5) over USB in both games.
 
-## Next 3 steps (P3, full plan in `docs/P3-PLAN.md`, approved 2026-10-04)
-1. ~~ER keeps running hidden~~ ✔ (60 fps hidden, `er-plugin/src/window.rs`).
-2. ~~Injected dodge in hidden ER~~ ✔ (`er-plugin/src/actions.rs`, `pad.rs`, `window.rs`).
-3. ~~Protocol v2 (InputState + PlayerState seqlock slots)~~ ✔ (`protocol/src/slot.rs`, `skse/src/bridge/Slot.h`).
-4. ~~Wire the loop~~ ✔ both games: Skyrim Sprint (keyboard) → hidden ER backsteps → anim/state back in Skyrim's log (~170 ms).
-   P3 accept: stamina drop ✔ in combat (136→128 in Skyrim's log and HUD). I-frame source ✔ found: `action_modifiers_flags` bit 1
-   (FLAG_AS_DODGING), set ~27 frames per **roll**; backsteps have none (`docs/research/elden-ring-state.md`).
-5. ~~Roll direction~~ ✔ both games: Skyrim W/A/S/D → `move_x/move_y` → ER virtual analog stick (Backwards/Left take negative values).
-   Sprint + direction = roll; Skyrim logs `IFrame on/off` (~450 ms) and the HUD says "i-frames yes". **P3 accept met.**
-6. **Next: coordinate/yaw test** (RECON §D) → `protocol/src/coords.rs` + C++ mirror, result in DESIGN §6. Then P3 is done → P4 plan (plan mode).
+## Next 3 steps (P4: movement & defense, `docs/ROADMAP.md`)
+1. **P4 plan (plan mode):** order the P4 items, decide input swallowing (vanilla sprint/dodge off while the bridge is on, F10 toggle) and
+   how the Skyrim player follows ER's roll (ER displacement → `coords::er_delta_to_local` → Skyrim delta per frame).
+2. Skyrim player follows the ER roll + plays a roll animation; stamina bar mirrors ER; out of stamina = no roll.
+3. NPC hits during ER i-frames are cancelled. Controller support (DualSense in Skyrim) is also in P4.
 
 ## Handoff notes
 **I-frame search solved (2026-10-04, attempt 3).** Attempts 1–2 diffed memory only during *backsteps*, which set no invincibility at

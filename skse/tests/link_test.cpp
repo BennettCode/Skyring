@@ -2,7 +2,8 @@
 //
 //   skyrimxer_link_test selftest
 //       Two Links (Skyrim + ER) in this process on a private region, simulated clock: handshake, heartbeat events,
-//       timeout, reconnect, Bye, LinkShared, plus seqlock slots (round trip, concurrent torn-read check).
+//       timeout, reconnect, Bye, LinkShared, plus seqlock slots (round trip, concurrent torn-read check) and the coordinate
+//       conversion (bridge/Coords.h, same cases as protocol/src/coords.rs).
 //       Exit 0 = pass. Run by ctest and tests/run-tests.ps1.
 //   skyrimxer_link_test peer [--side skyrim|er] [--seconds N] [--no-bye] [--region NAME] [--dodge-every S]
 //       Real-time peer, for cross-language tests against `cargo run -p fake-peer`. Same thread shape as the plugin: the link
@@ -12,6 +13,7 @@
 //
 // The generated header's static_asserts also make this target the C++ layout test.
 
+#include "bridge/Coords.h"
 #include "bridge/Link.h"
 #include "bridge/PlayerWatch.h"
 #include "bridge/Slot.h"
@@ -19,6 +21,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -85,6 +88,39 @@ namespace
 		return std::memcmp(&a_a, &a_b, sizeof(PlayerState)) == 0;
 	}
 
+	bool Near(float a_a, float a_b, float a_tol) { return std::fabs(a_a - a_b) <= a_tol; }
+
+	// Same cases as protocol/src/coords.rs tests, including the real segments from the 2026-10-04 both-games walk.
+	void CoordsTests()
+	{
+		using namespace sxer::coords;
+		constexpr float kHalfPi = 1.57079633f;
+		const Local l{ 1.5f, -0.7f, 0.3f };
+		bool roundTrip = true;
+		for (const float angle : { -3.0f, -1.2f, 0.0f, 0.4f, 1.7382f, 3.1f }) {
+			for (const auto got : { ErDeltaToLocal(LocalToErDelta(l, angle), angle), SkyrimDeltaToLocal(LocalToSkyrimDelta(l, angle), angle) }) {
+				roundTrip &= Near(got.forward, l.forward, 1e-5f) && Near(got.right, l.right, 1e-5f) && Near(got.up, l.up, 1e-5f);
+			}
+		}
+		Check(roundTrip, "coords: round trips");
+		const auto skyFwd0 = LocalToSkyrimDelta({ 1, 0, 0 }, 0), skyFwd90 = LocalToSkyrimDelta({ 1, 0, 0 }, kHalfPi);
+		Check(Near(skyFwd0[0], 0, 1e-4f) && Near(skyFwd0[1], 70, 1e-4f) && Near(skyFwd90[0], 70, 1e-4f) && Near(skyFwd90[1], 0, 1e-3f),
+			"coords: Skyrim heading 0 = +Y, +90 deg = +X");
+		const auto erFwd0 = LocalToErDelta({ 1, 0, 2 }, 0), erFwd90 = LocalToErDelta({ 1, 0, 0 }, kHalfPi);
+		Check(Near(erFwd0[0], 0, 1e-6f) && Near(erFwd0[1], 2, 1e-6f) && Near(erFwd0[2], -1, 1e-6f) && Near(erFwd90[0], -1, 1e-6f) &&
+				  Near(erFwd90[2], 0, 1e-6f),
+			"coords: ER yaw 0 = -Z, +90 deg = -X, Y up");
+		const auto skyW = SkyrimDeltaToLocal({ 173884.2f - 173080.8f, -91225.6f - -91143.9f, 11095.0f - 11110.9f }, 1.6274f);
+		const auto skyD = SkyrimDeltaToLocal({ 173964.4f - 174001.6f, -91867.7f - -91232.6f, 11154.1f - 11083.6f }, 1.6274f);
+		Check(Near(skyW.forward, 11.52f, 0.05f) && std::fabs(skyW.right) < 0.06f * skyW.forward && Near(skyD.right, 9.09f, 0.05f) &&
+				  std::fabs(skyD.forward) < 0.05f,
+			"coords: measured Skyrim W/D segments");
+		const auto erW = ErDeltaToLocal({ 4.347f - 5.510f, 6.756f - 6.634f, 5.472f - 5.275f }, 1.7382f);
+		const auto erD = ErDeltaToLocal({ -4.100f - -4.284f, 8.810f - 8.751f, 8.226f - 7.462f }, 1.7382f);
+		Check(Near(erW.forward, 1.18f, 0.01f) && std::fabs(erW.right) < 0.01f && Near(erD.right, 0.78f, 0.01f) && std::fabs(erD.forward) < 0.1f,
+			"coords: measured ER W/D segments");
+	}
+
 	void SlotTests(std::uint8_t* a_base)
 	{
 		using namespace sxer;
@@ -139,6 +175,7 @@ namespace
 
 	int SelfTest()
 	{
+		CoordsTests();
 		std::ostringstream lines;
 		auto logger = std::make_shared<spdlog::logger>("selftest", std::make_shared<spdlog::sinks::ostream_sink_mt>(lines));
 		logger->set_pattern("%l %v");

@@ -25,7 +25,7 @@ Tick boxes as you go. Keep each phase small. If a phase grows, split it.
 - [x] Kill ER → Skyrim logs a timeout and stays stable. Quit Skyrim → ER goes idle (2026-10-04)
 **Accept:** the logs show the handshake, heartbeats and a clean timeout.
 
-## P3: One value across, then the loop
+## P3: One value across, then the loop ✅ (2026-10-04)
 - [x] ER: window hidden + focus spoof (60 fps hidden, 2026-10-04). The user presses Continue (no auto-load or warp yet)
 - [x] Protocol v2: seqlock state slots `InputState` (Skyrim → ER) and `PlayerState` (ER → Skyrim), torn-read tests in both languages (2026-10-04)
 - [x] Skyrim → ER: Sprint (keyboard, Left Shift) is forwarded as Dodge. The hidden ER character backsteps by ER's own rules (2026-10-04)
@@ -34,9 +34,10 @@ Tick boxes as you go. Keep each phase small. If a phase grows, split it.
 - [x] I-frame window found: ER's dodge flag (TAE FLAG_AS_DODGING) is set for ~27 frames of every roll and no hit lands while it's set. Backsteps have none, so Skyrim sees it once rolls work (2026-10-04, `docs/research/elden-ring-state.md`)
 - [x] Roll direction: Skyrim's movement keys (W/A/S/D) steer ER's move stick, so Sprint + direction = roll. Skyrim logs `IFrame on/off` for every
   roll (~450 ms, starting 34–51 ms after the release) and the HUD says "i-frames yes"; Sprint alone still backsteps with none (2026-10-04)
-- [ ] Coordinate/yaw conversion test written and passing
+- [x] Coordinate/yaw conversion measured in both games (one walk, W/D/S/A) → `protocol/src/coords.rs` + C++ mirror, unit tests with the
+  measured segments (2026-10-04, `docs/research/coordinates.md`)
 **Accept:** pressing dodge in Skyrim → ER rolls → Skyrim's log shows the stamina drop and the i-frame window with timestamps. ✔ met 2026-10-04
-(stamina drop in combat, i-frame window from rolls); the coordinate test is the last P3 item.
+(stamina drop in combat, i-frame window from rolls).
 
 ## P4: Movement & defense
 - [ ] **Controller support:** PS5 DualSense in Skyrim. Skyrim only reads XInput, so it needs Steam Input, which doesn't apply when SKSE starts

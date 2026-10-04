@@ -19,7 +19,7 @@ namespace sxer::hooks
 			{
 				func(a_this, a_delta);
 				try {
-					bridge::OnFrame(a_delta);
+					bridge::OnFrame(a_this, a_delta);
 				} catch (const std::exception& e) {
 					static std::atomic<bool> logged{ false };
 					if (!logged.exchange(true)) {

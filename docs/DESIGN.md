@@ -86,9 +86,12 @@ Events er→sky: HitResult{target formid, dmg, poise dmg, status}, FlaskUsed, Ru
 3. `skse64_loader.exe` → Skyrim plugin connects on `kDataLoaded` → `Hello` handshake (versions must match).
 4. Save loaded → bridge active (F10 toggles). Either side quitting → `Bye` → the other side goes idle.
 
-## 6. Coordinates (⚠ to be tested)
-Skyrim Z-up, 70 u ≈ 1 m. ER Y-up, 1 u = 1 m. Only *deltas* in the arena matter. Handedness and yaw zero are unknown.
-Test: walk N/E/up in each game and log both, then write the conversion + a unit test in `tests/`.
+## 6. Coordinates (measured 2026-10-04)
+Only **deltas in the character's own frame** cross over: world delta → (forward, right, up) in metres with one game's facing angle → world
+delta in the other game with its facing angle. Code: `protocol/src/coords.rs` (+ C++ mirror `skse/src/bridge/Coords.h`, same tests).
+- Skyrim: Z up, 70 u ≈ 1 m. Heading h (`GetAngleZ()`): forward = (sin h, cos h, 0), right = (cos h, −sin h, 0).
+- ER: Y up, 1 u = 1 m. Yaw y: forward = (−sin y, 0, −cos y), right = (−cos y, 0, sin y).
+- Both angles grow when turning right, so yaw deltas carry over unchanged. Method + data: `docs/research/coordinates.md`.
 
 ## 7. Animation / visuals
 - v1: Skyrim plays its own (or custom-imported, user-supplied) animations chosen from ER's `action_state`/`anim_id`

@@ -5,6 +5,7 @@ namespace sxer::bridge
 {
 	// Starts the link thread and installs the frame hook + input sink (called on kDataLoaded). Later calls do nothing.
 	void Start();
-	// Main thread, once per game frame (hooks/PlayerUpdate.cpp): Sprint → InputState, PlayerState → log edges, perf every 5 s.
-	void OnFrame(float a_delta);
+	// Main thread, once per game frame (hooks/PlayerUpdate.cpp): Sprint → InputState, PlayerState → log edges, perf every 5 s,
+	// bounded [coords] samples of the player's position/heading while moving (coordinate test).
+	void OnFrame(const RE::PlayerCharacter* a_player, float a_delta);
 }

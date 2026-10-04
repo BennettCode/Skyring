@@ -9,7 +9,7 @@ Suggested files (create as needed):
 - `elden-ring-structs.md`: player/char structs, fields (stamina, FP, HP, poise, action state), eldenring-rs type names
 - `elden-ring-input.md`: how input reaches the player, how to inject it while unfocused
 - `elden-ring-params.md`: param tables + IDs used (AttackParam_Pc, EquipParamWeapon, SpEffectParam, ...)
-- `coordinates.md`: axis/handedness/yaw test results
+- `coordinates.md`: axis/handedness/yaw test results (P3, measured)
 
 Note template:
 ```

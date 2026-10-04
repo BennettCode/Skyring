@@ -4,6 +4,7 @@
 //! - [`region`]: open-or-create the named mapping.
 //! - [`ring`]: the one-way event rings.
 //! - [`link`]: the per-side state machine (heartbeat, handshake, timeout). `skse/src/bridge/Link.cpp` mirrors it in C++.
+//! - [`coords`]: Skyrim ⇄ ER deltas in the character frame (measured conventions). `skse/src/bridge/Coords.h` mirrors it.
 //! - [`slot`]: seqlock slots (latest-value state lanes for the game threads). `skse/src/bridge/Slot.h` mirrors it.
 
 #[allow(dead_code)]
@@ -11,6 +12,7 @@ pub mod proto {
     include!("../generated/skyrimxer_protocol.rs");
 }
 
+pub mod coords;
 pub mod link;
 pub mod region;
 pub mod ring;

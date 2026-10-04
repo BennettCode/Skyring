@@ -93,6 +93,8 @@ ER character dodges (ER's own gating and stamina) → ER state (stamina, i-frame
   Backwards/Left take −1** (a positive value there is ignored). ER self-test: 7/7 short taps in all four directions roll (27110, dodge flag
   27 frames); 30-frame holds dash. Both games: 8/8 Sprint + direction → roll, Skyrim `IFrame on` 34–51 ms after the release, off ~450 ms
   later, HUD "i-frames yes"; 2/2 Sprint alone → backstep, "i-frames no". **P3 accept met.**
+- **Result, coordinate test (2026-10-04):** one both-games walk (W/D/S/A, `[coords]` samples on both sides) → conventions in DESIGN §6,
+  `protocol/src/coords.rs` + `skse/src/bridge/Coords.h` with the measured segments as unit-test fixtures. **P3 done.**
 - Coordinate test per RECON §D: the same Skyrim input drives both. Walk N/E, compare position deltas + yaw in both logs → conversion in
   `protocol/src/coords.rs` + unit test + C++ mirror, result in DESIGN §6.
 

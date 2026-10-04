@@ -32,6 +32,9 @@ namespace sxer::bridge
 		constexpr std::uint64_t kReportMs = 5000;
 		// How long after a Dodge press the HUD summary waits for ER's reaction (ER starts a backstep ~9 frames after the press).
 		constexpr std::uint64_t kDodgeReportMs = 600;
+		// Coordinate test probe: one sample every kCoordsEvery frames while moving, at most kCoordsMaxLines per session.
+		constexpr std::uint64_t kCoordsEvery = 6;
+		constexpr std::uint32_t kCoordsMaxLines = 1500;
 
 		// What ER did with one Dodge press, for the HUD summary.
 		struct DodgeReport
@@ -60,7 +63,28 @@ namespace sxer::bridge
 			bool hudConnected = false;
 			bool hudInWorld = false;
 			std::optional<DodgeReport> dodge;
+			// Coordinate probe.
+			RE::NiPoint3 coordsLast;
+			std::uint32_t coordsLines = 0;
 		} g_frame;
+
+		// Coordinate test (docs/research/coordinates.md): position (Z-up, game units) and heading (data.angle.z, radians) every
+		// kCoordsEvery frames while the player moved more than 1 unit since the last sample or a movement key is held. Bounded.
+		void SampleCoords(FrameState& a_f, const RE::PlayerCharacter* a_player, std::uint64_t a_frame, const input::Move& a_move)
+		{
+			if (!a_player || a_f.coordsLines >= kCoordsMaxLines || a_frame % kCoordsEvery != 0) {
+				return;
+			}
+			const auto pos = a_player->GetPosition();
+			const bool moving = a_move.x != 0 || a_move.y != 0;
+			if (!moving && pos.GetDistance(a_f.coordsLast) <= 1.0f) {
+				return;
+			}
+			a_f.coordsLast = pos;
+			++a_f.coordsLines;
+			SKSE::log::info("[coords] frame={} pos=({:.1f},{:.1f},{:.1f}) heading={:.4f} move={},{}", a_frame, pos.x, pos.y, pos.z,
+				a_player->GetAngleZ(), a_move.x, a_move.y);
+		}
 
 		// Playtest feedback in Skyrim's HUD: link and ER-world changes, and one summary per Dodge press.
 		void UpdateHud(FrameState& a_f, bool a_connected, bool a_pressed, std::uint64_t a_now)
@@ -175,7 +199,7 @@ namespace sxer::bridge
 		SKSE::log::info("[core] hooks installed: PlayerCharacter::Update (vfunc 0xAD) → InputState/PlayerState slots, input sink (Sprint → Dodge, movement keys → move stick)");
 	}
 
-	void OnFrame(float a_delta)
+	void OnFrame(const RE::PlayerCharacter* a_player, float a_delta)
 	{
 		const auto start = std::chrono::steady_clock::now();
 		auto& f = g_frame;
@@ -213,6 +237,7 @@ namespace sxer::bridge
 		state.move_x = move.x;
 		state.move_y = move.y;
 		f.input->Write(state);
+		SampleCoords(f, a_player, frame, move);
 		f.watch.Update(f.player->Read(), connected, now);
 		UpdateHud(f, connected, pressed, now);
 

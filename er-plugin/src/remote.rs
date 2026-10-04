@@ -4,9 +4,10 @@
 //!   (tap = backstep/roll, hold = dash). Stale or disconnected input = nothing held (fail-safe).
 //!   Skyrim's movement keys (`move_x/move_y`) → the virtual move stick, so Dodge + direction = roll (P3 step 5).
 //! - [`publish_state`] (ChrIns_PostPhysics in world, FrameBegin otherwise): the player snapshot → PlayerState every frame.
+//! - [`sample_coords`] (ChrIns_PostPhysics): bounded `[coords]` position/yaw samples while moving (coordinate test).
 
 use std::sync::Mutex;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use eldenring::cs::UserInputKey;
 use skyrimxer_protocol::now_ms;
@@ -76,6 +77,7 @@ impl DodgeFromSkyrim {
             // SAFETY: main thread. The edge to (0, 0) writes the release once.
             unsafe { pad::set_move(moving.0, moving.1) };
             self.moving = moving;
+            MOVE.store(u64::from(moving.0.to_bits()) << 32 | u64::from(moving.1.to_bits()), Ordering::Relaxed);
         } else if moving != (0.0, 0.0) {
             // SAFETY: main thread. PadStep re-copies the device data each frame, so a held stick is written every frame.
             unsafe { pad::set_move(moving.0, moving.1) };
@@ -116,6 +118,44 @@ impl DodgeFromSkyrim {
         }
         self.held = held;
     }
+}
+
+/// Move stick held for Skyrim right now (x bits << 32 | y bits), for the `[coords]` lines.
+static MOVE: AtomicU64 = AtomicU64::new(0);
+/// Coordinate test probe: one sample every COORDS_EVERY frames while moving, at most COORDS_MAX_LINES per session.
+const COORDS_EVERY: u64 = 6;
+const COORDS_MAX_LINES: u32 = 1500;
+static COORDS_LINES: AtomicU32 = AtomicU32::new(0);
+static COORDS_LAST: Mutex<[f32; 3]> = Mutex::new([0.0; 3]);
+
+/// Coordinate test (docs/research/coordinates.md): position (Y-up, metres) and yaw every COORDS_EVERY frames while the player moved
+/// more than 1 cm since the last sample or Skyrim holds a direction. Bounded.
+pub fn sample_coords() {
+    let frame = bridge::FRAMES.load(Ordering::Relaxed);
+    if frame % COORDS_EVERY != 0 || COORDS_LINES.load(Ordering::Relaxed) >= COORDS_MAX_LINES {
+        return;
+    }
+    // SAFETY: main thread (task callback).
+    let Some(player) = (unsafe { game::main_player() }) else { return };
+    let s = game::snapshot(player);
+    let bits = MOVE.load(Ordering::Relaxed);
+    let (mx, my) = (f32::from_bits((bits >> 32) as u32), f32::from_bits(bits as u32));
+    let mut last = COORDS_LAST.lock().unwrap_or_else(|p| p.into_inner());
+    let dist = s.pos.iter().zip(last.iter()).map(|(a, b)| (a - b) * (a - b)).sum::<f32>().sqrt();
+    if mx == 0.0 && my == 0.0 && dist <= 0.01 {
+        return;
+    }
+    *last = s.pos;
+    COORDS_LINES.fetch_add(1, Ordering::Relaxed);
+    crate::info!(
+        "coords",
+        "frame={frame} pos=({:.3},{:.3},{:.3}) yaw={:.4} move={mx},{my} anim={}",
+        s.pos[0],
+        s.pos[1],
+        s.pos[2],
+        s.yaw,
+        s.anim_id
+    );
 }
 
 /// One writer shared by the two publish points (both on the main thread).

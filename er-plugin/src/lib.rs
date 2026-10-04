@@ -96,6 +96,7 @@ fn init(module: usize) {
     let mut watcher = actions::Watcher::new();
     std::mem::forget(task.run_recurring(move |_: &FD4TaskData| watcher.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
     std::mem::forget(task.run_recurring(|_: &FD4TaskData| remote::publish_state(false), CSTaskGroupIndex::ChrIns_PostPhysics));
+    std::mem::forget(task.run_recurring(|_: &FD4TaskData| remote::sample_coords(), CSTaskGroupIndex::ChrIns_PostPhysics));
     info!("core", "PlayerState publisher in ChrIns_PostPhysics (FrameBegin while not in world), dodge watcher in ChrIns_PostPhysics");
     if config::get().probe {
         let last = actions::probe::GROUPS.len() - 1;

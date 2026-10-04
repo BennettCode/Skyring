@@ -4,6 +4,15 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P3: coordinate/yaw conversion measured (P3 done)
+- **Changed:** bounded `[coords]` samples on both sides (Skyrim `Bridge.cpp` `SampleCoords`: position + `GetAngleZ()`; ER `remote.rs`
+  `sample_coords` in ChrIns_PostPhysics: position + yaw + move), max 1500 lines per session, only while moving. New `protocol/src/coords.rs`
+  (Local forward/right/up, ER/Skyrim delta ⇄ local, yaw delta) and its C++ mirror `skse/src/bridge/Coords.h`; unit tests in both languages
+  with the measured segments. `bridge::OnFrame` now gets the player pointer from the hook.
+- **Tested:** both games, the user walked W/D/S/A ~3 s each. Skyrim: W 2.7°, D 90.1°, S 176.5° off the heading (A hit an obstacle).
+  ER: 63/63 fast samples run at yaw + 180°; W→D turned +90°, later facings predicted to 0.1° with "right = yaw + 90°". `tests/run-tests.ps1` green.
+- **Result:** ✔ conventions in DESIGN §6 / `docs/research/coordinates.md`. **P3 done.** Next: P4 plan.
+
 ## 2026-10-04: P3: roll direction: Skyrim W/A/S/D → ER move stick (P3 accept met)
 - **Changed:** `er-plugin/src/pad.rs`: analog slot helpers (`analog_slots`, `set_analog`, `poll_analog`, `set_move`, `move_polls`).
   `remote.rs`: fresh `move_x/move_y` from Skyrim → ER's MoveForwards/Backwards/Left/Right analog slots every frame while held, one release
