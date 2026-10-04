@@ -114,3 +114,12 @@ Open hypotheses (next session):
   pulse sent while the character was still spawning (anim -1), as in every earlier run.
 - **Open (not blocking):** `perfect_invincibility` / `dodging` flags stayed 0 during 27010 for real and injected backsteps alike, and stamina
   stayed 101 (idle, out of combat). Confirm where ER exposes backstep/roll i-frames before PlayerState relies on them (P3 step 3/4).
+
+## Weapon stance from code (2026-10-05)
+- ChrAsm (eldenring-rs `player_game_data.rs`) exists twice: live (`PlayerIns.chr_asm`) and saved (`PlayerGameData.equipment.chr_asm`).
+  Writing `equipment.arm_style` and `selected_slots` in both switches ER's animation set on the next action. ER backstep self-test,
+  test character (R1 colossal sword 4000124, R2 dagger 1000700, L1 shield 31140000, L3/R3 Unarmed 110000):
+  - RightBothHands (the save's stance): 12027010.
+  - OneHanded or EmptyHanded with slot 1: 2027010 (the sword is still in hand).
+  - OneHanded with slots L3/R3 (Unarmed): **27010**, the plain set.
+- `er-plugin/src/stance.rs` (StanceSync) follows InputState.stance and puts the save's stance back when the bridge lets go.

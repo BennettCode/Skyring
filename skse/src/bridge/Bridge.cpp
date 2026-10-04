@@ -63,6 +63,35 @@ namespace sxer::bridge
 			bool iframe = false;
 		};
 
+		// How the player holds its weapon: ER switches its own stance to match, so the streamed pose (rolls, backsteps) holds the same
+		// thing (an ER character two-handing a weapon rolled "holding something" while Skyrim's was unarmed, 2026-10-05 playtest).
+		proto::Stance SkyrimStance(RE::PlayerCharacter* a_player)
+		{
+			if (!a_player || !a_player->AsActorState()->IsWeaponDrawn()) {
+				return proto::Stance::Unarmed;
+			}
+			auto* form = a_player->GetEquippedObject(false);
+			auto* weapon = form ? form->As<RE::TESObjectWEAP>() : nullptr;
+			if (!weapon) {
+				return proto::Stance::Unarmed;  // spells in the right hand
+			}
+			using Type = RE::WEAPON_TYPE;
+			switch (weapon->GetWeaponType()) {
+			case Type::kOneHandSword:
+			case Type::kOneHandDagger:
+			case Type::kOneHandAxe:
+			case Type::kOneHandMace:
+				return proto::Stance::OneHanded;
+			case Type::kTwoHandSword:
+			case Type::kTwoHandAxe:
+			case Type::kBow:
+			case Type::kCrossbow:
+				return proto::Stance::TwoHanded;
+			default:
+				return proto::Stance::Unarmed;  // fists, staff
+			}
+		}
+
 		// Main-thread state of OnFrame (only ever touched from PlayerCharacter::Update).
 		struct FrameState
 		{
@@ -78,6 +107,7 @@ namespace sxer::bridge
 			bool held = false;
 			std::uint32_t heldFrames = 0;
 			bool inCombat = false;
+			std::uint32_t stance = ~0u;
 			bool erInCombat = false;
 			input::Move move;
 			std::vector<float> frameMs;
@@ -305,6 +335,13 @@ namespace sxer::bridge
 		state.flags = on ? (kBridgeOn | (inCombat ? kInCombat : 0)) : 0;
 		state.move_x = move.x;
 		state.move_y = move.y;
+		const auto stance = static_cast<std::uint32_t>(SkyrimStance(a_player));
+		if (stance != f.stance) {
+			f.stance = stance;
+			static constexpr const char* kNames[] = { "Unarmed", "OneHanded", "TwoHanded" };
+			SKSE::log::info("[combat] stance {} frame={}", kNames[std::min<std::uint32_t>(stance, 2)], frame);
+		}
+		state.stance = stance;
 		f.input->Write(state);
 		SampleCoords(f, a_player, frame, move);
 		f.watch.Update(f.player->Read(), connected, now);

@@ -16,6 +16,7 @@ mod park;
 mod pose;
 mod pose_stream;
 mod remote;
+mod stance;
 mod window;
 
 use std::ffi::c_void;
@@ -114,6 +115,8 @@ fn init(module: usize) {
         },
         CSTaskGroupIndex::ChrIns_PostPhysics,
     ));
+    let mut stance = stance::StanceSync::new();
+    std::mem::forget(task.run_recurring(move |_: &FD4TaskData| stance.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
     let mut pose_stream = pose_stream::PoseStream::new();
     std::mem::forget(task.run_recurring(move |_: &FD4TaskData| pose_stream.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
     info!("core", "PoseState publisher in ChrIns_PostPhysics");

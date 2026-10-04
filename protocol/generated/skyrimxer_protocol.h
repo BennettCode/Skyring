@@ -7,9 +7,9 @@
 
 namespace sxer::proto
 {
-	inline constexpr std::uint32_t kVersion = 5;
+	inline constexpr std::uint32_t kVersion = 6;
 	inline constexpr std::uint32_t kMagic = 0x52455853;  // "SXER" as little-endian bytes
-	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v5";
+	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v6";
 
 	// Peer counts as gone when its heartbeat is older than this.
 	inline constexpr std::uint64_t kHeartbeatTimeoutMs = 2000;
@@ -77,6 +77,14 @@ namespace sxer::proto
 	{
 		InCombat = 0,  // The Skyrim player is in combat. ER mirrors it in its own combat state (dodges cost stamina only in combat).
 		BridgeOn = 1,  // The bridge is on (F10). Off = Skyrim plays vanilla; ER leaves its own state alone.
+	};
+
+	// InputState.stance: how the Skyrim player holds its weapon; ER switches its own stance (ChrAsm) to match, so the streamed pose matches.
+	enum class Stance : std::uint32_t
+	{
+		Unarmed = 0,  // Weapon sheathed, fists, staff or spells: ER fights with fists.
+		OneHanded = 1,  // A one-handed weapon drawn.
+		TwoHanded = 2,  // A two-handed weapon, bow or crossbow drawn.
 	};
 
 	// PlayerState.flags. Values are BIT INDICES: mask = 1 << value.
@@ -204,7 +212,7 @@ namespace sxer::proto
 		float move_x;  // Move stick right, -1..1.
 		float move_y;  // Move stick forward, -1..1.
 		float cam_yaw;  // Skyrim camera yaw, radians.
-		std::uint32_t _pad2;
+		std::uint32_t stance;  // Stance (Unarmed / OneHanded / TwoHanded).
 	};
 	static_assert(std::is_trivially_copyable_v<InputState> && std::is_standard_layout_v<InputState>);
 	static_assert(sizeof(InputState) == 48);
@@ -218,7 +226,7 @@ namespace sxer::proto
 	static_assert(offsetof(InputState, move_x) == 32);
 	static_assert(offsetof(InputState, move_y) == 36);
 	static_assert(offsetof(InputState, cam_yaw) == 40);
-	static_assert(offsetof(InputState, _pad2) == 44);
+	static_assert(offsetof(InputState, stance) == 44);
 
 	// At OFF_SLOT_PLAYER. Written by ER's game thread every frame, read by Skyrim's.
 	struct PlayerState

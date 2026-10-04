@@ -13,9 +13,9 @@
 # All values are little-endian (both games are x64 Windows).
 
 [protocol]
-version = 5
+version = 6
 magic = "SXER"                      # stored as a little-endian u32: bytes 'S' 'X' 'E' 'R'
-region_name = 'Local\SkyrimXER_v5'  # must end in _v<version>
+region_name = 'Local\SkyrimXER_v6'  # must end in _v<version>
 
 [constants]
 HEARTBEAT_TIMEOUT_MS = { type = "u64", value = 2000, doc = "Peer counts as gone when its heartbeat is older than this." }
@@ -74,6 +74,16 @@ doc = "InputState.flags. Values are BIT INDICES: mask = 1 << value."
 values = [
   { name = "InCombat", value = 0, doc = "The Skyrim player is in combat. ER mirrors it in its own combat state (dodges cost stamina only in combat)." },
   { name = "BridgeOn", value = 1, doc = "The bridge is on (F10). Off = Skyrim plays vanilla; ER leaves its own state alone." },
+]
+
+[[enums]]
+name = "Stance"
+repr = "u32"
+doc = "InputState.stance: how the Skyrim player holds its weapon; ER switches its own stance (ChrAsm) to match, so the streamed pose matches."
+values = [
+  { name = "Unarmed", value = 0, doc = "Weapon sheathed, fists, staff or spells: ER fights with fists." },
+  { name = "OneHanded", value = 1, doc = "A one-handed weapon drawn." },
+  { name = "TwoHanded", value = 2, doc = "A two-handed weapon, bow or crossbow drawn." },
 ]
 
 [[enums]]
@@ -192,7 +202,7 @@ fields = [
   { name = "move_x", type = "f32", doc = "Move stick right, -1..1." },
   { name = "move_y", type = "f32", doc = "Move stick forward, -1..1." },
   { name = "cam_yaw", type = "f32", doc = "Skyrim camera yaw, radians." },
-  { name = "_pad2", type = "u32" },
+  { name = "stance", type = "u32", doc = "Stance (Unarmed / OneHanded / TwoHanded)." },
 ]
 
 [[structs]]

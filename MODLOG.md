@@ -4,6 +4,21 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: ER's weapon stance follows Skyrim's (protocol v6)
+- **User:** "my right hand stays up after a roll; backsteps look like I'm holding something". ER's test character two-hands a colossal
+  sword, so ER played the weapon-holding variants (backstep 12027010) and the pose copied them.
+- **Changed:**
+  - Protocol v6: InputState `stance` (enum Stance).
+  - Skyrim sends it from IsWeaponDrawn + the right-hand weapon type.
+  - `er-plugin/src/stance.rs` StanceSync writes ER's ChrAsm (live + saved), never mid-dodge, and puts the save's stance back when the
+    bridge lets go: fists for Unarmed, the lightest right-hand weapon for OneHanded, the heaviest two-handed for TwoHanded.
+  - `-ErStance` dev override.
+- **Tested:**
+  - Probe: 12027010 → 2027010 (one-handed) → 27010 (fists).
+  - Both games: Skyrim Unarmed → ER fists, backstep anim 27010; the contact sheet shows the arms down after a roll.
+  - `run-tests.ps1` green.
+  - Not tested: drawing a weapon in Skyrim (the test save is unarmed).
+
 ## 2026-10-05: hands and feet follow the roll (finger/toe transforms carried)
 - **User:** "the hands, wrists and feet stay in place when rolling, causing it to stretch".
 - **Cause (probe):** fingers and toes aren't nodes in the player's tree. The skinned meshes skin them through loose animation-output

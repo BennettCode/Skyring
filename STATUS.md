@@ -12,7 +12,7 @@ chains, tap = dodge / hold = sprint, movement back at ER's move-cancel window). 
 every frame and Skyrim follows its virtual position, so ER walls no longer shorten rolls (`er-plugin/src/park.rs`).
 Step 5 (vanilla roll animation) is stuck after 2 attempts: see Handoff notes.
 P3 (done): ER runs hidden at 60 fps; Sprint (+ W/A/S/D) → ER backsteps/rolls by ER's rules; stamina, animation and the roll i-frame
-window come back every frame; coordinate conversion measured (`protocol/src/coords.rs`). Region `Local\SkyrimXER_v4` (v4 adds the PoseState slot).
+window come back every frame; coordinate conversion measured (`protocol/src/coords.rs`). Region `Local\SkyrimXER_v6` (v4 PoseState, v5 stamps + PoseBind, v6 stance).
 
 ## What exists
 - `protocol/`: schema `schema/messages.toml` (v3) → `tools/protogen` → `generated/skyrimxer_protocol.{h,rs}`. Rust crate `skyrimxer-protocol`

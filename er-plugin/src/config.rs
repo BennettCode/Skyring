@@ -22,6 +22,8 @@ pub struct Config {
     pub pin: bool,
     /// Research: find the skeleton pose in memory (pose::PoseProbe, docs/POSE-PLAN.md step 1).
     pub pose_probe: bool,
+    /// Research: write this weapon stance into ChrAsm once after spawn (stance.rs): empty | one | right2 | left2. Empty = don't write.
+    pub stance: String,
 }
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
@@ -42,6 +44,7 @@ pub fn load(dir: &Path) {
                 "force_combat" => config.force_combat = value.to_string(),
                 "pin" => config.pin = value != "0",
                 "pose_probe" => config.pose_probe = value == "1",
+                "stance" => config.stance = value.to_string(),
                 other => crate::error!("core", "skyrimxer_er.cfg: unknown key `{other}`"),
             }
         }

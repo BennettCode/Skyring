@@ -74,7 +74,8 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
 - **Roll i-frames reach Skyrim:** Skyrim knows the exact window (about 0.45 s) in which the Elden Ring roll makes you invincible.
 - Fail-safe: if either game closes, crashes or pauses, the other one notices within a moment and stops acting on stale input.
 
-**Not working yet:** fighting is still vanilla (P5). The roll animation copies 20 main bones, so fingers, cloth and armour
+**Not working yet:** fighting is still vanilla (P5). Elden Ring's character holds its weapon the way yours does (fists when you're unarmed
+or sheathed, one- or two-handed when you draw a weapon), but it doesn't use the same *kind* of weapon yet. The roll animation copies 20 main bones, so fingers, cloth and armour
 helpers follow Skyrim's own pose, and feet can slide a little (no foot placement yet). **Controller support isn't added yet:**
 Skyrim is keyboard-and-mouse only for now (details below). The i-frames are known to Skyrim but don't protect your Skyrim character yet (P4).
 
