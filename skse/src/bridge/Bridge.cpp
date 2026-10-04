@@ -1,5 +1,6 @@
 #include "bridge/Bridge.h"
 
+#include "bridge/Hud.h"
 #include "bridge/Input.h"
 #include "bridge/Link.h"
 #include "bridge/PlayerWatch.h"
@@ -9,6 +10,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <format>
 #include <mutex>
 #include <optional>
 #include <thread>
@@ -26,7 +28,22 @@ namespace sxer::bridge
 		std::atomic<std::uint64_t> g_frames{ 0 };
 
 		constexpr std::uint32_t kDodge = 1u << static_cast<std::uint32_t>(proto::Button::Dodge);
+		constexpr std::uint32_t kInWorld = 1u << static_cast<std::uint32_t>(proto::PlayerFlag::InWorld);
 		constexpr std::uint64_t kReportMs = 5000;
+		// How long after a Dodge press the HUD summary waits for ER's reaction (ER starts a backstep ~9 frames after the press).
+		constexpr std::uint64_t kDodgeReportMs = 600;
+
+		// What ER did with one Dodge press, for the HUD summary.
+		struct DodgeReport
+		{
+			std::uint64_t startMs = 0;
+			std::int32_t anim0 = 0;
+			std::int32_t stamina0 = 0;
+			std::int32_t staminaMin = 0;
+			std::int32_t firstNewAnim = 0;
+			bool animChanged = false;
+			bool iframe = false;
+		};
 
 		// Main-thread state of OnFrame (only ever touched from PlayerCharacter::Update).
 		struct FrameState
@@ -38,7 +55,50 @@ namespace sxer::bridge
 			std::vector<float> frameMs;
 			std::vector<float> hookUs;
 			std::uint64_t nextReportMs = 0;
+			// HUD feedback state.
+			bool hudConnected = false;
+			bool hudInWorld = false;
+			std::optional<DodgeReport> dodge;
 		} g_frame;
+
+		// Playtest feedback in Skyrim's HUD: link and ER-world changes, and one summary per Dodge press.
+		void UpdateHud(FrameState& a_f, bool a_connected, bool a_pressed, std::uint64_t a_now)
+		{
+			const auto& s = a_f.watch.Last();
+			if (a_connected != a_f.hudConnected) {
+				a_f.hudConnected = a_connected;
+				hud::Notify(a_connected ? "SkyrimXER: Elden Ring connected" : "SkyrimXER: Elden Ring link lost");
+			}
+			const bool inWorld = s && (s->flags & kInWorld);
+			if (a_connected && inWorld != a_f.hudInWorld) {
+				a_f.hudInWorld = inWorld;
+				hud::Notify(inWorld ? "SkyrimXER: ER character is in the world" : "SkyrimXER: ER character not in the world (title/loading)");
+			}
+			if (a_pressed) {
+				if (!s) {
+					hud::Notify("SkyrimXER: dodge pressed, but there is no ER state (not connected?)");
+				} else {
+					a_f.dodge = DodgeReport{ a_now, s->anim_id, s->stamina, s->stamina, 0, false, false };
+				}
+			}
+			if (!a_f.dodge) {
+				return;
+			}
+			auto& d = *a_f.dodge;
+			if (s) {
+				d.staminaMin = std::min(d.staminaMin, s->stamina);
+				d.iframe |= (s->flags & PlayerWatch::kIFrame) != 0;
+				if (!d.animChanged && s->anim_id != d.anim0) {
+					d.animChanged = true;
+					d.firstNewAnim = s->anim_id;
+				}
+			}
+			if (a_now - d.startMs >= kDodgeReportMs) {
+				const auto what = d.animChanged ? std::format("anim {}", d.firstNewAnim) : std::format("no reaction (anim stayed {})", d.anim0);
+				hud::Notify(std::format("ER dodge: {} | stamina {}->{} | i-frames {}", what, d.stamina0, d.staminaMin, d.iframe ? "yes" : "no"));
+				a_f.dodge.reset();
+			}
+		}
 
 		// Clean exit sends Bye (best effort; a crash or TerminateProcess is covered by ER's heartbeat timeout).
 		// Runs at DLL_PROCESS_DETACH, when other threads are already dead, possibly holding g_lock or the logger's
@@ -135,6 +195,7 @@ namespace sxer::bridge
 		const bool connected = shared.connected.load(std::memory_order_acquire);
 
 		const bool held = input::SprintHeld();
+		const bool pressed = held && !f.held;
 		if (held != f.held) {
 			f.held = held;
 			SKSE::log::info("[input] Dodge {} frame={} (Sprint from {})", held ? "down" : "up", frame, input::SprintDevice());
@@ -145,6 +206,7 @@ namespace sxer::bridge
 		state.buttons = held ? kDodge : 0;
 		f.input->Write(state);
 		f.watch.Update(f.player->Read(), connected, now);
+		UpdateHud(f, connected, pressed, now);
 
 		f.frameMs.push_back(a_delta * 1000.0f);
 		f.hookUs.push_back(std::chrono::duration<float, std::micro>(std::chrono::steady_clock::now() - start).count());

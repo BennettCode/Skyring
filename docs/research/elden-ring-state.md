@@ -5,7 +5,8 @@ Game/version: eldenring.exe 2.7.1.0 (1.17.1), eldenring-rs `59fbd3b`. Read in `e
 
 ## Fields
 - HP/FP/stamina + maxes: `modules.data` (`CSChrDataModule`). Anim: `modules.time_act.anim_queue[read_idx].anim_id` (backstep = 27010;
-  spawn-in plays 63000 / 29030000 first, during which a backstep press does nothing). Poise: `modules.super_armor`. Transform:
+  spawn-in plays 63000 / 29030000 first, during which a backstep press does nothing). Anim ids carry an animation-group prefix
+  (millions): with another stance/equipment the backstep is 12027010 and idle 12000000, so match `anim % 1_000_000 == 27010`. Poise: `modules.super_armor`. Transform:
   `modules.physics`. Map: `PlayerIns.current_block_id`.
 - Publish timing: ChrIns_PostPhysics while the player exists. The ChrIns task groups barely run at the title screen, so `FrameBegin`
   publishes "not in world" (flags 0) there; otherwise Skyrim would see PlayerState go stale.

@@ -4,6 +4,14 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P3: Skyrim HUD feedback for playtests
+- **Changed:** `skse/src/bridge/Hud.cpp` (ShowHUDMessage, AE id 52933, checked with addrlib-check). `Bridge.cpp` `UpdateHud`: top-left
+  notifications for ER connected/lost, ER character in/out of the world, and one summary per Dodge press 0.6 s later (ER anim reaction,
+  stamina before→lowest, i-frames seen). Each one is also logged as `[hud]`.
+- **Tested in-game (both games, keyboard):** connected + in-world messages appeared; 6 Left Shift taps → 6 × `ER dodge: anim 12027010 |
+  stamina 136->136 | i-frames no` (backstep in animation group 12; the character's stance changed since step 2, idle = 12000000).
+- **Result:** ✔. Still open: stamina/i-frames need combat (no enemy aggroed in these runs).
+
 ## 2026-10-04: P3 step 4b: the loop runs in both games (Skyrim Sprint → hidden ER backstep → state back)
 - **Changed:** `er-plugin/src/remote.rs`: `DodgeFromSkyrim` (in WorldChrMan_Prepare, replaces the self-test unless `selftest=dodge`) holds
   Backstep (+ BackstepTapped on the press frame) while InputState is fresh + connected + Dodge held; it releases on stale/lost.

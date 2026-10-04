@@ -17,6 +17,10 @@ before use (a missing id makes CommonLib abort the game at load).
 - Hook: `skse/src/hooks/PlayerUpdate.cpp`, a vtable write (no trampoline) that calls the original first. Same hook as SkyCraft (`Game.cpp`).
 - Confidence: verified by test (2026-10-04: ~60 calls/s, p50 16.8 ms frame time; our work ≈ 2 µs per frame, ~45 µs on frames that log).
 
+## HUD notification
+- Location: `RE::SendHUDMessage::ShowHUDMessage` = AE id **52933** (offset 0x991a30), the game's debug notification (top-left text).
+- Used by `skse/src/bridge/Hud.cpp` from the main thread (PlayerCharacter::Update). Confidence: verified by test (2026-10-04).
+
 ## Input: BSInputDeviceManager event sink
 - Location: `BSInputDeviceManager` singleton AE id **402776**, `UserEvents` singleton AE id **402638**.
 - What it does: `BSTEventSink<InputEvent*>` gets every input event batch on the main thread. `ButtonEvent::QUserEvent()` compared with
