@@ -39,11 +39,26 @@ before use (a missing id makes CommonLib abort the game at load).
 - Hook: `skse/src/hooks/SprintSwallow.cpp`. Confidence: verified by test (2026-10-04: bridged Shift+W ≈ 366 u/s = run speed, unswallowed
   sprint ≈ 499 u/s).
 
-## Moving the player with collision: Actor::ApplyCurrent (P4 step 4)
-- `Actor::ApplyCurrent(velocityTime, hkVector4 velocity)` = Actor vfunc **0x9D** (CommonLib, through the player's own vtable, no id): a
-  velocity the character controller applies (Havok units/s = Skyrim units/s × `bhkWorld::GetWorldScale()`), with collision.
-- Open loop it realizes an uneven share of the velocity (79–150 % over a roll). Closed loop (steer onto a target that moves with ER,
-  lead capped) gives 96–99 %. Confidence: verified by test (2026-10-04).
+## Moving the player with collision: the character controller's velocity (LOCO-PLAN stage A)
+- **Used:** `bhkCharProxyController::SetLinearVelocityImpl` = bhkCharacterController vfunc **0x07**, hooked in
+  `RE::VTABLE_bhkCharProxyController[1]` = AE **240560** (`skse/src/hooks/ControllerVelocity.cpp`). The player's controller is a
+  bhkCharProxyController. Its bhkCharacterController part (what `GetCharController()` returns) uses the class's **second** vtable,
+  because `hkpCharacterProxyListener` comes first; `[0]` (240558) is the listener's.
+- Skyrim calls it once per frame for the player, from a Havok worker thread, with the locomotion's velocity (Havok units/s =
+  Skyrim units/s × `bhkWorld::GetWorldScale()`). Replacing x/y there (keeping z) moves the player at exactly that speed, through
+  Skyrim's collision.
+- Measured 2026-10-05 (5 dodges, all directions):
+  - 0 stalled frames, 98–100 % of ER's distance.
+  - The realized speed is ER's interpolated speed one frame later, so its frame-to-frame change is ER's own (18–35 % of peak).
+  - Rolling into a wall: 0.21 m of 3.20 m, then the player slides along it.
+- **Didn't work (same session):**
+  - `Actor::ApplyCurrent(time, velocity)` (Actor vfunc 0x9D) is refused on alternate frames even with the controller's
+    `velocityTime` zeroed first: 12–15 stalls in a 44-frame roll.
+  - Writing the controller's linear velocity (`SetLinearVelocityImpl` from PlayerCharacter::Update) or `velocityMod` (+0xB0: the
+    locomotion's wanted velocity in the body frame, x right / y forward, Havok units) after PlayerCharacter::Update doesn't stick.
+    Skyrim sets both again before the Havok step.
+  - Skyrim's own run (moveInputVec zeroed) keeps `velocityMod` at run speed for ~20 frames into a roll.
+- Confidence: verified by test (2026-10-05).
 
 ## MovementHandler::CanProcess, PlayerControls, PlayerCamera
 - `RE::VTABLE_MovementHandler[0]` = AE **208715**, vfunc 0x1: refusing events keeps held movement keys from setting

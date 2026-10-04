@@ -1,6 +1,8 @@
 # LOCO-PLAN: Elden Ring drives the Skyrim body (smooth rolls, then ER locomotion)
 
-Approved 2026-10-04. Status: Stage A mostly done (protocol v5, timeline with 0 late frames, pose fixes, whole-roll follow). **Stuck: smooth player movement** (`ApplyCurrent` refuses currents, ~23 of 60 roll frames don't move): see STATUS handoff. Stage B not started.
+Approved 2026-10-04. Status: **Stage A done** (2026-10-05): protocol v5, timeline with 0 late frames, pose fixes, whole-roll follow, smooth player movement (ER's velocity goes into Skyrim's character controller: 0 stalls, 98–100 % distance). Stage B not started.
+
+**Accept A, smoothness (measured):** the realized speed is ER's own speed one frame later, so frame-to-frame change equals ER's roll curve (18–35 % of peak). "Under 15 %" is not reachable without changing ER's motion; the bar is "no worse than ER's own".
 
 **Correction after approval (measured):** the player's third-person skeleton has 51 nodes and no finger or toe bones (the hand/foot meshes reference them, but they resolve to nothing), so PoseBone grows 20 → 24 (the four upper-arm twist bones), not 56.
 

@@ -2,12 +2,15 @@
 
 #include <cmath>
 #include <numbers>
+#include <format>
+#include <string>
 
 #include "bridge/Coords.h"
 #include "bridge/VanillaInput.h"
+#include "hooks/ControllerVelocity.h"
 
-// Actor::ApplyCurrent = Actor vfunc 0x9D (CommonLib RE/A/Actor.h; called through the player's own vtable, no Address Library id):
-// Skyrim's "current" push (water currents), a velocity the character controller applies for a time, with collision.
+// The player is moved by putting ER's velocity into the character controller where Skyrim's own locomotion sets it
+// (hooks/ControllerVelocity.cpp), so Skyrim's Havok step moves the player with collision, one velocity per frame.
 // PlayerCamera singleton = AE id 400802 (CommonLib), checked with tools/addrlib-check.ps1: rolls go where the camera looks (in third
 // person the body lags behind a fast-turning camera). PlayerControls singleton = AE id 400864 (CommonLib), checked with tools/addrlib-check.ps1: its move input is zeroed during a dodge
 // (hooks/MoveSwallow.cpp keeps the movement keys from setting it again), so Skyrim's own running doesn't add to the roll.
@@ -44,11 +47,10 @@ namespace sxer::movement
 		// LOCO-PLAN stage A: velocity = this frame's ER step (feed-forward) + this share of the remaining gap per second. Closing the whole
 		// gap every frame overshot and stuttered (2026-10-04 playtest: 93 → 355 → −90 u/s).
 		constexpr float kCorrectionPerS = 8.0f;
-		// ApplyCurrent refuses a new current while the last one still runs (returns false). Measured 2026-10-04 (roll, 60 frames):
-		// 1-frame currents: applied on alternate frames, bursts. 2-frame: stalls 23, biggest frame-to-frame change 45% of peak, 89% of
-		// ER's distance. 0.75-frame scaled up: stalls 25-27, spikes 74-89%, 94%. Kept at 2: smoothing this needs another way to move
-		// the player (STATUS handoff: inject the velocity where Skyrim's own movement sets it).
-		constexpr float kCurrentFrames = 2.0f;
+		// Measured 2026-10-05 (5 dodges, all directions): 0 stalled frames, 98-100% of ER's distance; the realized speed is ER's
+		// interpolated speed one frame later, so its frame-to-frame change is ER's own (18-35% of peak, ER's roll curve).
+		// Actor::ApplyCurrent (before) was refused on alternate frames (22-27 stalls, 89-94%); writing the controller's linear velocity or
+		// velocityMod after PlayerCharacter::Update doesn't stick (Skyrim sets both again before the Havok step).
 		// Roll animation (P4 step 5): the vanilla Silent Roll is sneak + sprint. Attempt 3: Sneak is pressed through the game's own
 		// SneakHandler (vanilla::PressSneak, so HUD/stealth follow), sprint starts once the player sneaks, and the move input holds the
 		// roll's key direction so the game keeps the sprint going. The vanilla roll only goes where the body faces, so in third person the
@@ -89,6 +91,10 @@ namespace sxer::movement
 			float lastRealSpeed = 0;
 			float peakSpeed = 0;
 			float maxSpeedJump = 0;
+			// ER's own speed along the same frames (the interpolated target's step / dt): its biggest frame-to-frame change is the floor
+			// for ours. Per-frame series (realized / ER, u/s) logged at the dodge end.
+			float lastErSpeed = 0, erJump = 0;
+			std::string series;
 			int stalls = 0;
 			RE::NiPoint3 startPos;
 			float erDistM = 0;
@@ -222,6 +228,8 @@ namespace sxer::movement
 							"(3D root): stalls={} biggest change={:.0f} u/s",
 				g.frames, g.stalls, g.peakSpeed, g.maxSpeedJump, g.peakSpeed > 1.0f ? 100.0f * g.maxSpeedJump / g.peakSpeed : 0.0f, g.drawnStalls,
 				g.drawnJump);
+			SKSE::log::info("[move] smooth: ER's own biggest frame-to-frame change={:.0f} u/s ({:.0f}% of peak) | per frame realized/ER u/s: {}", g.erJump,
+				g.peakSpeed > 1.0f ? 100.0f * g.erJump / g.peakSpeed : 0.0f, g.series);
 			g.active = false;
 			g.spent = true;
 			EndTrick(a_player, "dodge end", a_keepSneak);
@@ -237,6 +245,8 @@ namespace sxer::movement
 				g.lastDrawn = root->world.translate;
 			}
 			g.lastRealSpeed = g.peakSpeed = g.maxSpeedJump = 0;
+			g.lastErSpeed = g.erJump = 0;
+			g.series.clear();
 			g.stalls = 0;
 			g.drawnStalls = 0;
 			g.drawnJump = g.lastDrawnSpeed = 0;
@@ -297,6 +307,7 @@ namespace sxer::movement
 			g.pressed = true;
 		}
 		if (!a_player || !a_enabled || !a_state) {
+			hooks::ClearVelocityOverride();
 			if (g.active && a_player) {
 				End(a_player, a_frame, a_enabled ? "ER state stale" : "bridge off");
 			} else if (a_player) {
@@ -367,6 +378,7 @@ namespace sxer::movement
 			End(a_player, a_frame, "ER motion over");
 		}
 		if (!g.active || a_delta <= 0) {
+			hooks::ClearVelocityOverride();
 			return;
 		}
 		++g.frames;
@@ -420,6 +432,12 @@ namespace sxer::movement
 			g.lastDrawnSpeed = drawn;
 			g.lastDrawn = d;
 		}
+		const float erSpeed = std::hypot(step.x, step.y) / a_delta;
+		if (g.frames > 2) {
+			g.erJump = std::max(g.erJump, std::fabs(erSpeed - g.lastErSpeed));
+		}
+		g.lastErSpeed = erSpeed;
+		g.series += std::format("{:.0f}/{:.0f} ", real, erSpeed);
 		g.lastRealSpeed = real;
 		g.lastHere = here;
 		RE::NiPoint3 err{ g.target.x - here.x, g.target.y - here.y, 0.0f };
@@ -436,11 +454,12 @@ namespace sxer::movement
 			speed = speed * (kMaxSpeed / v);
 		}
 		const float scale = RE::bhkWorld::GetWorldScale();
-		const RE::hkVector4 velocity(speed.x * scale, speed.y * scale, 0.0f, 0.0f);
-		const bool applied = a_player->ApplyCurrent(a_delta * kCurrentFrames, velocity);
+		if (auto* controller = a_player->GetCharController()) {
+			hooks::SetVelocityOverride(controller, speed.x * scale, speed.y * scale);
+		}
 		if (g.frames <= kDetailFrames) {
-			SKSE::log::info("[move] frame+{}: step=({:.1f},{:.1f}) units{} lead={:.1f} speed=({:.0f},{:.0f}) u/s dt={:.4f} applied={} er_frame={}", g.frames,
-				step.x, step.y, fresh ? "" : " (no new ER frame)", lead, speed.x, speed.y, a_delta, applied, s.frame);
+			SKSE::log::info("[move] frame+{}: step=({:.1f},{:.1f}) units{} lead={:.1f} speed=({:.0f},{:.0f}) u/s dt={:.4f} er_frame={}", g.frames,
+				step.x, step.y, fresh ? "" : " (no new ER frame)", lead, speed.x, speed.y, a_delta, s.frame);
 		}
 	}
 }

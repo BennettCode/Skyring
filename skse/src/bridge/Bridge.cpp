@@ -10,6 +10,7 @@
 #include "bridge/Slot.h"
 #include "bridge/Timeline.h"
 #include "hooks/PlayerUpdate.h"
+#include "hooks/ControllerVelocity.h"
 #include "hooks/MoveSwallow.h"
 #include "hooks/SprintSwallow.h"
 
@@ -252,9 +253,10 @@ namespace sxer::bridge
 		hooks::InstallPlayerUpdate();
 		hooks::InstallSprintSwallow();
 		hooks::InstallMoveSwallow();
+		hooks::InstallControllerVelocity();
 		input::Install();
 		SKSE::log::info("[core] hooks installed: PlayerCharacter::Update (vfunc 0xAD; ER pose applier) → InputState/PlayerState slots, SprintHandler::CanProcess "
-		                "(vfunc 0x1, vanilla sprint off while bridged), MovementHandler::CanProcess (vfunc 0x1, keys off during a dodge), input sink (Sprint → Dodge, movement keys → move stick, F10 toggle)");
+		                "(vfunc 0x1, vanilla sprint off while bridged), MovementHandler::CanProcess (vfunc 0x1, keys off during a dodge), bhkCharProxyController::SetLinearVelocityImpl (vfunc 0x7, ER roll velocity), input sink (Sprint → Dodge, movement keys → move stick, F10 toggle)");
 	}
 
 	bool SwallowSprint() { return g_swallowSprint.load(std::memory_order_relaxed); }

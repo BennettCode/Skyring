@@ -4,6 +4,24 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: smooth roll movement (LOCO-PLAN stage A done)
+- **Problem:** the player stalled on 22–27 of ~60 roll frames. `Actor::ApplyCurrent` refuses a new current on alternate frames.
+- **Probe** (plan mode, one key script, 5 dodges per mover; numbers in `docs/research/skyrim-hooks.md`):
+  1. `velocityTime = 0` before ApplyCurrent: still refused on alternate frames.
+  2. Controller linear velocity after PlayerCharacter::Update: overwritten.
+  3. `velocityMod` after the update: overwritten.
+  4. Hook on `SetLinearVelocityImpl`: works. The player's controller uses the proxy class's second vtable (AE 240560), found by
+     looking up its vtable RVA in the Address Library.
+- **Changed:** new `skse/src/hooks/ControllerVelocity.cpp` (lock-free override, player only, Skyrim keeps vertical velocity).
+  `Movement.cpp` sets ER's velocity there instead of ApplyCurrent. New `[move] smooth` line: ER's own change + per-frame
+  realized/ER speeds.
+- **Tested** (both games, auto load-in, key script backstep + W/D/S/A rolls):
+  - 0 stalls in all 5 dodges, 98–100 % of ER's distance (before: 12–22 stalls, 83–91 %).
+  - Speed = ER's speed one frame later.
+  - Wall (Whiterun stone wall, 3 left rolls): 2.64 m, then 0.21 m (blocked), then 0.67 m sliding along it. The screenshot shows
+    the player on the ground, not in the wall.
+- **Not done:** the user hasn't felt it yet. The "< 15 % frame-to-frame change" bar is ER's own roll curve (18–35 %).
+
 ## 2026-10-05: ER's weapon stance follows Skyrim's (protocol v6)
 - **User:** "my right hand stays up after a roll; backsteps look like I'm holding something". ER's test character two-hands a colossal
   sword, so ER played the weapon-holding variants (backstep 12027010) and the pose copied them.

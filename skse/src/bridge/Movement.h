@@ -7,8 +7,8 @@
 
 // The Skyrim player follows ER's dodge movement (P4 step 4). While ER plays a dodge animation (27xxx: rolls, backsteps), ER's
 // per-frame position delta is taken into the character's own frame (coords::ErDeltaToLocal with ER's yaw) and laid along the roll
-// direction in Skyrim (the camera's yaw plus the move-key angle at the roll start), then pushed through Actor::ApplyCurrent so
-// Skyrim's character controller (and its collision) moves the player. Main thread only.
+// direction in Skyrim (the camera's yaw plus the move-key angle at the roll start), then handed to Skyrim's character controller as its
+// velocity (hooks/ControllerVelocity), so its Havok step (and collision) moves the player. Main thread only.
 namespace sxer::movement
 {
 	// Every frame. a_state = ER's PlayerState interpolated on Skyrim's clock (bridge/Timeline; nullopt when stale/disconnected); a_enabled = bridge on;
