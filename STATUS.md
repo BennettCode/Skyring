@@ -20,7 +20,7 @@ Both plugins share the region `Local\SkyrimXER_v1`, handshake, exchange heartbea
 
 ## Blockers / open questions
 - **Dodge injection into ER** (P3 step 2), see Handoff notes. Arena settled: the test character is parked in m10_01_00_00 and the user presses
-  Continue each run (no warp in P3). The user tests with a DualShock over USB in both games.
+  Continue each run (no warp in P3). The user tests with a DualSense (PS5) over USB in both games.
 
 ## Next 3 steps (P3, full plan in `docs/P3-PLAN.md`, approved 2026-10-04)
 1. ~~ER keeps running hidden~~ ✔ (60 fps hidden, `er-plugin/src/window.rs`).

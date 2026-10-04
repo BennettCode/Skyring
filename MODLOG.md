@@ -13,6 +13,10 @@ Newest first. One entry per session or verified step: **what changed · how it w
   map m10_01_00_00. Probe of a real dodge press recorded where ER sets its action bits (`docs/research/elden-ring-input.md`).
 - **Result:** step 1 ✔. Step 2 (injected dodge) ✘ so far: writing `action_requests` is overwritten by the engine; a held virtual pad key is seen
   by ER's pad poll but doesn't reach the player's action requests. Next hypotheses are in the research note.
+- **Workflow pass (same day):** README rewritten (diagram, progress table, tested setup incl. **DualSense over USB** as the only test controller,
+  safety section, one-command dev table). `dev.ps1 -WaitInWorld N` waits for the load-in and prints the ER results itself;
+  `tools/stop-games.ps1` (+ shared `Stop-Game` in `common.psm1`); `tools/README.md` refreshed. DESIGN §9: controller open question.
+  Tested: scripts parse, `dev.ps1 -Target er -NoLaunch` OK, `stop-games.ps1` closed a hidden ER.
 
 ## 2026-10-04: Phase 2 complete (shared memory + heartbeat)
 - **Changed:** Protocol schema v1 (`protocol/schema/messages.toml`) + generator `tools/protogen` (rejects implicit padding, checks the region

@@ -100,6 +100,10 @@ Every line, on both sides:
   and log frame times as p50/p95/p99 every 5 s. Never log every frame.
 
 ## 9. Open questions
+- **Controller (all testing uses a DualSense over USB).** ER reads it natively (libScePad). Skyrim is XInput-only and sees it only through Steam
+  Input, which may not apply when `skse64_loader.exe` is started outside Steam: check before P3 step 4. With its focus spoofed, the hidden ER
+  may also read the pad directly, so one press could arrive twice (directly and via Skyrim). Decide in P3/P4: block ER's own pad reading,
+  or let ER read the pad itself (lower latency) and use Skyrim only for gating.
 - Can ER be kept running at full rate while hidden/unfocused? What's the cost when both games run at once?
 - What's the best hook point in Skyrim to cancel incoming player damage and redirect it?
 - How do we take Skyrim's "hit happened" and get ER's damage formula result without a real ER target? Options: a dummy enemy in the arena

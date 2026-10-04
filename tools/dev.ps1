@@ -10,6 +10,8 @@
   powershell -ExecutionPolicy Bypass -File tools/dev.ps1 -NoLaunch            # build + deploy only
   powershell -ExecutionPolicy Bypass -File tools/dev.ps1 -Target er -Game eldenring -Restart -ErSelfTest dodge
 .NOTES
+  -WaitInWorld N (ER): after the plugins report in, wait for the user to press Continue in ER (up to 5 min), let ER run N more seconds,
+   then print the ER plugin's log lines whose subsystem matches -Show. Tests then need no "done" message from the user.
   -Restart stops the game(s) about to be launched first (ER is hidden in-world, so it gets Stop-Process; no clean Bye).
   -ErVisible / -ErSelfTest / -ErInjectGroup / -ErProbe are written to build/er-plugin/skyrimxer_er.cfg on every launch (er-plugin/src/config.rs).
 #>
@@ -27,7 +29,9 @@ param(
     [string]$ErSelfTest = '',
     [ValidateSet('', 'wprep', 'padstep', 'ailogic', 'prebehavior')]
     [string]$ErInjectGroup = '',
-    [switch]$ErProbe
+    [switch]$ErProbe,
+    [int]$WaitInWorld = 0,
+    [string]$Show = 'action|state|window|probe|error|warning'
 )
 
 Set-StrictMode -Version Latest
@@ -37,16 +41,6 @@ $paths = Get-ProjectPaths
 $timer = [Diagnostics.Stopwatch]::StartNew()
 
 function Step([string]$Name) { Write-Host ("`n[{0,4}s] == {1} ==" -f [int]$timer.Elapsed.TotalSeconds, $Name) -ForegroundColor Cyan }
-
-function Stop-Game([string]$Name) {
-    $p = Get-Process -Name $Name -ErrorAction SilentlyContinue
-    if (-not $p) { return }
-    Write-Host "stopping $Name (pid $($p.Id -join ', '))"
-    $p | ForEach-Object { if ($_.MainWindowHandle -ne 0) { [void]$_.CloseMainWindow() } }
-    $p | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
-    Get-Process -Name $Name -ErrorAction SilentlyContinue | Stop-Process -Force
-    Get-Process -Name $Name -ErrorAction SilentlyContinue | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
-}
 
 if ($Restart -and -not $NoLaunch) {
     if ($Game -in 'both', 'skyrim') { Stop-Game 'SkyrimSE' }
@@ -100,6 +94,27 @@ while ($pending.Count -gt 0 -and (Get-Date) -lt $deadline) {
         }
     }
     if ($pending.Count -gt 0) { Start-Sleep -Seconds 2 }
+}
+
+$erLog = Join-Path $paths.BuildDir 'er-plugin\logs\skyrimxer_er.log'
+if ($WaitInWorld -gt 0 -and $Game -in 'both', 'eldenring' -and $pending.Count -eq 0) {
+    Step 'waiting for the player to load in (user: press Continue in Elden Ring)'
+    $inWorldDeadline = (Get-Date).AddMinutes(5)
+    while (-not (Select-String -LiteralPath $erLog -Pattern 'main player spawned \(in world' -Quiet) -and (Get-Date) -lt $inWorldDeadline) {
+        Start-Sleep -Seconds 2
+    }
+    if (Select-String -LiteralPath $erLog -Pattern 'main player spawned \(in world' -Quiet) {
+        Step "in world; letting ER run ${WaitInWorld}s"
+        Start-Sleep -Seconds $WaitInWorld
+        Step "ER log [$Show] lines"
+        $lines = @(Get-Content -LiteralPath $erLog | Where-Object { $_ -match "\[($Show)\]" })
+        # Probe lines come in bursts; keep the first 40 so the summary stays short (the full log is collected below).
+        $probe = @($lines | Where-Object { $_ -match '\[probe\]' } | Select-Object -First 40)
+        $lines | Where-Object { $_ -notmatch '\[probe\]' } | Select-Object -Last 60 | ForEach-Object { $_ -replace '^\S+ \[ER\] ', '' }
+        if ($probe.Count) { '-- first probe lines --'; $probe | ForEach-Object { $_ -replace '^\S+ \[ER\] \[info\] \[probe\] ', '' } }
+    } else {
+        Write-Host 'player never loaded in (nobody pressed Continue within 5 min)' -ForegroundColor Yellow
+    }
 }
 
 Step 'collect logs'

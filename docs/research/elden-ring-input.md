@@ -60,6 +60,6 @@ Open hypotheses (next session):
    `-ErVisible` and the window clicked/focused, hands off. If it works there, find the remaining focus check.
 2. The manipulator reads a **different source** than CSInGamePad (e.g. the pad device / libScePad directly, a per-device `PadDevice` state,
    `unused_input_map`, or a manipulator-side cache filled before WorldChrMan_Prepare). Test: write at PadStep (`-ErInjectGroup padstep`), and also
-   write `initial_virtual_input_data` before the copy. Mapped input 783 may be the *keyboard* binding; the user plays with a **DualShock over USB**,
+   write `initial_virtual_input_data` before the copy. Mapped input 783 may be the *keyboard* binding; the user plays with a **DualSense (PS5) over USB**,
    so try the pad-mapped input / `PadDevice` (`s_thumb*`, `w_buttons`).
 3. Hold/release timing: hold longer (10+ frames) and check `BackstepTapped` (13) too.

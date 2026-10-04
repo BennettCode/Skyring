@@ -60,4 +60,16 @@ function Assert-NoEasyAntiCheat {
     }
 }
 
-Export-ModuleMember -Function Get-RepoRoot, Expand-ConfigPath, Get-ProjectPaths, Get-Me3Path, Get-VsDevShellScript, Get-Timestamp, Assert-NoEasyAntiCheat
+# Closes a game: CloseMainWindow first (clean exit, sends Bye), then Stop-Process if it ignores that or has no window
+# (ER hides its window in-world, so it always ends up killed: Skyrim then logs a heartbeat timeout, which is fine).
+function Stop-Game([ValidateSet('SkyrimSE', 'eldenring')][string]$Name) {
+    $p = Get-Process -Name $Name -ErrorAction SilentlyContinue
+    if (-not $p) { return }
+    Write-Host "stopping $Name (pid $($p.Id -join ', '))"
+    $p | ForEach-Object { if ($_.MainWindowHandle -ne 0) { [void]$_.CloseMainWindow() } }
+    $p | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
+    Get-Process -Name $Name -ErrorAction SilentlyContinue | Stop-Process -Force
+    Get-Process -Name $Name -ErrorAction SilentlyContinue | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
+}
+
+Export-ModuleMember -Function Get-RepoRoot, Expand-ConfigPath, Get-ProjectPaths, Get-Me3Path, Get-VsDevShellScript, Get-Timestamp, Assert-NoEasyAntiCheat, Stop-Game
