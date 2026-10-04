@@ -63,6 +63,10 @@ if ($NoLaunch) { Step "done (no launch) in $([int]$timer.Elapsed.TotalSeconds)s"
 if ($Game -in 'both', 'eldenring' -and (Get-Process -Name eldenring -ErrorAction SilentlyContinue)) {
     throw 'Elden Ring is already running (it would not load the new DLL). Quit it and rerun.'
 }
+if ($Game -in 'both', 'eldenring' -and -not (Get-Process -Name steam -ErrorAction SilentlyContinue)) {
+    # me3 fails with "Steam is required to run this game" (logs/me3-*.log) and we'd wait for the timeout.
+    throw 'Steam is not running. Start Steam (offline mode is fine) and rerun.'
+}
 
 if ($Game -in 'both', 'eldenring') {
     $cfg = @('# written by tools/dev.ps1 on every launch', "visible=$([int][bool]$ErVisible)", "selftest=$ErSelfTest", "inject_group=$ErInjectGroup", "probe=$([int][bool]$ErProbe)")

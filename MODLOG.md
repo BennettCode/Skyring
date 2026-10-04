@@ -4,6 +4,16 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P3 step 2: injected backstep works (window focused)
+- **Changed:** `er-plugin/src/pad.rs` (`describe`, `poll_mask`, `layers`: read-only input diagnostics), `actions.rs` (wide per-frame probe:
+  full action masks, all key polls, device layers; self-test also raises `BackstepTapped` on the press frame; holds 4/9/30). `tools/dev.ps1`
+  refuses to launch ER without Steam running.
+- **Tested in-game (ER only, window visible, 2 runs):** probe compared a real DualSense tap with ours: the real one also raises
+  `BackstepTapped` for one frame, which makes the release a backstep request (bit 16). With that added, the self-test backsteps
+  (anim 27010) on its own; the user saw it. `tests/run-tests.ps1` passes.
+- **Result:** step 2 ✔ while ER is focused. Still open: the action module ignores the pad while ER isn't the foreground window
+  (the hidden case). Details: `docs/research/elden-ring-input.md` ("session 3").
+
 ## 2026-10-04: P3 step 2 diagnostics (dodge injection, still blocked)
 - **Changed:** `er-plugin/src/actions.rs`: the probe logs the action-request gating masks every 120 frames (possible, cancels, disabled, queued,
   animation flags) and a queued bit per task group. The self-test cycles hold lengths 4/8/12/20/30 frames and logs the engine's hold timer. Dev-only, off by default.

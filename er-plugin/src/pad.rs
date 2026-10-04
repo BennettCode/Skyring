@@ -7,6 +7,7 @@
 //! after PadStep and before the characters read input (see docs/research/elden-ring-input.md, P3 step 2 probe).
 
 use eldenring::cs::UserInputKey;
+use eldenring::dluid::DLVirtualInputData;
 use eldenring::fd4::{FD4PadManager, InputType};
 use fromsoftware_shared::FromStatic;
 
@@ -54,4 +55,80 @@ pub unsafe fn set_digital(key: UserInputKey, down: bool) -> usize {
         device.set_virtual_digital_state(index as usize, down);
     }
     slots.len()
+}
+
+/// Every entry of `key`'s input-type group: (mapped input, type, virtual index, checked). Unlike `digital_slots` this keeps
+/// AreKeysUp / IsStickMoving entries and unmapped ones (P3 step 2 probe).
+///
+/// # Safety
+/// Main thread only (task callback).
+pub unsafe fn describe(key: UserInputKey) -> Vec<(i32, InputType, Option<i32>, bool)> {
+    let Ok(pads) = (unsafe { FD4PadManager::instance() }) else { return Vec::new() };
+    let Some(pad) = pads.get_in_game_pad() else { return Vec::new() };
+    let groups = unsafe { pad.input_type_group.as_ref() };
+    let Some(group) = groups.find(&key) else { return Vec::new() };
+    let key_assign = unsafe { pad.key_assign.as_ref() };
+    let checks = unsafe { pad.input_code_check.as_ref() };
+    group
+        .iter()
+        .map(|(mapped, ty)| {
+            let checked = checks.find(&mapped).is_some_and(|c| c.state_1 && !c.state_2);
+            (mapped, ty, key_assign.get_virtual_input_index(mapped), checked)
+        })
+        .collect()
+}
+
+/// Every in-game `UserInputKey` (the enum has gaps), for `poll_mask`.
+pub const ALL_KEYS: [UserInputKey; 22] = {
+    use UserInputKey::*;
+    [
+        MouseMovementX, MouseMovementY, MovementControl, Attack, StrongAttack, Guard, Skill, EventAction, Backstep, BackstepTapped,
+        Jump, UseItem, SwitchSpell, SwitchRightHandArmament, SwitchleftHandArmament, SwitchItem, ResetCamera, Crouch, SwitchSpell2,
+        SwitchItem2, ResetCameraTapped, EventActionPouch,
+    ]
+};
+
+/// Bit `k` set = `poll_digital_input(k)` is true (k = the key's number, all < 32).
+///
+/// # Safety
+/// Main thread only (task callback).
+pub unsafe fn poll_mask() -> u32 {
+    let Ok(pads) = (unsafe { FD4PadManager::instance() }) else { return 0 };
+    let Some(pad) = pads.get_in_game_pad() else { return 0 };
+    ALL_KEYS.iter().filter(|&&k| pad.poll_digital_input(k)).fold(0, |m, &k| m | 1 << (k as i32))
+}
+
+/// Digital state of virtual input `index` in each layer, as a compact string:
+/// `M<live><initial>` for the merged VirtualMultiDevice, then `d<i><live><initial>` per source device (pad / keyboard / mouse).
+/// Shows which layer a real press appears in versus ours.
+///
+/// # Safety
+/// Main thread only (task callback).
+pub unsafe fn layers(index: usize) -> String {
+    let Ok(pads) = (unsafe { FD4PadManager::instance() }) else { return String::new() };
+    let Some(pad) = pads.get_in_game_pad() else { return String::new() };
+    let multi = unsafe { pad.pad_device.as_ref().virtual_multi_device.as_ref() };
+    let mut out = format!(
+        "M{}{}",
+        bit(&multi.virtual_input_data, index),
+        bit(&multi.initial_virtual_input_data, index)
+    );
+    for (i, dev) in multi.user_input_devices.iter().enumerate() {
+        let dev = unsafe { dev.as_ref() };
+        out.push_str(&format!(
+            " d{i}{}{}",
+            bit(&dev.virtual_input_data, index),
+            bit(&dev.initial_virtual_input_data, index)
+        ));
+    }
+    out
+}
+
+/// '1' / '0', or '-' when `index` is outside this device's bitset (`DynamicBitset::get` would panic; devices differ in size).
+fn bit(data: &DLVirtualInputData, index: usize) -> char {
+    match data.dynamic_bitset.as_slice().get(index / 32) {
+        Some(row) if (row >> (index & 31)) & 1 == 1 => '1',
+        Some(_) => '0',
+        None => '-',
+    }
 }

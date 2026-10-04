@@ -79,3 +79,18 @@ Open hypotheses (next session):
   compare its bytes across a real tap and an injected one with a bounded memory-diff probe. (2) Mapped input 783 is probably the keyboard
   binding: inject the pad-mapped Circle input and `UserInputKey::BackstepTapped` instead. (3) Skip input: ask the behavior for the
   evasion directly, then check that ER's stamina gating still applies.
+
+## P3 step 2, session 3 results (2026-10-04): injected backstep WORKS (window focused)
+- **Key layout** (`pad::describe`): `Backstep` (12) = mapped 783 → virtual index 270 (AreKeysDown). **`BackstepTapped` (13) = its own
+  mapped input 784 → virtual index 269** (AreKeysDown). Movement: `MovementControl` 759 → 273; `MoveForwards/Backwards/Left/Right` =
+  760..763 → 66/65/64/63 (IsStickMoving, analog).
+- **Real DualSense ◯ tap, per frame:** press frame: polls Backstep **and** BackstepTapped (BackstepTapped only on that one frame), merged
+  device live+initial bit set; `action_requests` = sp_move (0x20) while held, `roll` timer counts. **Release frame: `action_requests` = 0x10000
+  (bit 16 `backstep`, new press), sp_move released**; anim 27010 the next frame. `queue_mode_enabled` = 1, queue empty at idle.
+- **Ours before:** identical except BackstepTapped never polled → on release only sp_move was released, no bit 16, no backstep.
+- **Fix:** hold `Backstep` as before and set `BackstepTapped`'s slot for the **press frame only**. Result: release → bit 16 → anim 27010,
+  for 9- and 30-frame holds (30-frame: backstep starts ~9 frames in while still held, like a real tap). No gating masks touched.
+- **Remaining gate = focus:** in the same run some pulses had the pad poll at 1 (K1 T1) but `action_requests` stayed 0 for the whole press.
+  That happened during load-in and while the user was typing in another window. So `CSChrActionRequestModule`'s read from the pad needs
+  the window to really be foreground; our two-flag spoof (`is_game_window_focused`, `is_back_ground_window`) isn't enough. Next: find that check (P3 step 2, Stage 3).
+- Stamina stayed 101 for both the real and the injected backstep (out of combat, idle); not a difference.
