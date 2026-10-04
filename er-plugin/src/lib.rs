@@ -2,19 +2,25 @@
 //!
 //! Phase 1: the DLL loads, eldenring-rs accepts this game version, and a per-frame task runs.
 //! Phase 2: a link thread keeps the shared-memory heartbeat/handshake with Skyrim going (skyrimxer-protocol).
+//! Phase 3: hidden-but-focused window (window.rs), player state readout (game.rs). Plan: docs/P3-PLAN.md.
 
+mod actions;
 mod bridge;
+mod config;
+mod game;
 mod log;
+mod pad;
+mod window;
 
 use std::ffi::c_void;
 use std::panic;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::sync::atomic::Ordering;
+use std::time::{Duration, Instant};
 
-use eldenring::cs::{CSTaskGroupIndex, CSTaskImp, WorldChrMan};
+use eldenring::cs::{CSTaskGroupIndex, CSTaskImp};
 use eldenring::fd4::FD4TaskData;
-use fromsoftware_shared::{FromStatic, SharedTaskImpExt};
+use fromsoftware_shared::SharedTaskImpExt;
 use windows::Win32::Foundation::HMODULE;
 use windows::Win32::System::LibraryLoader::GetModuleFileNameW;
 
@@ -39,9 +45,9 @@ pub unsafe extern "system" fn DllMain(hmodule: HMODULE, reason: u32, _reserved: 
 }
 
 fn init(module: usize) {
-    let log_dir = module_dir(module).map(|dir| dir.join("logs"));
-    if let Some(dir) = &log_dir {
-        let _ = log::init(dir);
+    let dll_dir = module_dir(module);
+    if let Some(dir) = &dll_dir {
+        let _ = log::init(&dir.join("logs"));
     }
     panic::set_hook(Box::new(|info| error!("panic", "{info}")));
 
@@ -51,6 +57,9 @@ fn init(module: usize) {
         env!("CARGO_PKG_VERSION"),
         std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default()
     );
+    if let Some(dir) = &dll_dir {
+        config::load(dir);
+    }
 
     // eldenring-rs resolves its RVA table here and panics if eldenring.exe isn't a supported version.
     let result = panic::catch_unwind(|| CSTaskImp::wait_for_instance(Duration::MAX));
@@ -64,20 +73,67 @@ fn init(module: usize) {
     // Only after the version check: an unsupported ER never shows up as a peer, so Skyrim stays vanilla.
     bridge::start();
 
-    let player_present = AtomicBool::new(false);
-    task.run_recurring(
-        move |_: &FD4TaskData| {
-            bridge::FRAMES.fetch_add(1, Ordering::Relaxed);
-            let present = unsafe { WorldChrMan::instance() }
-                .map(|world| world.main_player.is_some())
-                .unwrap_or(false);
-            if player_present.swap(present, Ordering::Relaxed) != present {
-                info!("core", "main player {}", if present { "spawned (in world)" } else { "gone (menu/loading)" });
-            }
-        },
-        CSTaskGroupIndex::FrameBegin,
-    );
+    let mut frame = FrameTask::new();
+    let handle = task.run_recurring(move |_: &FD4TaskData| frame.run(), CSTaskGroupIndex::FrameBegin);
+    // Dropping the handle cancels the task; it must live as long as the game.
+    std::mem::forget(handle);
+
+    if actions::selftest_enabled() {
+        let (group, group_name) = actions::inject_group();
+        let mut injector = actions::Injector::new();
+        std::mem::forget(task.run_recurring(move |_: &FD4TaskData| injector.run(), group));
+        let mut watcher = actions::Watcher::new();
+        std::mem::forget(task.run_recurring(move |_: &FD4TaskData| watcher.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
+        info!("action", "SELFTEST dodge: injector in {group_name}, watcher in ChrIns_PostPhysics");
+    }
+    if config::get().probe {
+        let last = actions::probe::GROUPS.len() - 1;
+        for (i, (group, name)) in actions::probe::GROUPS.into_iter().enumerate() {
+            std::mem::forget(task.run_recurring(move |_: &FD4TaskData| actions::probe::sample(name, i == last), group));
+        }
+        info!("probe", "sp_move probe on {} task groups", last + 1);
+    }
     info!("core", "per-frame task registered (FrameBegin)");
+}
+
+/// FrameBegin: frame counter, focus spoof / window hiding, and a player-state line every STATE_LOG_INTERVAL.
+struct FrameTask {
+    in_world: bool,
+    window: window::WindowControl,
+    last_log: Instant,
+    frames_at_last_log: u64,
+}
+
+const STATE_LOG_INTERVAL: Duration = Duration::from_secs(5);
+
+impl FrameTask {
+    fn new() -> Self {
+        Self { in_world: false, window: window::WindowControl::new(), last_log: Instant::now(), frames_at_last_log: 0 }
+    }
+
+    fn run(&mut self) {
+        let frames = bridge::FRAMES.fetch_add(1, Ordering::Relaxed) + 1;
+        // SAFETY: task callbacks run on the game's main thread.
+        let player = unsafe { game::main_player() };
+        let in_world = player.is_some();
+        if in_world != self.in_world {
+            self.in_world = in_world;
+            match &player {
+                Some(p) => info!("core", "main player spawned (in world at {})", p.current_block_id),
+                None => info!("core", "main player gone (menu/loading)"),
+            }
+        }
+        self.window.frame(in_world);
+
+        let elapsed = self.last_log.elapsed();
+        if elapsed >= STATE_LOG_INTERVAL {
+            let fps = (frames - self.frames_at_last_log) as f64 / elapsed.as_secs_f64();
+            let state = player.map_or_else(|| "no player".to_string(), |p| game::snapshot(p).line());
+            info!("state", "frame={frames} fps={fps:.1} {state}");
+            self.last_log = Instant::now();
+            self.frames_at_last_log = frames;
+        }
+    }
 }
 
 /// Directory containing this DLL, so logs land next to the build output regardless of the game's working directory.

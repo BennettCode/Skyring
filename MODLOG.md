@@ -4,6 +4,16 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: Phase 3 started: ER runs hidden; dodge injection research
+- **Changed:** P3 plan (`docs/P3-PLAN.md`). `er-plugin`: `window.rs` (each frame: focus flags spoofed; hide the window while the player is in
+  the world, show it again at the title), `game.rs` (player snapshot: HP/FP/stamina, anim, i-frame/dodging/hyperarmor flags, poise, position,
+  yaw, map), `config.rs` (`skyrimxer_er.cfg` next to the DLL), `actions.rs` + `pad.rs` (dodge self-test + frame-phase probe, dev-only, off by default).
+  `tools/dev.ps1`: `-Restart`, `-ErVisible`, `-ErSelfTest`, `-ErInjectGroup`, `-ErProbe`. `tools/build.ps1`: retries the DLL copy after a kill.
+- **Tested in-game (ER only):** the window hides on load-in and ER keeps running at 60 fps hidden; the state line reads stamina 101/101, HP 455/455,
+  map m10_01_00_00. Probe of a real dodge press recorded where ER sets its action bits (`docs/research/elden-ring-input.md`).
+- **Result:** step 1 ✔. Step 2 (injected dodge) ✘ so far: writing `action_requests` is overwritten by the engine; a held virtual pad key is seen
+  by ER's pad poll but doesn't reach the player's action requests. Next hypotheses are in the research note.
+
 ## 2026-10-04: Phase 2 complete (shared memory + heartbeat)
 - **Changed:** Protocol schema v1 (`protocol/schema/messages.toml`) + generator `tools/protogen` (rejects implicit padding, checks the region
   map, emits size/offset asserts for C++ and Rust, `--check` stale test). Rust crate `skyrimxer-protocol` (region, SPSC rings, link state

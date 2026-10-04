@@ -8,6 +8,10 @@
   powershell -ExecutionPolicy Bypass -File tools/dev.ps1                      # everything, both games
   powershell -ExecutionPolicy Bypass -File tools/dev.ps1 -Target er -Game eldenring
   powershell -ExecutionPolicy Bypass -File tools/dev.ps1 -NoLaunch            # build + deploy only
+  powershell -ExecutionPolicy Bypass -File tools/dev.ps1 -Target er -Game eldenring -Restart -ErSelfTest dodge
+.NOTES
+  -Restart stops the game(s) about to be launched first (ER is hidden in-world, so it gets Stop-Process; no clean Bye).
+  -ErVisible / -ErSelfTest / -ErInjectGroup / -ErProbe are written to build/er-plugin/skyrimxer_er.cfg on every launch (er-plugin/src/config.rs).
 #>
 [CmdletBinding()]
 param(
@@ -16,7 +20,14 @@ param(
     [ValidateSet('both', 'eldenring', 'skyrim')]
     [string]$Game = 'both',
     [switch]$NoLaunch,
-    [int]$WaitSeconds = 180
+    [int]$WaitSeconds = 180,
+    [switch]$Restart,
+    [switch]$ErVisible,
+    [ValidateSet('', 'dodge')]
+    [string]$ErSelfTest = '',
+    [ValidateSet('', 'wprep', 'padstep', 'ailogic', 'prebehavior')]
+    [string]$ErInjectGroup = '',
+    [switch]$ErProbe
 )
 
 Set-StrictMode -Version Latest
@@ -26,6 +37,21 @@ $paths = Get-ProjectPaths
 $timer = [Diagnostics.Stopwatch]::StartNew()
 
 function Step([string]$Name) { Write-Host ("`n[{0,4}s] == {1} ==" -f [int]$timer.Elapsed.TotalSeconds, $Name) -ForegroundColor Cyan }
+
+function Stop-Game([string]$Name) {
+    $p = Get-Process -Name $Name -ErrorAction SilentlyContinue
+    if (-not $p) { return }
+    Write-Host "stopping $Name (pid $($p.Id -join ', '))"
+    $p | ForEach-Object { if ($_.MainWindowHandle -ne 0) { [void]$_.CloseMainWindow() } }
+    $p | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
+    Get-Process -Name $Name -ErrorAction SilentlyContinue | Stop-Process -Force
+    Get-Process -Name $Name -ErrorAction SilentlyContinue | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
+}
+
+if ($Restart -and -not $NoLaunch) {
+    if ($Game -in 'both', 'skyrim') { Stop-Game 'SkyrimSE' }
+    if ($Game -in 'both', 'eldenring') { Stop-Game 'eldenring' }
+}
 
 Step "build ($Target)"
 & (Join-Path $PSScriptRoot 'build.ps1') -Target $Target
@@ -42,6 +68,11 @@ if ($NoLaunch) { Step "done (no launch) in $([int]$timer.Elapsed.TotalSeconds)s"
 
 if ($Game -in 'both', 'eldenring' -and (Get-Process -Name eldenring -ErrorAction SilentlyContinue)) {
     throw 'Elden Ring is already running (it would not load the new DLL). Quit it and rerun.'
+}
+
+if ($Game -in 'both', 'eldenring') {
+    $cfg = @('# written by tools/dev.ps1 on every launch', "visible=$([int][bool]$ErVisible)", "selftest=$ErSelfTest", "inject_group=$ErInjectGroup", "probe=$([int][bool]$ErProbe)")
+    Set-Content -Path (Join-Path $paths.BuildDir 'er-plugin\skyrimxer_er.cfg') -Value $cfg -Encoding ascii
 }
 
 $launchedAt = Get-Date

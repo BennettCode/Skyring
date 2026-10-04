@@ -26,7 +26,7 @@ Tick boxes as you go. Keep each phase small. If a phase grows, split it.
 **Accept:** the logs show the handshake, heartbeats and a clean timeout.
 
 ## P3: One value across, then the loop
-- [ ] ER: window hidden + focus spoof. Test character warped to the arena
+- [x] ER: window hidden + focus spoof (60 fps hidden, 2026-10-04). Arena = test character parked in m10_01_00_00 (no warp; user presses Continue)
 - [ ] Skyrim → ER: forward one input (dodge button). ER performs a roll. ER log: stamina before/after
 - [ ] ER → Skyrim: PlayerState slot (stamina, action_state, iframe). Skyrim logs it at 1-in-30 frames
 - [ ] Coordinate/yaw conversion test written and passing

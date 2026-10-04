@@ -50,7 +50,12 @@ function Build-Er {
     New-Item -ItemType Directory -Force $out | Out-Null
     foreach ($name in 'skyrimxer_er.dll', 'skyrimxer_er.pdb') {
         $src = Join-Path $paths.Repo "target\release\$name"
-        if (Test-Path -LiteralPath $src) { Copy-Item -LiteralPath $src -Destination $out -Force }
+        if (-not (Test-Path -LiteralPath $src)) { continue }
+        # A just-killed eldenring.exe can keep the DLL locked for a moment, so retry before failing.
+        for ($try = 1; ; $try++) {
+            try { Copy-Item -LiteralPath $src -Destination $out -Force -ErrorAction Stop; break }
+            catch { if ($try -ge 20) { throw "$name is locked (is Elden Ring still running?): $($_.Exception.Message)" }; Start-Sleep -Milliseconds 500 }
+        }
     }
     Write-Host "OK: $(Join-Path $out 'skyrimxer_er.dll')" -ForegroundColor Green
 }
