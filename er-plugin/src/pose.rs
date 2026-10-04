@@ -32,7 +32,7 @@ const MAX_LOG_LINES: u32 = 100;
 
 // ---- safe memory access --------------------------------------------------------------------------------------------
 
-fn plausible(addr: usize) -> bool {
+pub(crate) fn plausible(addr: usize) -> bool {
     addr > 0x10000 && addr < 0x7FFF_FFFF_0000 && addr % 8 == 0
 }
 
@@ -48,12 +48,12 @@ fn read_into(addr: usize, buf: &mut [u8]) -> bool {
     ok && n == buf.len()
 }
 
-fn read_bytes(addr: usize, len: usize) -> Option<Vec<u8>> {
+pub(crate) fn read_bytes(addr: usize, len: usize) -> Option<Vec<u8>> {
     let mut buf = vec![0u8; len];
     read_into(addr, &mut buf).then_some(buf)
 }
 
-fn read_u64(addr: usize) -> Option<u64> {
+pub(crate) fn read_u64(addr: usize) -> Option<u64> {
     let mut b = [0u8; 8];
     read_into(addr, &mut b).then(|| u64::from_le_bytes(b))
 }
@@ -63,20 +63,20 @@ fn read_u32(addr: usize) -> Option<u32> {
     read_into(addr, &mut b).then(|| u32::from_le_bytes(b))
 }
 
-fn u64_at(b: &[u8], o: usize) -> u64 {
+pub(crate) fn u64_at(b: &[u8], o: usize) -> u64 {
     u64::from_le_bytes(b[o..o + 8].try_into().unwrap())
 }
 
-fn u32_at(b: &[u8], o: usize) -> u32 {
+pub(crate) fn u32_at(b: &[u8], o: usize) -> u32 {
     u32::from_le_bytes(b[o..o + 4].try_into().unwrap())
 }
 
-fn f32s(b: &[u8]) -> Vec<f32> {
+pub(crate) fn f32s(b: &[u8]) -> Vec<f32> {
     b.chunks_exact(4).map(|c| f32::from_le_bytes(c.try_into().unwrap())).collect()
 }
 
 /// A NUL-terminated name of 2..63 plain characters (letters, digits, `_`, space, `[]`, `.`, `-`).
-fn read_name(addr: usize) -> Option<String> {
+pub(crate) fn read_name(addr: usize) -> Option<String> {
     if addr < 0x10000 || addr > 0x7FFF_FFFF_FFFF {
         return None;
     }
@@ -532,15 +532,15 @@ fn sample(s: &mut Sampled) {
 // ChrIns+0x398 → CSFD4LocationHkaPoseImporter; +0x48 hkaSkeleton* (150 bones for c0000), +0x50 hkArray local pose,
 // +0x60 hkArray model pose (hkQsTransform). hkaSkeleton +0x30 bones (hkaBone 16 B, name first), +0x40 reference pose.
 
-const IMPORTER: usize = 0x398;
-const POSE_SKELETON: usize = 0x48;
+pub(crate) const IMPORTER: usize = 0x398;
+pub(crate) const POSE_SKELETON: usize = 0x48;
 const POSE_LOCAL: usize = 0x50;
-const POSE_MODEL: usize = 0x60;
+pub(crate) const POSE_MODEL: usize = 0x60;
 /// Bones logged per sample: Pelvis, L_Thigh, Spine, Head, R_UpperArm (indices in the c0000 skeleton).
 const KEY_BONES: [(usize, &str); 5] = [(8, "Pelvis"), (10, "L_Thigh"), (47, "Spine"), (86, "Head"), (97, "R_UpperArm")];
 
 /// (data pointer, size) of the hkArray at `addr`.
-fn hk_array(addr: usize) -> Option<(usize, usize)> {
+pub(crate) fn hk_array(addr: usize) -> Option<(usize, usize)> {
     let b = read_bytes(addr, 16)?;
     Some((u64_at(&b, 0) as usize, u32_at(&b, 8) as usize))
 }

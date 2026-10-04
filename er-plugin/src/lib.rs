@@ -14,6 +14,7 @@ mod log;
 mod pad;
 mod park;
 mod pose;
+mod pose_stream;
 mod remote;
 mod window;
 
@@ -113,6 +114,9 @@ fn init(module: usize) {
         },
         CSTaskGroupIndex::ChrIns_PostPhysics,
     ));
+    let mut pose_stream = pose_stream::PoseStream::new();
+    std::mem::forget(task.run_recurring(move |_: &FD4TaskData| pose_stream.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
+    info!("core", "PoseState publisher in ChrIns_PostPhysics");
     let mut combat_watch = combat::CombatWatch::new();
     std::mem::forget(task.run_recurring(move |_: &FD4TaskData| combat_watch.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
     let force = config::get().force_combat.as_str();

@@ -4,6 +4,15 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: POSE-PLAN step 4, ER pose writer (ER only)
+- **Changed:** `protocol/src/rig.rs` (new): quaternion math, ER → Skyrim model basis as a matrix change (handles ER's left-handed axes),
+  bind deltas, model-space compose; 7 unit tests. `er-plugin/src/pose_stream.rs` (new): resolves the skeleton once (20 bones by name,
+  bind pose from the reference pose + parents, basis measured on it), then every frame in ChrIns_PostPhysics writes PoseState (deltas
+  in Skyrim's basis, pelvis offset, yaw, Active while a dodge animation plays). `pose.rs` helpers shared, `park::is_dodge_anim` shared.
+- **Tested:** two ER-only self-test runs (user pressed Continue). Basis right −X / forward −Z / up +Y, det −1. Backsteps: Active 81
+  frames, pelvis 56°, drop 0.54 m. Rolls in 4 directions: all anim 27110 (direction is in yaw), Active 101 frames, pelvis 179°, drop
+  0.84 m, write ≤ 0.27 ms. `cargo test` green. Skyrim doesn't apply the pose yet (step 5). Findings: `docs/research/elden-ring-pose.md`.
+
 ## 2026-10-04: POSE-PLAN step 3, protocol v4 PoseState (no game)
 - **Changed:** protocol v4 (`Local\SkyrimXER_v4`): seqlock slot `PoseState` at 0x400 (368 B: flags `PoseFlag::Active`, frame, time_ms,
   bone_count, yaw, pelvis_offset[3], rot[4 × 20]), enum `PoseBone` (20 bones, parents first), constant `POSE_BONE_COUNT`. Regenerated.

@@ -57,3 +57,18 @@ Index (parent):
 | Weapons | L_Weapon 78 (61), R_Weapon 119 (102) |
 
 The spine hangs off RootPos through RootRotY/RootRotXZ, so it is not a child of the pelvis. The rest are fingers, twist, skirt, armour and mantle helpers, foot IK targets and 20 `Xtra_Multipurpose` bones. The full name list and tree are written to `build/er-plugin/logs/pose_probe.txt` by the probe.
+
+## Streaming it (POSE-PLAN step 4, 2026-10-04)
+`er-plugin/src/pose_stream.rs` writes PoseState every frame in `ChrIns_PostPhysics`. It builds the bind pose in model space from the
+skeleton's reference pose and parent array, then sends `q_model · q_bind⁻¹` per mapped bone. Measured on the c0000 bind:
+- **Model axes:** right = −X (R_Thigh − L_Thigh = (−0.207, 0, 0)), forward = −Z (toes ahead of the feet), up = +Y. Left-handed
+  (basis det −1), the same as the world axes in `docs/research/coordinates.md`. Head − feet leans 2.2° back, so up is fixed to +Y.
+- **Bind is an A-pose:** upper arms point 45° down and out (Skyrim basis: L_UpperArm (−0.707, −0.016, −0.707)). Skyrim's own bind will
+  differ, so step 5 aligns the segments. Unit segment directions in Skyrim's basis (x right, y forward, z up):
+  Pelvis/Spine/Spine1 (0, 0, 1), Spine2 (0, −0.116, 0.993), Neck (0, 0.175, 0.985), Clavicles (±1, 0, 0),
+  UpperArms (±0.707, −0.016, −0.707), Forearms (±0.705, 0.097, −0.703), Hands (±0.735, 0.107, −0.670),
+  Thighs (0, 0.020, −1.000), Calves (0, −0.169, −0.986), Feet (0, 0.774, −0.634). Bind pelvis is 0.86 m above the feet, head 1.45 m.
+- **Rolls** (`-ErSelfTest roll`): every direction plays anim **27110**; ER first turns the body toward the roll, so the direction
+  travels in `yaw`, not in the pose. Per roll: dodge anim for 101 frames (≈ 1.7 s, recovery included), pelvis turn up to 179°
+  (it tumbles), pelvis drop up to 0.84 m. Backsteps (27010): 81 frames, 56°, 0.54 m.
+- **Cost:** the write takes ≤ 0.27 ms (max per roll, three ReadProcessMemory calls + the snapshot).

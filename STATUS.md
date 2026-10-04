@@ -36,7 +36,7 @@ window come back every frame; coordinate conversion measured (`protocol/src/coor
 ## Next 3 steps (P4, `docs/P4-PLAN.md`)
 1. Step 5 roll animation by ER pose streaming (`docs/POSE-PLAN.md`): step 1 done (ER pose found, `docs/research/elden-ring-pose.md`);
    step 2 done (bone writes after PlayerCharacter::Update show on screen); step 3 done (protocol v4 PoseState slot);
-   next the ER pose writer + retarget math (step 4).
+   step 4 done (ER writes the pose every frame, Active during dodges); next the Skyrim applier (step 5).
 2. Step 6: Skyrim's stamina bar mirrors ER's.
 3. Step 7: NPC hits during ER i-frames are cancelled.
 

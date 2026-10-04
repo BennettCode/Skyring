@@ -6,6 +6,7 @@
 //! - [`link`]: the per-side state machine (heartbeat, handshake, timeout). `skse/src/bridge/Link.cpp` mirrors it in C++.
 //! - [`coords`]: Skyrim ⇄ ER deltas in the character frame (measured conventions). `skse/src/bridge/Coords.h` mirrors it.
 //! - [`slot`]: seqlock slots (latest-value state lanes for the game threads). `skse/src/bridge/Slot.h` mirrors it.
+//! - [`rig`]: pose retarget math (quaternions, ER → Skyrim model basis, bind deltas).
 
 #[allow(dead_code)]
 pub mod proto {
@@ -15,6 +16,7 @@ pub mod proto {
 pub mod coords;
 pub mod link;
 pub mod region;
+pub mod rig;
 pub mod ring;
 pub mod slot;
 

@@ -27,7 +27,7 @@ pub fn virtual_pos() -> Option<[f32; 3]> {
     *VIRTUAL.lock().unwrap_or_else(|p| p.into_inner())
 }
 
-fn is_dodge_anim(anim: i32) -> bool {
+pub(crate) fn is_dodge_anim(anim: i32) -> bool {
     anim >= 0 && (anim % 1_000_000) / 1000 == 27
 }
 
