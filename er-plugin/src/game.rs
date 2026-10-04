@@ -14,7 +14,8 @@ pub struct Snapshot {
     pub max_stamina: i32,
     /// Animation currently playing (TAE queue read slot).
     pub anim_id: i32,
-    /// TAE PERFECT_INVINCIBILITY: the i-frame window.
+    /// I-frame window: TAE FLAG_AS_DODGING or one of the invincibility bits. Rolls set FLAG_AS_DODGING for 26–27 frames (60 fps) from
+    /// the roll's first frame and no hit lands while it is set; backsteps set nothing (docs/research/elden-ring-state.md).
     pub iframe: bool,
     /// TAE FLAG_AS_DODGING.
     pub dodging: bool,
@@ -52,7 +53,10 @@ pub fn snapshot(player: &PlayerIns) -> Snapshot {
         stamina: m.data.stamina,
         max_stamina: m.data.max_stamina,
         anim_id,
-        iframe: flags.perfect_invincibility(),
+        iframe: flags.dodging()
+            || flags.perfect_invincibility()
+            || flags.invincible_excluding_throw_attacks_defender()
+            || flags.pve_only_iframes(),
         dodging: flags.dodging(),
         hyperarmor: flags.super_armor(),
         poise: m.super_armor.sa_durability,

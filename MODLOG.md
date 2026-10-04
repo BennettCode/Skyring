@@ -4,6 +4,17 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P3: i-frame window found (rolls set FLAG_AS_DODGING)
+- **Changed:** `er-plugin/src/game.rs`: `iframe` = `action_modifiers_flags` bit 1 (`dodging`, TAE FLAG_AS_DODGING) or an invincibility bit
+  (0/3/5), was bit 0 only. `actions.rs`: the Watcher logs HP, opens a watch window on every dodge animation (real presses too), and logs every HP
+  loss with the modifier bits and the frame offset into the last dodge (`[probe] HIT`). Word-diff probe trimmed to the action-flag module.
+- **Tested in-game (ER only):** (1) self-test backsteps out of combat with a special-effect diff and a per-task-group sample of the modifier bits:
+  no effect and no bit during backsteps. (2) Combat run: a backstep-while-walking became a roll and showed bit 1 for ~27 frames.
+  (3) User play test, ~20 rolls + some backsteps against an enemy: bit 1 set for 26–27 frames from each roll's first frame, **0 of 46 hits
+  landed while it was set**; backsteps set nothing and were hit at +1..+34 frames. `tests/run-tests.ps1` green.
+- **Result:** ✔ the i-frame source is found and published as `PlayerFlag::IFrame`. Skyrim's Sprint injects a backstep (no i-frames), so the
+  both-games IFrame check moves to step 5 (roll direction). Details: `docs/research/elden-ring-state.md`.
+
 ## 2026-10-04: P3: i-frame search attempt 2 (not found) → handoff
 - **Changed:** `er-plugin/src/actions.rs` Watcher: the dev-only word-diff probe now covers three regions (`action_flag`, `event` = CSChrEventModule,
   `chr_flags` = ChrIns+0x1c4..0x1cb), and the per-frame `[action]` line shows raw `ev_flags`.

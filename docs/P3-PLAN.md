@@ -14,8 +14,8 @@ ER character dodges (ER's own gating and stamina) → ER state (stamina, i-frame
 **Research findings** (eldenring-rs @ 59fbd3b; SkyCraft). These go into `docs/research/elden-ring-input.md` and a new `docs/research/elden-ring-state.md`:
 - Inject: `main_player.chr_ins.modules.action_request.action_requests.set_sp_move(true)`. The module updates during `ChrIns_PreBehavior`.
   Our write timing relative to the engine's own fill is **unknown → experiment** (step 2).
-- No stick/direction field in that module. With no movement input, `sp_move` = **backstep** (still costs stamina and has i-frames, which is enough
-  for the P3 accept). Steering = virtual analog `MoveForwards/Left/...` via `DLUserInputDeviceImpl::set_virtual_analog_state`. That's step 5 (stretch).
+- No stick/direction field in that module. With no movement input, `sp_move` = **backstep**. It costs stamina in combat but sets **no i-frame flag**
+  (measured, see step 4), so the i-frame part of the accept needs a roll. Steering = virtual analog `MoveForwards/Left/...` via `DLUserInputDeviceImpl::set_virtual_analog_state`. That's step 5 (required for the accept).
 - State: `modules.data` (`hp/max_hp/fp/max_fp/stamina/max_stamina` i32). Anim = `modules.time_act.anim_queue[read_idx].anim_id`.
   I-frames = `modules.action_flag.action_modifiers_flags` (`perfect_invincibility` b0, `dodging` b1, `super_armor` b8).
   Poise = `modules.super_armor.sa_durability(_max)`. Transform = `modules.physics.position/orientation`. Map = `PlayerIns.current_block_id`.
@@ -81,6 +81,9 @@ ER character dodges (ER's own gating and stamina) → ER state (stamina, i-frame
 - **Result (2026-10-04):** the loop works in both games (keyboard Sprint in Skyrim; Skyrim gets no DualSense without Steam Input, so the
   controller is deferred). Tap → ER backstep (27010), seen in Skyrim's log ~170 ms after the press; stale input releases the key.
   Not shown yet: stamina stays 101 and no i-frame flag is set during backsteps out of combat (`docs/research/elden-ring-state.md`).
+- **I-frames (2026-10-04, attempt 3):** `PlayerFlag::IFrame` = `action_modifiers_flags` bit 1 (FLAG_AS_DODGING) or an invincibility bit.
+  Rolls set bit 1 for 26–27 frames from the roll's first frame and no hit landed while it was set (46 hits logged in a play test). Backsteps set
+  nothing and get hit, so Skyrim only sees `IFrame` once step 5 makes the hidden ER character roll.
 
 ### 5. Roll direction + coordinate test (finishes the ROADMAP P3 list)
 - Skyrim forward/strafe user events + gamepad move stick → `move_x/move_y`. ER: `set_virtual_analog_state` on MoveForwards/… at `PadStep`

@@ -31,7 +31,7 @@ Tick boxes as you go. Keep each phase small. If a phase grows, split it.
 - [x] Skyrim → ER: Sprint (keyboard, Left Shift) is forwarded as Dodge. The hidden ER character backsteps by ER's own rules (2026-10-04)
 - [x] ER → Skyrim: PlayerState every frame. Skyrim logs stamina/anim edges and shows an on-screen summary per dodge (2026-10-04)
 - [x] Stamina drop visible in Skyrim's log with timestamps (in combat: 136→128; out of combat ER charges no stamina for dodges)
-- [ ] I-frame window: find where ER stores dodge invincibility (not in the action-flag module, see `docs/research/elden-ring-state.md`)
+- [x] I-frame window found: ER's dodge flag (TAE FLAG_AS_DODGING) is set for ~27 frames of every roll and no hit lands while it's set. Backsteps have none, so Skyrim sees it once rolls work (2026-10-04, `docs/research/elden-ring-state.md`)
 - [ ] Roll direction from Skyrim's movement input + coordinate/yaw conversion test written and passing
 **Accept:** pressing dodge in Skyrim → ER rolls → Skyrim's log shows the stamina drop and the i-frame window with timestamps.
 

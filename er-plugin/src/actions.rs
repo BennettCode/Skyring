@@ -58,20 +58,13 @@ unsafe fn raw_words(ptr: *const u8, bytes: usize) -> Vec<u32> {
     (0..bytes / 4).map(|i| unsafe { std::ptr::read_unaligned(ptr.add(i * 4).cast::<u32>()) }).collect()
 }
 
-/// The regions the Watcher diffs: (name, words to skip at the start (vtable/owner pointers), words).
-fn probe_regions(player: &eldenring::cs::PlayerIns) -> [(&'static str, usize, Vec<u32>); 3] {
-    use eldenring::cs::{CSChrActionFlagModule, CSChrEventModule};
-    let m = &player.chr_ins.modules;
-    let flag: &CSChrActionFlagModule = &m.action_flag;
-    let event: &CSChrEventModule = &m.event;
-    // SAFETY: each region is a live object's own bytes (the 8 chr_flags bytes start at ChrIns+0x1c4 and run through 0x1cb).
-    unsafe {
-        [
-            ("action_flag", 4, raw_words((flag as *const CSChrActionFlagModule).cast(), size_of::<CSChrActionFlagModule>())),
-            ("event", 4, raw_words((event as *const CSChrEventModule).cast(), size_of::<CSChrEventModule>())),
-            ("chr_flags", 0, raw_words((&raw const player.chr_ins.chr_flags1c4).cast(), 8)),
-        ]
-    }
+/// The regions the Watcher diffs: (name, words to skip at the start (vtable/owner pointers), words). `CSChrEventModule` and the
+/// ChrIns flag bytes were diffed in attempt 2 and ruled out (docs/research/elden-ring-state.md).
+fn probe_regions(player: &eldenring::cs::PlayerIns) -> [(&'static str, usize, Vec<u32>); 1] {
+    use eldenring::cs::CSChrActionFlagModule;
+    let flag: &CSChrActionFlagModule = &player.chr_ins.modules.action_flag;
+    // SAFETY: the region is a live object's own bytes.
+    unsafe { [("action_flag", 4, raw_words((flag as *const CSChrActionFlagModule).cast(), size_of::<CSChrActionFlagModule>()))] }
 }
 
 /// Runs in `inject_group()`. Self-test only for now; P3 step 4 feeds it from Skyrim's InputState.
@@ -127,16 +120,65 @@ impl Injector {
 /// Runs in ChrIns_PostPhysics (after behavior): logs what the injected press did, and which probed words changed.
 pub struct Watcher {
     last: Option<game::Snapshot>,
-    last_words: Option<[(&'static str, usize, Vec<u32>); 3]>,
+    last_words: Option<[(&'static str, usize, Vec<u32>); 1]>,
     last_ev_flags: u8,
+    hits: HitLog,
+}
+
+/// Cap for the hit lines (i-frame timing test), per session.
+const MAX_HIT_LINES: u32 = 300;
+static HIT_LINES: AtomicU32 = AtomicU32::new(0);
+
+/// I-frame timing test: opens a watch window on every dodge animation the player starts (real presses too, not only injected ones),
+/// and logs every HP loss with the modifier bits and how far into the last dodge it landed. Hits that never land while a bit is set =
+/// that bit is the i-frame window.
+#[derive(Default)]
+struct HitLog {
+    last_anim: i32,
+    last_hp: i32,
+    /// (frame, anim) of the last dodge-family animation start (anim id 27xxx without the group prefix: backstep 27010, rolls 271xx).
+    dodge: Option<(u64, i32)>,
+}
+
+impl HitLog {
+    fn run(&mut self, player: &eldenring::cs::PlayerIns, s: &game::Snapshot) {
+        let frame = crate::bridge::FRAMES.load(Ordering::Relaxed);
+        if s.anim_id != self.last_anim && (s.anim_id % 1_000_000) / 1000 == 27 {
+            self.dodge = Some((frame, s.anim_id));
+            if WATCH_LEFT.load(Ordering::Relaxed) == 0 {
+                watch(frame);
+                crate::info!("action", "frame={frame} dodge anim {} started: watch window opened", s.anim_id);
+            }
+        }
+        if s.hp < self.last_hp && s.hp > 0 && HIT_LINES.fetch_add(1, Ordering::Relaxed) < MAX_HIT_LINES {
+            // SAFETY: ChrActionModifiersFlags is a one-field bitfield over a u64.
+            let mods: u64 = unsafe { std::mem::transmute(player.chr_ins.modules.action_flag.action_modifiers_flags) };
+            let dodge = self.dodge.map_or("none".to_string(), |(f, a)| format!("{a} +{}", frame - f));
+            crate::info!(
+                "probe",
+                "frame={frame} HIT hp {}→{} anim={} mods={mods:#x} dodging={} last_dodge={dodge}",
+                self.last_hp,
+                s.hp,
+                s.anim_id,
+                s.dodging as u8
+            );
+        }
+        self.last_anim = s.anim_id;
+        self.last_hp = s.hp;
+    }
 }
 
 impl Watcher {
     pub fn new() -> Self {
-        Self { last: None, last_words: None, last_ev_flags: 0 }
+        Self { last: None, last_words: None, last_ev_flags: 0, hits: HitLog::default() }
     }
 
     pub fn run(&mut self) {
+        // SAFETY: main thread.
+        if let Some(player) = unsafe { game::main_player() } {
+            let s = game::snapshot(player);
+            self.hits.run(player, &s);
+        }
         let left = WATCH_LEFT.load(Ordering::Relaxed);
         if left == 0 {
             self.last = None;
@@ -156,15 +198,21 @@ impl Watcher {
         let changed = match &self.last {
             None => true,
             Some(l) => {
-                l.anim_id != s.anim_id || l.iframe != s.iframe || l.dodging != s.dodging || l.stamina != s.stamina || ev_flags != self.last_ev_flags
+                l.anim_id != s.anim_id
+                    || l.iframe != s.iframe
+                    || l.dodging != s.dodging
+                    || l.stamina != s.stamina
+                    || l.hp != s.hp
+                    || ev_flags != self.last_ev_flags
             }
         };
         self.last_ev_flags = ev_flags;
         if changed || pressing {
             crate::info!(
                 "action",
-                "frame={frame} +{since}: stamina={} anim={} iframe={} dodging={} ev_flags={ev_flags:#04x} | requests.sp_move={} \
+                "frame={frame} +{since}: hp={} stamina={} anim={} iframe={} dodging={} ev_flags={ev_flags:#04x} | requests.sp_move={} \
                  new_presses.sp_move={} readback_new.sp_move={} roll_timer={:.3}",
+                s.hp,
                 s.stamina,
                 s.anim_id,
                 s.iframe as u8,
@@ -363,3 +411,4 @@ pub mod probe {
         );
     }
 }
+

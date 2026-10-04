@@ -59,7 +59,8 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
 - Fail-safe: if either game closes, crashes or pauses, the other one notices within a moment and stops acting on stale input.
 
 **Not working yet:** your Skyrim character doesn't move or fight differently yet (that's P4/P5). **Controller support isn't added yet:**
-Skyrim is keyboard-and-mouse only for now (details below). Elden Ring's i-frame window isn't read yet.
+Skyrim is keyboard-and-mouse only for now (details below). Sprint triggers Elden Ring's backstep, which has no i-frames. The roll's i-frame
+window is already read, but it only reaches Skyrim once rolls work (direction from your movement keys comes next).
 
 ## Progress
 
@@ -68,7 +69,7 @@ Skyrim is keyboard-and-mouse only for now (details below). Elden Ring's i-frame 
 | P0 | Tooling and version research | ✅ done |
 | P1 | Both plugins load and log | ✅ done |
 | P2 | Shared memory link: handshake, heartbeats, crash fail-safe | ✅ done |
-| **P3** | **Dodge in Skyrim → Elden Ring dodges → its stamina comes back** | 🔄 almost done: hidden ER at 60 fps ✅, Skyrim Sprint → ER dodge ✅, stamina back in Skyrim ✅, on-screen feedback ✅, i-frame window 🔧, roll direction ⏳ |
+| **P3** | **Dodge in Skyrim → Elden Ring dodges → its stamina comes back** | 🔄 almost done: hidden ER at 60 fps ✅, Skyrim Sprint → ER dodge ✅, stamina back in Skyrim ✅, on-screen feedback ✅, i-frame window found ✅, roll direction ⏳ |
 | P4 | Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support | ⏳ |
 | P5 | Damage both ways uses Elden Ring's math (poise, stagger) | ⏳ |
 | P6 | Elden Ring-style HUD | ⏳ |

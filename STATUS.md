@@ -32,18 +32,17 @@ Both plugins share the region `Local\SkyrimXER_v2`, handshake, exchange heartbea
 2. ~~Injected dodge in hidden ER~~ ✔ (`er-plugin/src/actions.rs`, `pad.rs`, `window.rs`).
 3. ~~Protocol v2 (InputState + PlayerState seqlock slots)~~ ✔ (`protocol/src/slot.rs`, `skse/src/bridge/Slot.h`).
 4. ~~Wire the loop~~ ✔ both games: Skyrim Sprint (keyboard) → hidden ER backsteps → anim/state back in Skyrim's log (~170 ms).
-   P3 accept: stamina drop ✔ in combat (136→128 in Skyrim's log and HUD); the i-frame flag is still not found (`docs/research/elden-ring-state.md`).
+   P3 accept: stamina drop ✔ in combat (136→128 in Skyrim's log and HUD). I-frame source ✔ found: `action_modifiers_flags` bit 1
+   (FLAG_AS_DODGING), set ~27 frames per **roll**; backsteps have none (`docs/research/elden-ring-state.md`).
+5. **Next: roll direction.** Skyrim movement keys → `InputState.move_x/move_y` → ER virtual analog `MoveForwards/Backwards/Left/Right`
+   at PadStep, so Sprint + direction = roll. Then the both-games check (Skyrim log `IFrame on/off`, HUD) closes the P3 accept, then the
+   coordinate/yaw test.
 
 ## Handoff notes
-**I-frame search: stuck after 2 attempts (2026-10-04).** Goal: set `PlayerFlag::IFrame` during ER's dodge i-frames (the last P3 accept item).
-Tried: (1) word-diff of `CSChrActionFlagModule` every frame of a backstep, out of combat and in combat; (2) the same for `CSChrEventModule`
-(eldenring-rs "iframes" bit) and the ChrIns flag bytes. Neither shows a window (`docs/research/elden-ring-state.md`). Hypothesis: dodge
-invincibility isn't a persistent flag our PostPhysics read can see. It may be applied through a special effect, or checked inside the
-hit pipeline from the TAE state. Next, in order:
-1. **Special effects:** log the player's active SpEffect list every frame of the dodge window (an effect id appearing for ~10–15 frames = i-frames).
-2. **Timing test in combat:** log the frame of every HP loss relative to the last backstep start over many backsteps (`-ErVisible`, enemy aggroed).
-   Hits never land in frames +a..+b → that's the window, so IFrame = the anim is a backstep/roll and frames are in [a, b] (anim-based, documented as such).
-3. **Upstream:** check newer eldenring-rs revisions / community ER docs for a mapped dodge-invincibility field (notes only, no copied code).
+**I-frame search solved (2026-10-04, attempt 3).** Attempts 1–2 diffed memory only during *backsteps*, which set no invincibility at
+all. A roll sets `action_modifiers_flags` bit 1 for 26–27 frames; a play test with 46 logged hits had none land while it was set.
+`game.rs` publishes it as `PlayerFlag::IFrame`. The Watcher's `[probe] HIT` lines (every HP loss with bits + frame offset into the last
+dodge) stay as a tool for P4/P5.
 
 **P3 step 3 done (2026-10-04).** Protocol v2 slots are in, and the tests/fake peers exercise them. The plugins were only rebuilt against v2
 (no behaviour change). Step 4 hands `Link::shared()` / `Link::Shared()` to the game threads and moves the peers' `PlayerWatch` edge
