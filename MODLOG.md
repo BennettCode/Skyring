@@ -4,6 +4,12 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: Docs: README + roadmap refresh for the GitHub page
+- **Changed:** README: author's "About this project" section, "What works today" / "Not working yet", input badge, Tested setup says
+  keyboard + mouse (**controller support not added yet**, why, and that it's planned for P4), dev-loop commands updated. ROADMAP: P3
+  ticks match reality, controller support added to P4, installer added to P8, new "Beyond the roadmap: ideas" section.
+- **Tested:** docs only.
+
 ## 2026-10-04: P3: stamina drop shows in Skyrim (combat); torn-read fix; regen log squashed
 - **Tested in-game (both games, ER visible, enemy aggroed in m60_42_37_00):** Left Shift in Skyrim → ER backstep 12027010 → Skyrim log + HUD
   `stamina 136→128` (a backstep costs 8 stamina in combat; out of combat it costs 0, which is why earlier runs showed none). The enemy's hits showed as
