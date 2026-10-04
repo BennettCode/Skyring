@@ -113,6 +113,10 @@ fn init(module: usize) {
         let mut f = combat::ForceCombat::new("ChrIns_AILogic", on);
         std::mem::forget(task.run_recurring(move |_: &FD4TaskData| f.run(), CSTaskGroupIndex::ChrIns_AILogic));
         info!("combat", "FORCE combat state {force} (ChrIns_AILogic, every frame)");
+    } else {
+        let mut mirror = combat::MirrorCombat::new();
+        std::mem::forget(task.run_recurring(move |_: &FD4TaskData| mirror.run(), CSTaskGroupIndex::ChrIns_AILogic));
+        info!("core", "Skyrim combat state → ER combat flag in ChrIns_AILogic");
     }
     if config::get().dump {
         let mut dump = combat::Dump::new();

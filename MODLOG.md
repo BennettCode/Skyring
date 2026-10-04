@@ -4,6 +4,15 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P4 step 3: protocol v3, Skyrim's combat state drives ER's
+- **Changed:** protocol v3 (`Local\SkyrimXER_v3`): InputState `_pad1` → `flags` (InputFlag InCombat, BridgeOn), PlayerFlag InCombat.
+  Skyrim `Bridge.cpp` writes them (`IsInCombat()`, F10) and logs `[combat]` edges of both games. ER: `remote.rs` hands the wanted state to
+  `combat::MirrorCombat` (ChrIns_AILogic, every frame, both ways); bridge off or stale input = ER decides. PlayerState reports ER's state.
+- **Tested:** `tests/run-tests.ps1` green. Both games (keyboard): out of combat 3/3 rolls free; NPC set hostile (`startcombat player`)
+  → 4/4 rolls cost 12 stamina; after `kill` 3/3 free again; all rolls with i-frames. Holding Sprint dashes (ER rule) and drains stamina
+  in combat only.
+- **Result:** ✔ step 3. Next: step 4, the Skyrim player follows the roll.
+
 ## 2026-10-04: P4 step 2: ER combat flag found and forced (ER self-test)
 - **Changed:** `er-plugin/src/combat.rs`: `in_combat`/`set_in_combat` (CSChrDataModule +0x19a bit 0x40 = out of combat), `CombatWatch`
   (logs ER's combat-state edges every session), `ForceCombat` (`-ErForceCombat on|off`, one write per frame in ChrIns_AILogic), research

@@ -64,7 +64,8 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
   in that direction; tap Sprint alone and it backsteps. Elden Ring's own rules decide what happens (tap = dodge, hold = dash).
   While the link is active, Skyrim's own sprint is off (Sprint is the dodge now). **F10** turns the link off and on (off = plain Skyrim).
 - **Elden Ring's state comes back to Skyrim every frame:** stamina (a dodge costs stamina in combat), HP, animation.
-  Skyrim shows a short on-screen message after each dodge, e.g. `ER dodge: anim 27110 | stamina 136->128 | i-frames yes`.
+  Skyrim shows a short on-screen message after each dodge, e.g. `ER dodge: anim 27110 | stamina 136->124 | i-frames yes`.
+- **Rolls cost stamina only while your Skyrim character is in combat**, like in Elden Ring (exploring, they're free).
 - **Roll i-frames reach Skyrim:** Skyrim knows the exact window (about 0.45 s) in which the Elden Ring roll makes you invincible.
 - Fail-safe: if either game closes, crashes or pauses, the other one notices within a moment and stops acting on stale input.
 
@@ -79,7 +80,7 @@ Skyrim is keyboard-and-mouse only for now (details below). The i-frames are know
 | P1 | Both plugins load and log | ✅ done |
 | P2 | Shared memory link: handshake, heartbeats, crash fail-safe | ✅ done |
 | P3 | Dodge in Skyrim → Elden Ring dodges → its stamina and i-frames come back | ✅ done |
-| **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 in progress (1/7: Sprint = dodge, F10 toggle) |
+| **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 in progress (2/7: Sprint = dodge, F10 toggle, combat stamina) |
 | P5 | Damage both ways uses Elden Ring's math (poise, stagger) | ⏳ |
 | P6 | Elden Ring-style HUD | ⏳ |
 | P7 | Runes from kills, leveling, flasks refill at "graces" | ⏳ |

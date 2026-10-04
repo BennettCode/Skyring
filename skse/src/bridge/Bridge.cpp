@@ -32,6 +32,9 @@ namespace sxer::bridge
 
 		constexpr std::uint32_t kDodge = 1u << static_cast<std::uint32_t>(proto::Button::Dodge);
 		constexpr std::uint32_t kInWorld = 1u << static_cast<std::uint32_t>(proto::PlayerFlag::InWorld);
+		constexpr std::uint32_t kErInCombat = 1u << static_cast<std::uint32_t>(proto::PlayerFlag::InCombat);
+		constexpr std::uint32_t kInCombat = 1u << static_cast<std::uint32_t>(proto::InputFlag::InCombat);
+		constexpr std::uint32_t kBridgeOn = 1u << static_cast<std::uint32_t>(proto::InputFlag::BridgeOn);
 		constexpr std::uint64_t kReportMs = 5000;
 		// How long after a Dodge press the HUD summary waits for ER's reaction (ER starts a backstep ~9 frames after the press).
 		constexpr std::uint64_t kDodgeReportMs = 600;
@@ -60,6 +63,8 @@ namespace sxer::bridge
 			bool bridgeOn = true;
 			bool swallow = false;
 			bool held = false;
+			bool inCombat = false;
+			bool erInCombat = false;
 			input::Move move;
 			std::vector<float> frameMs;
 			std::vector<float> hookUs;
@@ -251,10 +256,24 @@ namespace sxer::bridge
 			f.move = move;
 			SKSE::log::info("[input] move x={} y={} frame={}", move.x, move.y, frame);
 		}
+		// Skyrim's combat state → ER's (P4 step 3): ER dodges cost stamina only while the Skyrim player fights.
+		const bool inCombat = a_player && a_player->IsInCombat();
+		if (inCombat != f.inCombat) {
+			f.inCombat = inCombat;
+			SKSE::log::info("[combat] Skyrim player {} frame={}", inCombat ? "IN COMBAT" : "out of combat", frame);
+		}
+		if (const auto& s = f.watch.Last()) {
+			const bool er = (s->flags & kErInCombat) != 0;
+			if (er != f.erInCombat) {
+				f.erInCombat = er;
+				SKSE::log::info("[combat] ER combat state: {} (stamina={}) frame={}", er ? "IN COMBAT" : "calm", s->stamina, frame);
+			}
+		}
 		proto::InputState state{};
 		state.frame = frame;
 		state.time_ms = now;
 		state.buttons = held ? kDodge : 0;
+		state.flags = on ? (kBridgeOn | (inCombat ? kInCombat : 0)) : 0;
 		state.move_x = move.x;
 		state.move_y = move.y;
 		f.input->Write(state);

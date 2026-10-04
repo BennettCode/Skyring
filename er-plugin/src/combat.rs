@@ -42,6 +42,46 @@ pub fn set_in_combat(player: &mut eldenring::cs::PlayerIns, on: bool) -> bool {
     }
 }
 
+/// Combat state Skyrim wants (remote.rs, every frame): 0 = none (bridge off / stale: ER decides), 1 = calm, 2 = in combat.
+static WANT: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+pub fn want(state: Option<bool>) {
+    WANT.store(state.map_or(0, |c| if c { 2 } else { 1 }), Ordering::Relaxed);
+}
+
+/// ChrIns_AILogic (right after ER recomputes the flag in ChrIns_NaviCache): ER's combat state = Skyrim's while the bridge is on and
+/// the input is fresh (P4 step 3), so dodges cost stamina only while the Skyrim player fights. Logs Skyrim-side edges.
+pub struct MirrorCombat {
+    last: u8,
+}
+
+impl MirrorCombat {
+    pub fn new() -> Self {
+        Self { last: 0 }
+    }
+
+    pub fn run(&mut self) {
+        let want = WANT.load(Ordering::Relaxed);
+        if want != self.last {
+            let frame = bridge::FRAMES.load(Ordering::Relaxed);
+            let what = match want {
+                2 => "Skyrim IN COMBAT → ER in combat",
+                1 => "Skyrim calm → ER calm",
+                _ => "no Skyrim combat state (bridge off / stale) → ER decides",
+            };
+            crate::info!("combat", "frame={frame} {what}");
+            self.last = want;
+        }
+        if want == 0 {
+            return;
+        }
+        // SAFETY: task callbacks run on the game's main thread.
+        if let Some(player) = unsafe { game::main_player() } {
+            set_in_combat(player, want == 2);
+        }
+    }
+}
+
 /// `force_combat=on|off` (`tools/dev.ps1 -ErForceCombat`, research/self-test): writes the flag in one task group every frame and logs,
 /// every FORCE_REPORT frames, on how many frames the game had changed it back since our last write.
 pub struct ForceCombat {

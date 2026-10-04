@@ -6,11 +6,12 @@ _Last updated: 2026-10-04_
 **P4: in progress** (plan: `docs/P4-PLAN.md`). Step 1 done (2026-10-04): while the bridge is on, Skyrim's vanilla sprint is off (Sprint =
 ER dodge), F10 toggles the bridge, and the hidden ER character only gets the move stick around a dodge (stays parked).
 Step 2 done: ER's combat flag found (`CSChrDataModule` +0x19a bit 0x40) and forced from code (rolls then cost stamina with no enemy).
+Step 3 done: protocol v3; Skyrim's combat state drives ER's, so rolls cost stamina only while the Skyrim player fights.
 P3 (done): ER runs hidden at 60 fps; Sprint (+ W/A/S/D) → ER backsteps/rolls by ER's rules; stamina, animation and the roll i-frame
-window come back every frame; coordinate conversion measured (`protocol/src/coords.rs`). Region `Local\SkyrimXER_v2`.
+window come back every frame; coordinate conversion measured (`protocol/src/coords.rs`). Region `Local\SkyrimXER_v3`.
 
 ## What exists
-- `protocol/`: schema `schema/messages.toml` (v2) → `tools/protogen` → `generated/skyrimxer_protocol.{h,rs}`. Rust crate `skyrimxer-protocol`
+- `protocol/`: schema `schema/messages.toml` (v3) → `tools/protogen` → `generated/skyrimxer_protocol.{h,rs}`. Rust crate `skyrimxer-protocol`
   (region, rings, seqlock slots, link state machine + `LinkShared` for game threads). C++ mirrors: `skse/src/bridge/{Link.*,Slot.h}`.
   Layout + link rules: `docs/DESIGN.md` §4.
 - `skse/` → `SkyrimXER.dll` (CommonLibVR-ng 39f9d07, AE only). Logs load/kDataLoaded/save loaded. Link thread starts on kDataLoaded
@@ -29,9 +30,9 @@ window come back every frame; coordinate conversion measured (`protocol/src/coor
   Continue each run (no warp in P3). The user tests with a DualSense (PS5) over USB in both games.
 
 ## Next 3 steps (P4, `docs/P4-PLAN.md`)
-1. Step 3: protocol v3 (InputState `flags`: InCombat, BridgeOn) so Skyrim's combat state drives ER's (`combat::set_in_combat`).
-2. Step 4: the Skyrim player follows ER's roll (ER displacement → coords → Skyrim, with Skyrim collision).
-3. Step 5: vanilla Silent Roll animation.
+1. Step 4: the Skyrim player follows ER's roll (ER displacement → coords → Skyrim, with Skyrim collision).
+2. Step 5: vanilla Silent Roll animation.
+3. Step 6: Skyrim's stamina bar mirrors ER's.
 
 ## Handoff notes
 **I-frame search solved (2026-10-04, attempt 3).** Attempts 1–2 diffed memory only during *backsteps*, which set no invincibility at

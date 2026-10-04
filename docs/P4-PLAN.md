@@ -46,6 +46,9 @@ First: copy this plan to `docs/P4-PLAN.md`, ROADMAP P4/P5 edits (swallow list, v
 - `messages.toml`: version 3 / `Local\SkyrimXER_v3`; InputState `_pad1` → `flags` (new enum `InputFlag`: `InCombat`, `BridgeOn`);
   `PlayerFlag` + `InCombat` (ER's own state, for logs). Layout size unchanged. Regenerate, update fake peers + tests, DESIGN §4.
 - Skyrim writes `InCombat` = `player->IsInCombat()`; ER forces/releases the step-2 state from it (fail-safe: stale → release).
+- **Result (2026-10-04, both games, keyboard, NPC made hostile with `startcombat player`, ended with `kill`):** calm 3/3 rolls free,
+  Skyrim combat 4/4 rolls cost 12 (136→124), after the fight 3/3 free; all with i-frames. Console pauses make the input stale and ER falls
+  back to its own state (as designed). `combat::MirrorCombat` (ChrIns_AILogic), `[combat]` edge lines on both sides. run-tests green.
 
 ### 4. Skyrim player follows the ER roll (both; the core)
 - New `skse/src/bridge/Movement.cpp`: while ER's anim is a dodge (`anim % 1e6` in the 27xxx dodge set, logged/measured), take ER's horizontal

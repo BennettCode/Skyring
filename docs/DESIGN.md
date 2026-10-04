@@ -33,19 +33,20 @@ Alternatives considered (if the draft fails the tests):
 - **ER owns position too** (like SkyCraft's Minecraft): would need Skyrim collision streamed into ER's Havok world. Very hard, deferred.
 - **No hidden ER, re-implement the rules in SKSE**: simpler, but it's not a merge and loses ER's exact timing/math. Fallback only.
 
-## 4. Protocol (`Local\SkyrimXER_v2`)
+## 4. Protocol (`Local\SkyrimXER_v3`)
 
 Source of truth: `protocol/schema/messages.toml` → `cargo run -p protogen` → `protocol/generated/skyrimxer_protocol.{h,rs}`.
 Fixed-size little-endian plain structs, explicit padding only (protogen rejects implicit padding), size/offset asserts in both
 languages, `version` + region name bump for any layout change.
 
-**v2 region (P3, 0x21000 bytes; v1 = the same without the slots):**
+**v3 region (P4, 0x21000 bytes; v3 = v2 + InputState `flags` + PlayerFlag InCombat; v1 = v2 without the slots):**
 ```
 0x00000 Header       magic 'SXER' (written last by the creator), version, header_size, region_size,
                      sky_/er_ pid, state (SideState), heartbeat_ms (GetTickCount64), attach_count   (64 B)
 0x00100 RingHeader   sky→er   write_pos, read_pos (u64 byte totals, never wrap), capacity, dropped
 0x00140 RingHeader   er→sky
-0x00200 InputState   sky→er   seqlock slot (48 B): frame, time_ms, buttons (Button bits), move_x/y, cam_yaw
+0x00200 InputState   sky→er   seqlock slot (48 B): frame, time_ms, buttons (Button bits), flags (InputFlag: InCombat,
+                              BridgeOn), move_x/y, cam_yaw
 0x00300 PlayerState  er→sky   seqlock slot (80 B): flags (PlayerFlag bits), frame, time_ms, hp/fp/stamina + maxes,
                               anim_id, block_id, poise(+max), pos[3], yaw
 0x01000 ring data    sky→er   64 KiB

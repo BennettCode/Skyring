@@ -7,9 +7,9 @@
 
 namespace sxer::proto
 {
-	inline constexpr std::uint32_t kVersion = 2;
+	inline constexpr std::uint32_t kVersion = 3;
 	inline constexpr std::uint32_t kMagic = 0x52455853;  // "SXER" as little-endian bytes
-	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v2";
+	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v3";
 
 	// Peer counts as gone when its heartbeat is older than this.
 	inline constexpr std::uint64_t kHeartbeatTimeoutMs = 2000;
@@ -68,6 +68,13 @@ namespace sxer::proto
 		Dodge = 0,  // Skyrim's Sprint user event, held state forwarded raw (ER: tap = roll/backstep, hold = dash).
 	};
 
+	// InputState.flags. Values are BIT INDICES: mask = 1 << value.
+	enum class InputFlag : std::uint32_t
+	{
+		InCombat = 0,  // The Skyrim player is in combat. ER mirrors it in its own combat state (dodges cost stamina only in combat).
+		BridgeOn = 1,  // The bridge is on (F10). Off = Skyrim plays vanilla; ER leaves its own state alone.
+	};
+
 	// PlayerState.flags. Values are BIT INDICES: mask = 1 << value.
 	enum class PlayerFlag : std::uint32_t
 	{
@@ -76,6 +83,7 @@ namespace sxer::proto
 		Dodging = 2,
 		HyperArmor = 3,
 		PoiseBroken = 4,
+		InCombat = 5,  // ER's own combat state (CSChrDataModule +0x19a bit 0x40 clear): dodges cost stamina.
 	};
 
 	// At OFF_HEADER. Each side writes only its own sky_* / er_* fields; the creator writes the rest, magic last.
@@ -152,7 +160,7 @@ namespace sxer::proto
 		std::uint64_t frame;  // Skyrim frame counter.
 		std::uint64_t time_ms;  // GetTickCount64() when written.
 		std::uint32_t buttons;  // Held Button bits.
-		std::uint32_t _pad1;
+		std::uint32_t flags;  // InputFlag bits.
 		float move_x;  // Move stick right, -1..1.
 		float move_y;  // Move stick forward, -1..1.
 		float cam_yaw;  // Skyrim camera yaw, radians.
@@ -166,7 +174,7 @@ namespace sxer::proto
 	static_assert(offsetof(InputState, frame) == 8);
 	static_assert(offsetof(InputState, time_ms) == 16);
 	static_assert(offsetof(InputState, buttons) == 24);
-	static_assert(offsetof(InputState, _pad1) == 28);
+	static_assert(offsetof(InputState, flags) == 28);
 	static_assert(offsetof(InputState, move_x) == 32);
 	static_assert(offsetof(InputState, move_y) == 36);
 	static_assert(offsetof(InputState, cam_yaw) == 40);

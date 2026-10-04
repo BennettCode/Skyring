@@ -1,4 +1,4 @@
-//! Skyrim ⇄ ER over the protocol v2 slots (P3 step 4). Main thread only (task callbacks); the link's lock is never taken here.
+//! Skyrim ⇄ ER over the protocol slots (P3 step 4, v3 since P4 step 3). Main thread only (task callbacks); the link's lock is never taken here.
 //! - [`DodgeFromSkyrim`] (in `actions::inject_group()`): Skyrim's held Dodge → the virtual Backstep key, the same way the step-2
 //!   self-test presses it (hold Backstep, BackstepTapped on the press frame only). ER's own gating decides what happens
 //!   (tap = backstep/roll, hold = dash). Stale or disconnected input = nothing held (fail-safe).
@@ -12,12 +12,14 @@ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use eldenring::cs::UserInputKey;
 use skyrimxer_protocol::now_ms;
-use skyrimxer_protocol::proto::{Button, InputState, OFF_SLOT_INPUT, OFF_SLOT_PLAYER, PlayerFlag, PlayerState};
+use skyrimxer_protocol::proto::{Button, InputFlag, InputState, OFF_SLOT_INPUT, OFF_SLOT_PLAYER, PlayerFlag, PlayerState};
 use skyrimxer_protocol::slot::{SlotReader, SlotWriter, fresh};
 
-use crate::{actions, bridge, game, pad};
+use crate::{actions, bridge, combat, game, pad};
 
 const DODGE: u32 = 1 << Button::Dodge as u32;
+const IN_COMBAT: u32 = 1 << InputFlag::InCombat as u32;
+const BRIDGE_ON: u32 = 1 << InputFlag::BridgeOn as u32;
 /// Frames the move stick stays forwarded after Dodge is released (ER picks the roll direction on the release frame or just after).
 const STICK_AFTER_RELEASE: u32 = 10;
 
@@ -69,6 +71,12 @@ impl DodgeFromSkyrim {
         }
 
         let frame = bridge::FRAMES.load(Ordering::Relaxed);
+        // Skyrim's combat state → ER's (applied in ChrIns_AILogic by combat::MirrorCombat). Bridge off or stale = ER decides itself.
+        let combat = match input {
+            Some(i) if is_fresh && i.flags & BRIDGE_ON != 0 => Some(i.flags & IN_COMBAT != 0),
+            _ => None,
+        };
+        combat::want(combat);
         // SAFETY: task callbacks run on the game's main thread.
         let player = unsafe { game::main_player() };
         let held = is_fresh && player.is_some() && input.is_some_and(|i| i.buttons & DODGE != 0);
@@ -190,7 +198,8 @@ pub fn publish_state(from_frame_begin: bool) {
             | if s.iframe { flag(PlayerFlag::IFrame) } else { 0 }
             | if s.dodging { flag(PlayerFlag::Dodging) } else { 0 }
             | if s.hyperarmor { flag(PlayerFlag::HyperArmor) } else { 0 }
-            | if s.poise_broken { flag(PlayerFlag::PoiseBroken) } else { 0 };
+            | if s.poise_broken { flag(PlayerFlag::PoiseBroken) } else { 0 }
+            | if combat::in_combat(player) { flag(PlayerFlag::InCombat) } else { 0 };
         state.hp = s.hp;
         state.max_hp = s.max_hp;
         state.fp = s.fp;
