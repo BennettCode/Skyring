@@ -8,6 +8,7 @@
 // Not thread-safe: call Tick/Shutdown from one thread at a time.
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <string>
 
@@ -34,6 +35,17 @@ namespace sxer
 		std::array<std::uint16_t, 4> gameVersion{};
 	};
 
+	// What the game threads need from the link without taking its lock (mirror of link.rs LinkShared).
+	// Lives inside the Link: valid while the Link lives. The plugin never destroys its Link (Bridge.cpp), so there it's
+	// valid for the whole process.
+	struct LinkShared
+	{
+		// The mapped region once this side joined a matching layout (for SlotWriter/SlotReader); nullptr before that or on a mismatch.
+		std::atomic<std::uint8_t*> base{ nullptr };
+		// Handshake done and the peer is alive, as of the link's last tick.
+		std::atomic<bool> connected{ false };
+	};
+
 	// GetTickCount64(): the clock both sides use for heartbeats.
 	std::uint64_t NowMs();
 
@@ -53,6 +65,7 @@ namespace sxer
 
 		PeerStatus Status() const { return status_; }
 		bool Connected() const { return status_ == PeerStatus::Connected; }
+		const LinkShared& Shared() const { return shared_; }
 
 	private:
 		struct Ring
@@ -91,6 +104,7 @@ namespace sxer
 
 		Side side_;
 		Identity identity_;
+		LinkShared shared_;
 		std::wstring regionName_;
 		void* mapping_ = nullptr;
 		std::uint8_t* base_ = nullptr;

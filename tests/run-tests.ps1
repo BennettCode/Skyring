@@ -6,6 +6,8 @@
   2. C++ selftest (skyrimxer_link_test.exe selftest; its build also compiles the generated static_asserts).
   3. Cross-language, real processes, private region name (safe while a game runs):
      A. Rust fake ER exits without Bye (crash)  -> C++ Skyrim link: handshake, heartbeat events, then timeout.
+        Also the slots both ways: C++ Skyrim pulses Dodge (InputState), the Rust ER dodges (stamina -20, 1 s IFrame) and
+        C++ Skyrim logs it from PlayerState, then marks PlayerState stale once after the crash.
      B. C++ ER link exits cleanly with Bye      -> Rust fake Skyrim: handshake, then "said Bye".
   Needs `tools/build.ps1 -Target skse` first (for the C++ exe). Exit code 0 = all passed.
 #>
@@ -53,11 +55,14 @@ try {
     }
 
     Write-Host '== interop A: Rust fake ER crashes -> C++ Skyrim times out (~10 s) ==' -ForegroundColor Cyan
-    $er, $sky = Invoke-Pair 'interop-a' $fakeExe "er --seconds 6 --no-bye --region $region" $cppExe "peer --side skyrim --seconds 10 --region $region"
+    $er, $sky = Invoke-Pair 'interop-a' $fakeExe "er --seconds 6 --no-bye --region $region" $cppExe "peer --side skyrim --seconds 10 --dodge-every 2 --region $region"
     Check ($sky -match 'CONNECTED: handshake ok with ER') 'C++ Skyrim: handshake with Rust ER'
     Check ($er -match 'CONNECTED: handshake ok with Skyrim') 'Rust ER: handshake with C++ Skyrim'
     Check (($sky -match 'ER heartbeat seq=') -and ($er -match 'Skyrim heartbeat seq=')) 'heartbeat events both ways'
     Check ($sky -match 'LOST: ER .*heartbeat timeout') 'C++ Skyrim: heartbeat timeout after the crash'
+    Check ($er -match 'Dodge down \(InputState .*stamina 100.{1,3}80') 'slot sky->er: Rust ER saw the C++ Dodge press and dodged'
+    Check (($sky -match 'stamina 100.{1,3}80') -and ($sky -match 'IFrame on') -and ($sky -match 'IFrame off')) 'slot er->sky: C++ Skyrim saw stamina drop + IFrame on/off'
+    Check (([regex]::Matches($sky, 'PlayerState stale')).Count -eq 1) 'C++ Skyrim: PlayerState stale exactly once after the crash'
     Check (-not ($sky -match 'seq gap|corrupt|MISMATCH') -and -not ($er -match 'seq gap|corrupt|MISMATCH')) 'no seq gaps, corruption or mismatches'
 
     Write-Host '== interop B: C++ ER exits with Bye -> Rust fake Skyrim goes idle (~6 s) ==' -ForegroundColor Cyan

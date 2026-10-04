@@ -2,19 +2,29 @@
 //
 //   skyrimxer_link_test selftest
 //       Two Links (Skyrim + ER) in this process on a private region, simulated clock: handshake, heartbeat events,
-//       timeout, reconnect, Bye. Exit 0 = pass. Run by ctest and tests/run-tests.ps1.
-//   skyrimxer_link_test peer [--side skyrim|er] [--seconds N] [--no-bye] [--region NAME]
-//       Real-time peer, for cross-language tests against `cargo run -p fake-peer`.
+//       timeout, reconnect, Bye, LinkShared, plus seqlock slots (round trip, concurrent torn-read check).
+//       Exit 0 = pass. Run by ctest and tests/run-tests.ps1.
+//   skyrimxer_link_test peer [--side skyrim|er] [--seconds N] [--no-bye] [--region NAME] [--dodge-every S]
+//       Real-time peer, for cross-language tests against `cargo run -p fake-peer`. Same thread shape as the plugin: the link
+//       ticks on its own thread, the main thread runs ~60 "frames"/s and touches only the slots. As skyrim it holds Dodge
+//       for 250 ms (first 1 s after connecting, then every S seconds, default 4) and logs PlayerState edges with the
+//       same wording as tools/fake-peer.
 //
 // The generated header's static_asserts also make this target the C++ layout test.
 
 #include "bridge/Link.h"
+#include "bridge/Slot.h"
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <format>
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -29,6 +39,11 @@ namespace
 	using sxer::Link;
 	using sxer::PeerStatus;
 	using sxer::Side;
+	using sxer::proto::InputState;
+	using sxer::proto::PlayerState;
+
+	constexpr std::uint32_t kDodge = 1u << static_cast<std::uint32_t>(sxer::proto::Button::Dodge);
+	constexpr std::uint32_t kIFrame = 1u << static_cast<std::uint32_t>(sxer::proto::PlayerFlag::IFrame);
 
 	int g_failures = 0;
 
@@ -36,6 +51,90 @@ namespace
 	{
 		std::printf("  %s %s\n", a_ok ? "ok  " : "FAIL", a_what);
 		g_failures += a_ok ? 0 : 1;
+	}
+
+	// Every field derives from one counter, so a torn copy shows up as fields that disagree.
+	PlayerState Snapshot(std::uint64_t a_k)
+	{
+		const auto i = static_cast<std::int32_t>(a_k);
+		const auto f = static_cast<float>(a_k % 100000);
+		PlayerState s{};
+		s.flags = static_cast<std::uint32_t>(a_k);
+		s.frame = a_k;
+		s.time_ms = a_k * 3;
+		s.hp = i;
+		s.max_hp = i + 1;
+		s.fp = i + 2;
+		s.max_fp = i + 3;
+		s.stamina = i + 4;
+		s.max_stamina = i + 5;
+		s.anim_id = i + 6;
+		s.block_id = i + 7;
+		s.poise = f;
+		s.poise_max = f + 1;
+		s.pos[0] = f + 2;
+		s.pos[1] = f + 3;
+		s.pos[2] = f + 4;
+		s.yaw = f + 5;
+		return s;
+	}
+
+	bool SameExceptSeq(PlayerState a_a, PlayerState a_b)
+	{
+		a_a.seq = a_b.seq = 0;
+		return std::memcmp(&a_a, &a_b, sizeof(PlayerState)) == 0;
+	}
+
+	void SlotTests(std::uint8_t* a_base)
+	{
+		using namespace sxer;
+		if (!a_base) {
+			Check(false, "slots: no region");
+			return;
+		}
+		SlotReader<InputState> inputReader(a_base, proto::kOffSlotInput);
+		Check(!inputReader.Read(), "slot: never written → nothing");
+		SlotWriter<InputState> inputWriter(a_base, proto::kOffSlotInput);
+		InputState in{};
+		in.seq = 999;
+		in.frame = 7;
+		in.time_ms = 1234;
+		in.buttons = kDodge;
+		in.move_x = -0.5f;
+		inputWriter.Write(in);
+		const auto got = inputReader.Read();
+		Check(got && got->seq == 2 && got->frame == 7 && got->time_ms == 1234 && got->buttons == kDodge && got->move_x == -0.5f,
+			"slot: round trip (seq from the slot)");
+		Check(Fresh(1000, 1000 + proto::kSlotStaleMs) && !Fresh(1000, 1001 + proto::kSlotStaleMs), "slot: Fresh limits");
+
+		std::atomic<bool> stop{ false };
+		std::uint64_t written = 0;
+		std::thread writer([&] {
+			SlotWriter<PlayerState> w(a_base, proto::kOffSlotPlayer);
+			for (std::uint64_t k = 1; !stop.load(std::memory_order_relaxed); ++k) {
+				w.Write(Snapshot(k));
+				written = k;
+				for (int spin = 0; spin < 200; ++spin) {
+					::YieldProcessor();  // real writers publish once per frame
+				}
+			}
+		});
+		SlotReader<PlayerState> reader(a_base, proto::kOffSlotPlayer);
+		std::uint64_t reads = 0, torn = 0, last = 0;
+		bool backwards = false;
+		const auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+		while (std::chrono::steady_clock::now() < end) {
+			if (const auto s = reader.Read()) {
+				torn += SameExceptSeq(*s, Snapshot(s->frame)) ? 0 : 1;
+				backwards |= s->frame < last;
+				last = s->frame;
+				++reads;
+			}
+		}
+		stop = true;
+		writer.join();
+		Check(torn == 0 && !backwards, "slot: concurrent reads never torn or out of order");
+		Check(reads > 1000 && written > 1000, std::format("slot: enough traffic (reads={} written={})", reads, written).c_str());
 	}
 
 	int SelfTest()
@@ -48,6 +147,7 @@ namespace
 
 		const auto region = L"Local\\SkyrimXER_test_cpp_" + std::to_wstring(::GetCurrentProcessId());
 		Link sky(Side::Skyrim, { { 0, 1, 0 }, { 1, 7, 104, 0 } }, region);
+		Check(!sky.Shared().base.load() && !sky.Shared().connected.load(), "LinkShared empty before joining");
 		{
 			Link er(Side::EldenRing, { { 0, 1, 0 }, { 2, 7, 1, 0 } }, region);
 			const auto both = [&](std::uint64_t a_t) {
@@ -58,6 +158,7 @@ namespace
 				both(t);
 			}
 			Check(sky.Connected() && er.Connected(), "handshake: both connected");
+			Check(sky.Shared().base.load() && sky.Shared().connected.load() && er.Shared().connected.load(), "LinkShared: region + connected");
 			Check(has("CONNECTED: handshake ok with ER") && has("CONNECTED: handshake ok with Skyrim"), "handshake logged both ways");
 			Check(!has("Hello again"), "exactly one Hello each way");
 
@@ -70,6 +171,7 @@ namespace
 			Check(sky.Connected(), "no timeout at exactly the limit");
 			sky.Tick(6251 + sxer::proto::kHeartbeatTimeoutMs, 0);
 			Check(sky.Status() == PeerStatus::Lost && has("heartbeat timeout"), "ER stops beating → Skyrim times out");
+			Check(!sky.Shared().connected.load(), "LinkShared: game threads see the loss");
 
 			for (std::uint64_t t = 9000; t <= 9100; t += 50) {
 				both(t);
@@ -79,6 +181,7 @@ namespace
 		}  // ER link destroyed: Bye + handle closed
 		sky.Tick(9150, 0);
 		Check(sky.Status() == PeerStatus::Lost && has("said Bye (reason=Quit)"), "ER Bye → Skyrim goes idle");
+		SlotTests(sky.Shared().base.load());
 
 		std::printf("%s", g_failures ? lines.str().c_str() : "");
 		std::printf("selftest: %s\n", g_failures ? "FAILED" : "passed");
@@ -87,14 +190,60 @@ namespace
 
 	[[noreturn]] void Usage()
 	{
-		std::fprintf(stderr, "usage: skyrimxer_link_test selftest | peer [--side skyrim|er] [--seconds N] [--no-bye] [--region NAME]\n");
+		std::fprintf(stderr, "usage: skyrimxer_link_test selftest | peer [--side skyrim|er] [--seconds N] [--no-bye] [--region NAME] [--dodge-every S]\n");
 		std::exit(2);
 	}
+
+	// Logs PlayerState edges on the Skyrim side (same wording as tools/fake-peer): fresh/stale transitions, stamina changes,
+	// IFrame on/off, anim changes. Step 4 moves this into the plugin.
+	class PlayerWatch
+	{
+	public:
+		void Update(std::optional<PlayerState> a_state, bool a_connected, std::uint64_t a_now)
+		{
+			const bool fresh = a_connected && a_state && sxer::Fresh(a_state->time_ms, a_now);
+			if (fresh != fresh_) {
+				fresh_ = fresh;
+				if (fresh) {
+					const auto& s = *a_state;
+					spdlog::info("[state] PlayerState fresh: stamina={}/{} hp={}/{} flags={:#x} anim={} er_frame={}", s.stamina, s.max_stamina, s.hp,
+						s.max_hp, s.flags, s.anim_id, s.frame);
+				} else {
+					const auto why = !a_connected ? std::string("link not connected") :
+					                 !a_state     ? std::string("never written") :
+					                                std::format("last write {} ms ago", a_now > a_state->time_ms ? a_now - a_state->time_ms : 0);
+					spdlog::warn("[state] PlayerState stale ({}); ignoring it", why);
+					last_.reset();
+				}
+			}
+			if (!fresh) {
+				return;
+			}
+			const auto& s = *a_state;
+			if (last_) {
+				if (s.stamina != last_->stamina) {
+					spdlog::info("[state] stamina {}→{} er_frame={}", last_->stamina, s.stamina, s.frame);
+				}
+				if ((s.flags ^ last_->flags) & kIFrame) {
+					spdlog::info("[state] IFrame {} er_frame={}", (s.flags & kIFrame) ? "on" : "off", s.frame);
+				}
+				if (s.anim_id != last_->anim_id) {
+					spdlog::info("[state] anim {}→{} er_frame={}", last_->anim_id, s.anim_id, s.frame);
+				}
+			}
+			last_ = s;
+		}
+
+	private:
+		bool fresh_ = false;
+		std::optional<PlayerState> last_;
+	};
 
 	int Peer(int a_argc, char** a_argv)
 	{
 		Side side = Side::Skyrim;
 		double seconds = -1;
+		double dodgeEvery = 4;
 		bool bye = true;
 		std::wstring region = sxer::proto::kRegionName;
 		for (int i = 2; i < a_argc; ++i) {
@@ -105,6 +254,8 @@ namespace
 				side = v == "er" ? Side::EldenRing : v == "skyrim" ? Side::Skyrim : (Usage(), Side::Skyrim);
 			} else if (arg == "--seconds") {
 				seconds = std::atof(next().c_str());
+			} else if (arg == "--dodge-every") {
+				dodgeEvery = std::atof(next().c_str());
 			} else if (arg == "--no-bye") {
 				bye = false;
 			} else if (arg == "--region") {
@@ -123,12 +274,64 @@ namespace
 		using Version4 = std::array<std::uint16_t, 4>;
 		const sxer::Identity identity{ { 0, 1, 0 }, side == Side::Skyrim ? Version4{ 1, 7, 104, 0 } : Version4{ 2, 7, 1, 0 } };
 		auto link = std::make_unique<Link>(side, identity, region);
+		const auto& shared = link->Shared();
+
+		// Link thread, like the plugin's Bridge.cpp.
+		std::mutex lock;
+		std::atomic<std::uint64_t> frames{ 0 };
+		std::atomic<bool> stop{ false };
+		std::thread linkThread([&] {
+			while (!stop.load()) {
+				{
+					std::lock_guard guard(lock);
+					link->Tick(sxer::NowMs(), frames.load());
+				}
+				std::this_thread::sleep_for(std::chrono::milliseconds(sxer::proto::kLinkTickMs));
+			}
+		});
+
+		// "Game" thread: slots only (Skyrim side; the C++ ER peer only runs the link).
+		std::optional<sxer::SlotWriter<InputState>> input;
+		std::optional<sxer::SlotReader<PlayerState>> player;
+		PlayerWatch watch;
+		std::optional<std::uint64_t> nextPulse;
+		bool held = false;
+		const auto everyMs = static_cast<std::uint64_t>(dodgeEvery * 1000);
 		const auto start = std::chrono::steady_clock::now();
-		std::uint64_t frames = 0;
 		while (seconds < 0 || std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() < seconds) {
-			link->Tick(sxer::NowMs(), ++frames);
-			std::this_thread::sleep_for(std::chrono::milliseconds(sxer::proto::kLinkTickMs));
+			const auto frame = ++frames;
+			const auto now = sxer::NowMs();
+			auto* base = shared.base.load(std::memory_order_acquire);
+			if (side == Side::Skyrim && base && !input) {
+				input.emplace(base, sxer::proto::kOffSlotInput);
+				player.emplace(base, sxer::proto::kOffSlotPlayer);
+			}
+			if (input) {
+				const bool connected = shared.connected.load(std::memory_order_acquire);
+				if (connected && !nextPulse) {
+					nextPulse = now + 1000;
+				}
+				bool down = false;
+				if (nextPulse && now >= *nextPulse + 250) {
+					*nextPulse += everyMs;
+				} else if (nextPulse) {
+					down = now >= *nextPulse;
+				}
+				if (down != held) {
+					held = down;
+					spdlog::info("[input] Dodge {} frame={}", down ? "down" : "up", frame);
+				}
+				InputState state{};
+				state.frame = frame;
+				state.time_ms = now;
+				state.buttons = down ? kDodge : 0;
+				input->Write(state);
+				watch.Update(player->Read(), connected, now);
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(16));
 		}
+		stop = true;
+		linkThread.join();
 		if (!bye) {
 			spdlog::info("[link] exiting without Bye (simulated crash)");
 			std::fflush(stdout);

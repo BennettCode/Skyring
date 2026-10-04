@@ -33,18 +33,21 @@ Alternatives considered (if the draft fails the tests):
 - **ER owns position too** (like SkyCraft's Minecraft): would need Skyrim collision streamed into ER's Havok world. Very hard, deferred.
 - **No hidden ER, re-implement the rules in SKSE**: simpler, but it's not a merge and loses ER's exact timing/math. Fallback only.
 
-## 4. Protocol (`Local\SkyrimXER_v1`)
+## 4. Protocol (`Local\SkyrimXER_v2`)
 
 Source of truth: `protocol/schema/messages.toml` → `cargo run -p protogen` → `protocol/generated/skyrimxer_protocol.{h,rs}`.
 Fixed-size little-endian plain structs, explicit padding only (protogen rejects implicit padding), size/offset asserts in both
 languages, `version` + region name bump for any layout change.
 
-**v1 region (P2, 0x21000 bytes):**
+**v2 region (P3, 0x21000 bytes; v1 = the same without the slots):**
 ```
 0x00000 Header       magic 'SXER' (written last by the creator), version, header_size, region_size,
                      sky_/er_ pid, state (SideState), heartbeat_ms (GetTickCount64), attach_count   (64 B)
 0x00100 RingHeader   sky→er   write_pos, read_pos (u64 byte totals, never wrap), capacity, dropped
 0x00140 RingHeader   er→sky
+0x00200 InputState   sky→er   seqlock slot (48 B): frame, time_ms, buttons (Button bits), move_x/y, cam_yaw
+0x00300 PlayerState  er→sky   seqlock slot (80 B): flags (PlayerFlag bits), frame, time_ms, hp/fp/stamina + maxes,
+                              anim_id, block_id, poise(+max), pos[3], yaw
 0x01000 ring data    sky→er   64 KiB
 0x11000 ring data    er→sky   64 KiB
 ```
@@ -52,7 +55,13 @@ languages, `version` + region name bump for any layout change.
   then checks magic/version/sizes. On a mismatch it logs `PROTOCOL MISMATCH` once and writes nothing. Each side writes only its own `sky_*`/`er_*` fields.
 - **Rings:** exactly one writer and one reader each. Message = `{u16 msg_type, u16 size, u32 seq}` + payload, padded to 8 B, may wrap.
   A full ring drops the message and counts it in `dropped`. On (re)attach, a reader skips stale bytes and the writer restarts `seq` at 1.
-- **Events v1:** `Hello` (protocol version, pid, plugin + game version), `Bye` (reason), `Heartbeat` (uptime, frames; every 5 s).
+- **Slots** (`protocol/src/slot.rs`, mirrored in `skse/src/bridge/Slot.h`): latest value only, one writer (that side's game thread),
+  any readers. The struct starts with `seq` (odd = being written). Writer: seq+1, release fence, copy, seq+2 (release). Reader: seq (acquire),
+  retry while odd, copy, acquire fence, accept if unchanged (≤ 64 tries). The body is copied as u32 atomics, so there are no data races. A new writer
+  turns a dead writer's odd seq even again. **Stale** = `time_ms` older than 250 ms or the link not connected: the reader acts on nothing.
+  Game threads reach the slots through `LinkShared` (region + `connected` atomic), never the link's lock. The region is only published after a
+  successful join, so a mismatched layout never gets slot writes.
+- **Events (unchanged since v1):** `Hello` (protocol version, pid, plugin + game version), `Bye` (reason), `Heartbeat` (uptime, frames; every 5 s).
 - **Link state machine** (`protocol/src/link.rs`, mirrored in `skse/src/bridge/Link.cpp`; same steps and log wording), ticked by a
   dedicated 50 ms thread on each side, not by the game loop:
   attach (retry 1 s) → write own heartbeat → check peer → read events → maybe send a Heartbeat event.
@@ -65,10 +74,8 @@ languages, `version` + region name bump for any layout change.
 
 **Planned (P3+, will bump the version):**
 ```
-Slot<InputState>    sky→er   seqlock   per Skyrim frame   (buttons, sticks, camera yaw/pitch)
 Slot<CameraState>   sky→er   seqlock   per Skyrim frame
-Slot<PlayerState>   er→sky   seqlock   per ER frame       (hp, fp, stamina, maxes, action_state, anim_id,
-                                                           iframe, hyperarmor, poise, move_delta_xyz, yaw)
+PlayerState additions: action_state, move_delta_xyz
 Events sky→er: PlayerHurt{dmg types, attacker level, hit dir}, Toggle, ...
 Events er→sky: HitResult{target formid, dmg, poise dmg, status}, FlaskUsed, RunesChanged, Died, ...
 ```

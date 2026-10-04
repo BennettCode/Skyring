@@ -7,9 +7,9 @@
 
 namespace sxer::proto
 {
-	inline constexpr std::uint32_t kVersion = 1;
+	inline constexpr std::uint32_t kVersion = 2;
 	inline constexpr std::uint32_t kMagic = 0x52455853;  // "SXER" as little-endian bytes
-	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v1";
+	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v2";
 
 	// Peer counts as gone when its heartbeat is older than this.
 	inline constexpr std::uint64_t kHeartbeatTimeoutMs = 2000;
@@ -23,10 +23,16 @@ namespace sxer::proto
 	inline constexpr std::uint32_t kMsgAlign = 8;
 	// Largest payload a message may carry.
 	inline constexpr std::uint32_t kMsgMaxPayload = 1024;
+	// Slot data whose time_ms is older than this is stale (the reader ignores it).
+	inline constexpr std::uint64_t kSlotStaleMs = 250;
+	// A slot reader gives up after this many torn reads in a row.
+	inline constexpr std::uint32_t kSlotReadTries = 64;
 
 	inline constexpr std::size_t kOffHeader = 0x0;
 	inline constexpr std::size_t kOffRingSkyToEr = 0x100;
 	inline constexpr std::size_t kOffRingErToSky = 0x140;
+	inline constexpr std::size_t kOffSlotInput = 0x200;
+	inline constexpr std::size_t kOffSlotPlayer = 0x300;
 	inline constexpr std::size_t kOffRingSkyToErData = 0x1000;
 	inline constexpr std::size_t kOffRingErToSkyData = 0x11000;
 	inline constexpr std::size_t kRegionSize = 0x21000;
@@ -54,6 +60,22 @@ namespace sxer::proto
 		Hello = 1,
 		Bye = 2,
 		Heartbeat = 3,
+	};
+
+	// InputState.buttons. Values are BIT INDICES: mask = 1 << value.
+	enum class Button : std::uint32_t
+	{
+		Dodge = 0,  // Skyrim's Sprint user event, held state forwarded raw (ER: tap = roll/backstep, hold = dash).
+	};
+
+	// PlayerState.flags. Values are BIT INDICES: mask = 1 << value.
+	enum class PlayerFlag : std::uint32_t
+	{
+		InWorld = 0,  // The ER player is loaded in the world (not title screen / loading).
+		IFrame = 1,  // Invincible (dodge i-frames).
+		Dodging = 2,
+		HyperArmor = 3,
+		PoiseBroken = 4,
 	};
 
 	// At OFF_HEADER. Each side writes only its own sky_* / er_* fields; the creator writes the rest, magic last.
@@ -121,6 +143,74 @@ namespace sxer::proto
 	static_assert(offsetof(MsgHeader, msg_type) == 0);
 	static_assert(offsetof(MsgHeader, size) == 2);
 	static_assert(offsetof(MsgHeader, seq) == 4);
+
+	// At OFF_SLOT_INPUT. Written by Skyrim's game thread every frame, read by ER's.
+	struct InputState
+	{
+		std::uint32_t seq;  // Seqlock counter (odd = being written).
+		std::uint32_t _pad0;
+		std::uint64_t frame;  // Skyrim frame counter.
+		std::uint64_t time_ms;  // GetTickCount64() when written.
+		std::uint32_t buttons;  // Held Button bits.
+		std::uint32_t _pad1;
+		float move_x;  // Move stick right, -1..1.
+		float move_y;  // Move stick forward, -1..1.
+		float cam_yaw;  // Skyrim camera yaw, radians.
+		std::uint32_t _pad2;
+	};
+	static_assert(std::is_trivially_copyable_v<InputState> && std::is_standard_layout_v<InputState>);
+	static_assert(sizeof(InputState) == 48);
+	static_assert(alignof(InputState) == 8);
+	static_assert(offsetof(InputState, seq) == 0);
+	static_assert(offsetof(InputState, _pad0) == 4);
+	static_assert(offsetof(InputState, frame) == 8);
+	static_assert(offsetof(InputState, time_ms) == 16);
+	static_assert(offsetof(InputState, buttons) == 24);
+	static_assert(offsetof(InputState, _pad1) == 28);
+	static_assert(offsetof(InputState, move_x) == 32);
+	static_assert(offsetof(InputState, move_y) == 36);
+	static_assert(offsetof(InputState, cam_yaw) == 40);
+	static_assert(offsetof(InputState, _pad2) == 44);
+
+	// At OFF_SLOT_PLAYER. Written by ER's game thread every frame, read by Skyrim's.
+	struct PlayerState
+	{
+		std::uint32_t seq;  // Seqlock counter (odd = being written).
+		std::uint32_t flags;  // PlayerFlag bits.
+		std::uint64_t frame;  // ER frame counter.
+		std::uint64_t time_ms;  // GetTickCount64() when written.
+		std::int32_t hp;
+		std::int32_t max_hp;
+		std::int32_t fp;
+		std::int32_t max_fp;
+		std::int32_t stamina;
+		std::int32_t max_stamina;
+		std::int32_t anim_id;  // Current ER animation id (e.g. 27010 = backstep).
+		std::int32_t block_id;  // ER map block id (eldenring-rs BlockId as i32, e.g. m10_01_00_00).
+		float poise;
+		float poise_max;
+		float pos[3];  // ER world position (Y-up, metres).
+		float yaw;  // ER yaw, radians.
+	};
+	static_assert(std::is_trivially_copyable_v<PlayerState> && std::is_standard_layout_v<PlayerState>);
+	static_assert(sizeof(PlayerState) == 80);
+	static_assert(alignof(PlayerState) == 8);
+	static_assert(offsetof(PlayerState, seq) == 0);
+	static_assert(offsetof(PlayerState, flags) == 4);
+	static_assert(offsetof(PlayerState, frame) == 8);
+	static_assert(offsetof(PlayerState, time_ms) == 16);
+	static_assert(offsetof(PlayerState, hp) == 24);
+	static_assert(offsetof(PlayerState, max_hp) == 28);
+	static_assert(offsetof(PlayerState, fp) == 32);
+	static_assert(offsetof(PlayerState, max_fp) == 36);
+	static_assert(offsetof(PlayerState, stamina) == 40);
+	static_assert(offsetof(PlayerState, max_stamina) == 44);
+	static_assert(offsetof(PlayerState, anim_id) == 48);
+	static_assert(offsetof(PlayerState, block_id) == 52);
+	static_assert(offsetof(PlayerState, poise) == 56);
+	static_assert(offsetof(PlayerState, poise_max) == 60);
+	static_assert(offsetof(PlayerState, pos) == 64);
+	static_assert(offsetof(PlayerState, yaw) == 76);
 
 	// Sent on attach and whenever a new peer appears. The receiver checks protocol_version.
 	struct Hello

@@ -13,9 +13,9 @@
 # All values are little-endian (both games are x64 Windows).
 
 [protocol]
-version = 1
+version = 2
 magic = "SXER"                      # stored as a little-endian u32: bytes 'S' 'X' 'E' 'R'
-region_name = 'Local\SkyrimXER_v1'  # must end in _v<version>
+region_name = 'Local\SkyrimXER_v2'  # must end in _v<version>
 
 [constants]
 HEARTBEAT_TIMEOUT_MS = { type = "u64", value = 2000, doc = "Peer counts as gone when its heartbeat is older than this." }
@@ -24,6 +24,8 @@ LINK_TICK_MS = { type = "u64", value = 50, doc = "Link thread period on both sid
 RING_CAPACITY = { type = "u32", value = 0x10000, doc = "Data bytes per ring. Power of two." }
 MSG_ALIGN = { type = "u32", value = 8, doc = "Each message (header + payload) is padded to this many bytes." }
 MSG_MAX_PAYLOAD = { type = "u32", value = 1024, doc = "Largest payload a message may carry." }
+SLOT_STALE_MS = { type = "u64", value = 250, doc = "Slot data whose time_ms is older than this is stale (the reader ignores it)." }
+SLOT_READ_TRIES = { type = "u32", value = 64, doc = "A slot reader gives up after this many torn reads in a row." }
 
 [[enums]]
 name = "SideState"
@@ -54,6 +56,26 @@ values = [
   { name = "Hello", value = 1 },
   { name = "Bye", value = 2 },
   { name = "Heartbeat", value = 3 },
+]
+
+[[enums]]
+name = "Button"
+repr = "u32"
+doc = "InputState.buttons. Values are BIT INDICES: mask = 1 << value."
+values = [
+  { name = "Dodge", value = 0, doc = "Skyrim's Sprint user event, held state forwarded raw (ER: tap = roll/backstep, hold = dash)." },
+]
+
+[[enums]]
+name = "PlayerFlag"
+repr = "u32"
+doc = "PlayerState.flags. Values are BIT INDICES: mask = 1 << value."
+values = [
+  { name = "InWorld", value = 0, doc = "The ER player is loaded in the world (not title screen / loading)." },
+  { name = "IFrame", value = 1, doc = "Invincible (dodge i-frames)." },
+  { name = "Dodging", value = 2 },
+  { name = "HyperArmor", value = 3 },
+  { name = "PoiseBroken", value = 4 },
 ]
 
 # ---- region layout ------------------------------------------------------------------------------------------------
@@ -100,11 +122,58 @@ fields = [
   { name = "seq", type = "u32", doc = "Per-ring counter, starts at 1 each time the writer attaches." },
 ]
 
+# Seqlock slots (blocks named SLOT_*): one writer, any number of readers, latest value only.
+# The struct must start with `seq: u32` (odd = being written) and its size must be a multiple of 4: the body is copied as u32 words.
+# Writer: seq+1, release fence, copy words, seq+2 (release). Reader: seq (acquire), retry while odd, copy, acquire fence,
+# accept if seq is unchanged (at most SLOT_READ_TRIES tries). Data older than SLOT_STALE_MS, or with the link not connected, is stale.
+
+[[structs]]
+name = "InputState"
+size = 48
+doc = "At OFF_SLOT_INPUT. Written by Skyrim's game thread every frame, read by ER's."
+fields = [
+  { name = "seq", type = "u32", doc = "Seqlock counter (odd = being written)." },
+  { name = "_pad0", type = "u32" },
+  { name = "frame", type = "u64", doc = "Skyrim frame counter." },
+  { name = "time_ms", type = "u64", doc = "GetTickCount64() when written." },
+  { name = "buttons", type = "u32", doc = "Held Button bits." },
+  { name = "_pad1", type = "u32" },
+  { name = "move_x", type = "f32", doc = "Move stick right, -1..1." },
+  { name = "move_y", type = "f32", doc = "Move stick forward, -1..1." },
+  { name = "cam_yaw", type = "f32", doc = "Skyrim camera yaw, radians." },
+  { name = "_pad2", type = "u32" },
+]
+
+[[structs]]
+name = "PlayerState"
+size = 80
+doc = "At OFF_SLOT_PLAYER. Written by ER's game thread every frame, read by Skyrim's."
+fields = [
+  { name = "seq", type = "u32", doc = "Seqlock counter (odd = being written)." },
+  { name = "flags", type = "u32", doc = "PlayerFlag bits." },
+  { name = "frame", type = "u64", doc = "ER frame counter." },
+  { name = "time_ms", type = "u64", doc = "GetTickCount64() when written." },
+  { name = "hp", type = "i32" },
+  { name = "max_hp", type = "i32" },
+  { name = "fp", type = "i32" },
+  { name = "max_fp", type = "i32" },
+  { name = "stamina", type = "i32" },
+  { name = "max_stamina", type = "i32" },
+  { name = "anim_id", type = "i32", doc = "Current ER animation id (e.g. 27010 = backstep)." },
+  { name = "block_id", type = "i32", doc = "ER map block id (eldenring-rs BlockId as i32, e.g. m10_01_00_00)." },
+  { name = "poise", type = "f32" },
+  { name = "poise_max", type = "f32" },
+  { name = "pos", type = "f32[3]", doc = "ER world position (Y-up, metres)." },
+  { name = "yaw", type = "f32", doc = "ER yaw, radians." },
+]
+
 [region]
 blocks = [
   { name = "HEADER", offset = 0x0, struct = "Header" },
   { name = "RING_SKY_TO_ER", offset = 0x100, struct = "RingHeader" },
   { name = "RING_ER_TO_SKY", offset = 0x140, struct = "RingHeader" },
+  { name = "SLOT_INPUT", offset = 0x200, struct = "InputState" },
+  { name = "SLOT_PLAYER", offset = 0x300, struct = "PlayerState" },
   { name = "RING_SKY_TO_ER_DATA", offset = 0x1000, bytes = 0x10000 },
   { name = "RING_ER_TO_SKY_DATA", offset = 0x11000, bytes = 0x10000 },
 ]

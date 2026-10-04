@@ -19,6 +19,8 @@ pub struct Region {
 
 // SAFETY: the mapping is process-wide memory; all shared accesses go through atomics.
 unsafe impl Send for Region {}
+// SAFETY: as above; game threads share it through `Arc<Region>` (slots) while the link thread uses the rings.
+unsafe impl Sync for Region {}
 
 impl Region {
     /// Opens the mapping `name`, creating it (zero-filled) if it doesn't exist yet. Maps exactly `REGION_SIZE` bytes,

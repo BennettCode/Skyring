@@ -7,7 +7,8 @@
 //! - Connected peer stops beating, faults, or says Bye → lost → this side goes idle (the fail-safe) and waits again.
 
 use std::mem::offset_of;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 
 use crate::proto::{
     Bye, ByeReason, HEARTBEAT_EVENT_INTERVAL_MS, HEARTBEAT_TIMEOUT_MS, Header, Heartbeat, Hello, MAGIC, MsgType, OFF_HEADER,
@@ -93,7 +94,27 @@ struct Attached {
     tx: RingWriter,
     rx: RingReader,
     joined: bool,
-    region: Region,
+    region: Arc<Region>,
+}
+
+/// What the game threads need from the link without taking its lock: the joined region (for the `slot`s) and
+/// whether the peer is connected. Get it once with [`Link::shared`]; the `Arc<Region>` keeps the mapping alive.
+#[derive(Default)]
+pub struct LinkShared {
+    region: OnceLock<Arc<Region>>,
+    connected: AtomicBool,
+}
+
+impl LinkShared {
+    /// Set once this side joined a region with a matching layout; `None` before that (or forever, on a mismatch).
+    pub fn region(&self) -> Option<Arc<Region>> {
+        self.region.get().cloned()
+    }
+
+    /// Handshake done and the peer is alive, as of the link's last tick (≤ `LINK_TICK_MS` old).
+    pub fn connected(&self) -> bool {
+        self.connected.load(Ordering::Acquire)
+    }
 }
 
 pub struct Link {
@@ -101,6 +122,7 @@ pub struct Link {
     region_name: String,
     identity: Identity,
     log: LogFn,
+    shared: Arc<LinkShared>,
     attached: Option<Attached>,
     retry_at_ms: u64,
     last_problem: String,
@@ -131,6 +153,7 @@ impl Link {
             region_name: region_name.to_string(),
             identity,
             log,
+            shared: Arc::default(),
             attached: None,
             retry_at_ms: 0,
             last_problem: String::new(),
@@ -154,6 +177,10 @@ impl Link {
         self.status == PeerStatus::Connected
     }
 
+    pub fn shared(&self) -> Arc<LinkShared> {
+        self.shared.clone()
+    }
+
     /// `now_ms` = `crate::now_ms()` in the games; tests pass their own clock. `frames` = game frames run so far.
     pub fn tick(&mut self, now_ms: u64, frames: u64) {
         if self.attached.is_none() && !self.try_open(now_ms) {
@@ -168,6 +195,7 @@ impl Link {
             self.send_heartbeat_event(&mut a, now_ms, frames);
         }
         self.attached = Some(a);
+        self.shared.connected.store(self.connected(), Ordering::Release);
     }
 
     /// Clean exit: Bye to a connected peer, then state ShuttingDown. Safe to call more than once.
@@ -176,6 +204,7 @@ impl Link {
         if a.joined && self.state != SideState::ShuttingDown {
             let sent = self.connected() && a.tx.send(&Bye { reason: ByeReason::Quit as u32, ..Default::default() }).is_ok();
             self.set_state(&a, SideState::ShuttingDown);
+            self.shared.connected.store(false, Ordering::Release);
             self.say(Level::Info, &format!("shutting down (Bye sent: {})", if sent { "yes" } else { "no peer" }));
         }
         self.attached = Some(a);
@@ -231,7 +260,7 @@ impl Link {
         let rx = unsafe { RingReader::new(region.base(), rx_ring.0, rx_ring.1) };
         let how = if region.created { "created" } else { "opened existing" };
         self.say(Level::Info, &format!("region {} {how} ({REGION_SIZE:#x} bytes, protocol v{VERSION})", self.region_name));
-        self.attached = Some(Attached { tx, rx, joined: false, region });
+        self.attached = Some(Attached { tx, rx, joined: false, region: Arc::new(region) });
         true
     }
 
@@ -266,6 +295,8 @@ impl Link {
         r.u64_at(my.heartbeat).store(now_ms, Ordering::Relaxed);
         let attach = r.u32_at(my.attach).fetch_add(1, Ordering::Relaxed) + 1;
         a.joined = true;
+        // Only a validated layout is handed to the game threads, so a mismatch never gets slot writes.
+        let _ = self.shared.region.set(a.region.clone());
         self.set_state(a, SideState::Ready);
         self.joined_at_ms = now_ms;
         self.last_problem.clear();
@@ -466,10 +497,13 @@ mod tests {
         let region = name("timeout");
         let (mut sky, sky_log) = link(Side::Skyrim, &region);
         let (mut er, er_log) = link(Side::EldenRing, &region);
+        let shared = sky.shared();
+        assert!(shared.region().is_none() && !shared.connected());
         for t in [1000, 1050, 1100] {
             tick_both(&mut sky, &mut er, t);
         }
         assert!(sky.connected() && er.connected(), "sky: {sky_log:?}\ner: {er_log:?}");
+        assert!(shared.region().is_some() && shared.connected() && er.shared().connected());
         assert!(has(&sky_log, "CONNECTED: handshake ok with ER"));
         assert!(!has(&sky_log, "Hello again") && !has(&er_log, "Hello again"), "exactly one Hello each way");
 
@@ -484,6 +518,7 @@ mod tests {
         assert!(sky.connected());
         sky.tick(6251 + HEARTBEAT_TIMEOUT_MS, 0);
         assert_eq!(sky.status(), PeerStatus::Lost);
+        assert!(!shared.connected(), "game threads see the loss");
         assert!(has(&sky_log, "LOST: ER") && has(&sky_log, "heartbeat timeout"));
 
         // ER comes back: reconnects without restarting Skyrim.
@@ -533,5 +568,6 @@ er: {er_log:?}");
         assert!(has(&er_log, "PROTOCOL MISMATCH"));
         assert_eq!(er_log.lock().unwrap().iter().filter(|l| l.contains("MISMATCH")).count(), 1, "logged once");
         assert_eq!(region.u32_at(fields(Side::EldenRing).pid).load(Ordering::Relaxed), 0, "no writes into a foreign layout");
+        assert!(er.shared().region().is_none(), "a foreign layout is never handed to the game threads");
     }
 }

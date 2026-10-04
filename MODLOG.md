@@ -4,6 +4,17 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P3 step 3 done: protocol v2 seqlock slots
+- **Changed:** schema v2 (`Local\SkyrimXER_v2`): `InputState` slot @0x200 (sky→er), `PlayerState` slot @0x300 (er→sky), `Button`/`PlayerFlag`
+  bit enums, `SLOT_STALE_MS`/`SLOT_READ_TRIES`. protogen requires `SLOT_*` structs to start with `seq: u32`. New `protocol/src/slot.rs` + C++ mirror
+  `skse/src/bridge/Slot.h` (seqlock, body copied as u32 atomics). `LinkShared` (region + `connected`) on both links for lock-free game-thread access,
+  published only after a valid join. fake-peer + C++ peer: link thread + frame loop, Dodge pulses (`--dodge-every`), fake ER dodge model, PlayerState edge log.
+- **Tested (no game):** `tests/run-tests.ps1` all green. Covered: protogen (incl. the slot rule); Rust slot tests (round trip, dead-writer repair,
+  fresh, 0.5 s concurrent torn-read check); link `LinkShared` asserts; the C++ selftest (same + a threaded torn-read check, ~9 M reads); interop A
+  (C++ Skyrim Dodge → Rust ER dodges → C++ sees stamina 100→80 and IFrame on/off ~31 ms later, stale once after the crash); interop B. Both
+  plugins rebuilt + deployed (`dev.ps1 -NoLaunch`).
+- **Result:** P3 step 3 ✔. Next: step 4 (wire the loop in both games).
+
 ## 2026-10-04: P3 step 2 done: injected backstep works with ER hidden
 - **Changed:** `er-plugin/src/window.rs`: the focus spoof also runs at WorldChrMan_Prepare (PadStep re-sets `is_back_ground_window`
   every frame while ER isn't foreground). `er-plugin/src/focus.rs`: change-only focus-flag probe (dev, `probe=1`).

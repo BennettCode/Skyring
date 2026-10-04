@@ -277,6 +277,16 @@ fn validate(schema: &Schema) -> Result<Model<'_>, String> {
                 if b.offset % l.align != 0 {
                     return Err(format!("block {}: offset not aligned for {s}", b.name));
                 }
+                // Seqlock slots copy whole u32 words after a leading `seq` counter (see protocol/src/slot.rs).
+                if b.name.starts_with("SLOT_") {
+                    let first = l.fields.first().map(|(f, ty, _)| (f.name.as_str(), ty.prim.rust, ty.count));
+                    if first != Some(("seq", "u32", None)) {
+                        return Err(format!("block {}: slot struct {s} must start with `seq: u32`", b.name));
+                    }
+                    if l.size % 4 != 0 {
+                        return Err(format!("block {}: slot struct {s} size must be a multiple of 4", b.name));
+                    }
+                }
                 l.size
             }
             (None, Some(bytes)) => bytes,
@@ -536,6 +546,35 @@ mod tests {
             ],
         };
         assert!(layout(&def).is_err());
+    }
+
+    #[test]
+    fn slot_struct_needs_leading_seq() {
+        let schema = |first: &str| {
+            format!(
+                r#"
+                messages = []
+                [protocol]
+                version = 1
+                magic = "SXER"
+                region_name = 'Local\T_v1'
+                [constants]
+                [[enums]]
+                name = "MsgType"
+                repr = "u16"
+                values = []
+                [[structs]]
+                name = "S"
+                fields = [{{ name = "{first}", type = "u32" }}, {{ name = "x", type = "u32" }}]
+                [region]
+                blocks = [{{ name = "SLOT_S", offset = 0x0, struct = "S" }}]
+                "#
+            )
+        };
+        let ok: Schema = toml::from_str(&schema("seq")).unwrap();
+        assert!(validate(&ok).is_ok());
+        let bad: Schema = toml::from_str(&schema("count")).unwrap();
+        assert!(validate(&bad).err().unwrap().contains("must start with `seq: u32`"));
     }
 
     #[test]

@@ -110,6 +110,8 @@ namespace sxer
 
 	void Link::Close()
 	{
+		shared_.base.store(nullptr, std::memory_order_release);
+		shared_.connected.store(false, std::memory_order_release);
 		if (base_) {
 			::UnmapViewOfFile(base_);
 			base_ = nullptr;
@@ -145,14 +147,14 @@ namespace sxer
 		if (!base_ && !TryOpen(a_nowMs)) {
 			return;
 		}
-		if (!joined_ && !TryJoin(a_nowMs)) {
-			return;
+		if (joined_ || TryJoin(a_nowMs)) {
+			At<std::uint64_t>(base_, Fields(side_).heartbeat).store(a_nowMs, std::memory_order_release);
+			// Peer check first: a new peer is greeted before its own Hello is read, so a Hello never looks like a restart.
+			CheckPeer(a_nowMs);
+			Pump(a_nowMs);
+			SendHeartbeatEvent(a_nowMs, a_frames);
 		}
-		At<std::uint64_t>(base_, Fields(side_).heartbeat).store(a_nowMs, std::memory_order_release);
-		// Peer check first: a new peer is greeted before its own Hello is read, so a Hello never looks like a restart.
-		CheckPeer(a_nowMs);
-		Pump(a_nowMs);
-		SendHeartbeatEvent(a_nowMs, a_frames);
+		shared_.connected.store(Connected(), std::memory_order_release);
 	}
 
 	void Link::Shutdown(bool a_log)
@@ -162,6 +164,7 @@ namespace sxer
 		}
 		const bool sent = Connected() && Send(Bye{ static_cast<std::uint32_t>(ByeReason::Quit), 0 });
 		SetState(SideState::ShuttingDown);
+		shared_.connected.store(false, std::memory_order_release);
 		if (a_log) {
 			Say(Level::Info, std::format("shutting down (Bye sent: {})", sent ? "yes" : "no peer"));
 		}
@@ -238,6 +241,8 @@ namespace sxer
 		At<std::uint64_t>(base_, my.heartbeat).store(a_nowMs, std::memory_order_relaxed);
 		const auto attach = At<std::uint32_t>(base_, my.attach).fetch_add(1, std::memory_order_relaxed) + 1;
 		joined_ = true;
+		// Only a validated layout is handed to the game threads, so a mismatch never gets slot writes.
+		shared_.base.store(base_, std::memory_order_release);
 		SetState(SideState::Ready);
 		joinedAtMs_ = a_nowMs;
 		lastProblem_.clear();

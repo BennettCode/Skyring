@@ -62,6 +62,9 @@ ER character dodges (ER's own gating and stamina) → ER state (stamina, i-frame
   rest of the process, so game threads can use slots without taking the link mutex. Add a `connected` atomic flag for the game threads.
 - `tools/fake-peer`: `er` writes a synthetic PlayerState (stamina −20 / 1 s of IFrame on each Dodge edge, regen afterwards). `skyrim` pulses Dodge every 4 s.
 - `docs/DESIGN.md` §4: v2 layout table.
+- **Result (2026-10-04):** ✔ as specified. Extras: `LinkShared` (Rust `Arc`, C++ member of the leaked Link), `SLOT_STALE_MS`/`SLOT_READ_TRIES`
+  constants, `Button`/`PlayerFlag` values are bit indices, body copied as u32 atomics. Fake peers run a link thread + a 16 ms frame loop.
+  `run-tests.ps1` interop A now also checks C++ Dodge → Rust ER dodge → C++ sees stamina 100→80 + IFrame on/off, and stale once after the crash.
 
 ### 4. Wire the loop (both plugins)
 - **Skyrim**: `skse/src/hooks/PlayerUpdate.cpp` (new, own file with a comment, CLAUDE §7): vtable hook 0xAD on `VTABLE_PlayerCharacter`. Every frame:
