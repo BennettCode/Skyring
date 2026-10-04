@@ -3,10 +3,10 @@
 _Last updated: 2026-10-04_
 
 ## Current phase
-**P3: done (2026-10-04)** (plan + results: `docs/P3-PLAN.md`). ER runs hidden at 60 fps; Skyrim Sprint (+ W/A/S/D) → the hidden ER
-character backsteps/rolls by ER's own rules; ER's stamina, animation and roll i-frame window come back to Skyrim every frame (HUD + log);
-the coordinate conversion between the games is measured (`protocol/src/coords.rs`). Both plugins share `Local\SkyrimXER_v2`, handshake,
-exchange heartbeats, and fail safe when the other game dies or quits. **Next: P4 plan.**
+**P4: in progress** (plan: `docs/P4-PLAN.md`). Step 1 done (2026-10-04): while the bridge is on, Skyrim's vanilla sprint is off (Sprint =
+ER dodge), F10 toggles the bridge, and the hidden ER character only gets the move stick around a dodge (stays parked).
+P3 (done): ER runs hidden at 60 fps; Sprint (+ W/A/S/D) → ER backsteps/rolls by ER's rules; stamina, animation and the roll i-frame
+window come back every frame; coordinate conversion measured (`protocol/src/coords.rs`). Region `Local\SkyrimXER_v2`.
 
 ## What exists
 - `protocol/`: schema `schema/messages.toml` (v2) → `tools/protogen` → `generated/skyrimxer_protocol.{h,rs}`. Rust crate `skyrimxer-protocol`
@@ -27,11 +27,10 @@ exchange heartbeats, and fail safe when the other game dies or quits. **Next: P4
 - None blocking. Arena settled: the test character is parked in m10_01_00_00 and the user presses
   Continue each run (no warp in P3). The user tests with a DualSense (PS5) over USB in both games.
 
-## Next 3 steps (P4: movement & defense, `docs/ROADMAP.md`)
-1. **P4 plan (plan mode):** order the P4 items, decide input swallowing (vanilla sprint/dodge off while the bridge is on, F10 toggle) and
-   how the Skyrim player follows ER's roll (ER displacement → `coords::er_delta_to_local` → Skyrim delta per frame).
-2. Skyrim player follows the ER roll + plays a roll animation; stamina bar mirrors ER; out of stamina = no roll.
-3. NPC hits during ER i-frames are cancelled. Controller support (DualSense in Skyrim) is also in P4.
+## Next 3 steps (P4, `docs/P4-PLAN.md`)
+1. Step 2: find ER's combat state (rolls are free out of combat) with a probe diff, aggroed vs calm; force it from code.
+2. Step 3: protocol v3 (InputState `flags`: InCombat, BridgeOn) so Skyrim's combat state drives ER's.
+3. Step 4: the Skyrim player follows ER's roll (ER displacement → coords → Skyrim, with Skyrim collision).
 
 ## Handoff notes
 **I-frame search solved (2026-10-04, attempt 3).** Attempts 1–2 diffed memory only during *backsteps*, which set no invincibility at

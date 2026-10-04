@@ -6,6 +6,7 @@
 #include "bridge/PlayerWatch.h"
 #include "bridge/Slot.h"
 #include "hooks/PlayerUpdate.h"
+#include "hooks/SprintSwallow.h"
 
 #include <algorithm>
 #include <atomic>
@@ -26,6 +27,8 @@ namespace sxer::bridge
 		Link* g_link = nullptr;
 		// Game frames run so far (PlayerCharacter::Update calls); sent in Heartbeat events.
 		std::atomic<std::uint64_t> g_frames{ 0 };
+		// See SwallowSprint().
+		std::atomic<bool> g_swallowSprint{ false };
 
 		constexpr std::uint32_t kDodge = 1u << static_cast<std::uint32_t>(proto::Button::Dodge);
 		constexpr std::uint32_t kInWorld = 1u << static_cast<std::uint32_t>(proto::PlayerFlag::InWorld);
@@ -54,6 +57,8 @@ namespace sxer::bridge
 			std::optional<SlotWriter<proto::InputState>> input;
 			std::optional<SlotReader<proto::PlayerState>> player;
 			PlayerWatch watch;
+			bool bridgeOn = true;
+			bool swallow = false;
 			bool held = false;
 			input::Move move;
 			std::vector<float> frameMs;
@@ -195,9 +200,13 @@ namespace sxer::bridge
 		SKSE::log::info("[core] link thread started (tick {} ms); waiting for ER", proto::kLinkTickMs);
 
 		hooks::InstallPlayerUpdate();
+		hooks::InstallSprintSwallow();
 		input::Install();
-		SKSE::log::info("[core] hooks installed: PlayerCharacter::Update (vfunc 0xAD) → InputState/PlayerState slots, input sink (Sprint → Dodge, movement keys → move stick)");
+		SKSE::log::info("[core] hooks installed: PlayerCharacter::Update (vfunc 0xAD) → InputState/PlayerState slots, SprintHandler::CanProcess "
+		                "(vfunc 0x1, vanilla sprint off while bridged), input sink (Sprint → Dodge, movement keys → move stick, F10 toggle)");
 	}
+
+	bool SwallowSprint() { return g_swallowSprint.load(std::memory_order_relaxed); }
 
 	void OnFrame(const RE::PlayerCharacter* a_player, float a_delta)
 	{
@@ -219,13 +228,25 @@ namespace sxer::bridge
 		}
 		const bool connected = shared.connected.load(std::memory_order_acquire);
 
-		const bool held = input::SprintHeld();
+		const bool on = input::BridgeOn();
+		if (on != f.bridgeOn) {
+			f.bridgeOn = on;
+			hud::Notify(on ? "SkyrimXER: bridge ON (Sprint = Elden Ring dodge), F10 toggles" : "SkyrimXER: bridge OFF (vanilla Skyrim), F10 toggles");
+		}
+		const auto& last = f.watch.Last();
+		const bool swallow = on && connected && last && (last->flags & kInWorld);
+		if (swallow != f.swallow) {
+			f.swallow = swallow;
+			g_swallowSprint.store(swallow, std::memory_order_relaxed);
+			SKSE::log::info("[input] vanilla Sprint {} frame={}", swallow ? "swallowed (Sprint = ER dodge only)" : "restored", frame);
+		}
+		const bool held = on && input::SprintHeld();
 		const bool pressed = held && !f.held;
 		if (held != f.held) {
 			f.held = held;
 			SKSE::log::info("[input] Dodge {} frame={} (Sprint from {})", held ? "down" : "up", frame, input::SprintDevice());
 		}
-		const auto move = input::MoveAxes();
+		const auto move = on ? input::MoveAxes() : input::Move{};
 		if (move != f.move) {
 			f.move = move;
 			SKSE::log::info("[input] move x={} y={} frame={}", move.x, move.y, frame);

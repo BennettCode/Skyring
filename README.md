@@ -62,6 +62,7 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
 - Elden Ring runs **hidden** at a full 60 fps while you play Skyrim (it keeps running when its window isn't focused).
 - **Sprint in Skyrim (Left Shift) → the Elden Ring character dodges.** Hold a movement key (W/A/S/D) while you tap Sprint and it **rolls**
   in that direction; tap Sprint alone and it backsteps. Elden Ring's own rules decide what happens (tap = dodge, hold = dash).
+  While the link is active, Skyrim's own sprint is off (Sprint is the dodge now). **F10** turns the link off and on (off = plain Skyrim).
 - **Elden Ring's state comes back to Skyrim every frame:** stamina (a dodge costs stamina in combat), HP, animation.
   Skyrim shows a short on-screen message after each dodge, e.g. `ER dodge: anim 27110 | stamina 136->128 | i-frames yes`.
 - **Roll i-frames reach Skyrim:** Skyrim knows the exact window (about 0.45 s) in which the Elden Ring roll makes you invincible.
@@ -78,7 +79,7 @@ Skyrim is keyboard-and-mouse only for now (details below). The i-frames are know
 | P1 | Both plugins load and log | ✅ done |
 | P2 | Shared memory link: handshake, heartbeats, crash fail-safe | ✅ done |
 | P3 | Dodge in Skyrim → Elden Ring dodges → its stamina and i-frames come back | ✅ done |
-| **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 next: planning |
+| **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 in progress (1/7: Sprint = dodge, F10 toggle) |
 | P5 | Damage both ways uses Elden Ring's math (poise, stagger) | ⏳ |
 | P6 | Elden Ring-style HUD | ⏳ |
 | P7 | Runes from kills, leveling, flasks refill at "graces" | ⏳ |
@@ -93,7 +94,7 @@ All development and testing happens on this exact setup. Other versions aren't s
 
 | | Version |
 |---|---|
-| **Input** | **Keyboard and mouse** in both games for now. Skyrim: Sprint (Left Shift) = dodge. |
+| **Input** | **Keyboard and mouse** in both games for now. Skyrim: Sprint (Left Shift) = dodge, F10 = link on/off. |
 | Skyrim Special/Anniversary Edition (Steam) | `SkyrimSE.exe` **1.7.104.0** |
 | SKSE64 | **2.3.1** |
 | Address Library for SKSE Plugins | **v13** (All in One) |

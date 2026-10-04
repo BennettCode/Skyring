@@ -30,3 +30,11 @@ before use (a missing id makes CommonLib abort the game at load).
   Steam launches. A Steam launch option `"...\skse64_loader.exe" %command%` fails: the loader logs `too many free args (...SkyrimSELauncher.exe)`
   and never starts the game. Controller support is still open (options: a `cmd /c start ... & rem %command%` launch option, or a Non-Steam shortcut).
 - Confidence: verified by test (2026-10-04).
+
+## SprintHandler::CanProcess (vanilla sprint off)
+- Location: `RE::VTABLE_SprintHandler[0]` = AE id **208717** (offset 0x1935208), vfunc **0x1** (`PlayerInputHandler::CanProcess(InputEvent*)`;
+  CommonLib's AE 1.7.99 vfunc shift only starts at 0x2).
+- What it does: PlayerControls asks each handler whether it takes an event. Returning false for Sprint *presses* stops vanilla sprint;
+  our `BSInputDeviceManager` sink still sees the key. Releases are let through so a sprint begun before the swallow still ends.
+- Hook: `skse/src/hooks/SprintSwallow.cpp`. Confidence: verified by test (2026-10-04: bridged Shift+W ≈ 366 u/s = run speed, unswallowed
+  sprint ≈ 499 u/s).

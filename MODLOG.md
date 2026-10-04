@@ -4,6 +4,15 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P4 step 1: Sprint swallowed, F10 toggle, ER stick only around dodges
+- **Changed:** P4 plan (`docs/P4-PLAN.md`, ROADMAP P4/P5 edited after the user's choices). New `skse/src/hooks/SprintSwallow.cpp`:
+  `SprintHandler::CanProcess` (vtable AE 208717, vfunc 0x1) refuses Sprint presses while `bridge::SwallowSprint()` (bridge on + connected +
+  ER in world); releases pass. `Input.cpp`: F10 toggles the bridge (off = nothing forwarded or swallowed), HUD message. ER `remote.rs`: the
+  move stick is forwarded only while Dodge is held and 10 frames after, so the hidden character no longer walks with Skyrim.
+- **Tested:** both games, keyboard (user). Bridged Shift+W ≈ 366 u/s (plain run 356), bridge off ≈ 499 (vanilla sprint); F10 both ways;
+  plain walks sent nothing to ER; 5/5 directional rolls with i-frames.
+- **Result:** ✔ step 1. Next: step 2, ER combat state (rolls free out of combat).
+
 ## 2026-10-04: Docs: "Made with Claude" + public CLAUDE.md
 - **Changed:** README "Made with Claude" section (built with Claude Opus 5.5 in Claude Code, guided by a project CLAUDE.md) linking a new
   public copy `docs/ai/CLAUDE.md` (the project's agent instructions, cleaned of machine paths and private notes; copy it to the repo root to use it).

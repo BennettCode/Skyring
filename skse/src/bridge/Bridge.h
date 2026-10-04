@@ -8,4 +8,7 @@ namespace sxer::bridge
 	// Main thread, once per game frame (hooks/PlayerUpdate.cpp): Sprint → InputState, PlayerState → log edges, perf every 5 s,
 	// bounded [coords] samples of the player's position/heading while moving (coordinate test).
 	void OnFrame(const RE::PlayerCharacter* a_player, float a_delta);
+	// True while vanilla sprint must stay off: bridge on (F10), link connected and the ER character in the world (fresh PlayerState).
+	// Updated by OnFrame; read by hooks/SprintSwallow.cpp (main thread).
+	bool SwallowSprint();
 }

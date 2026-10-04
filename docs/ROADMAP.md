@@ -39,18 +39,22 @@ Tick boxes as you go. Keep each phase small. If a phase grows, split it.
 **Accept:** pressing dodge in Skyrim → ER rolls → Skyrim's log shows the stamina drop and the i-frame window with timestamps. ✔ met 2026-10-04
 (stamina drop in combat, i-frame window from rolls).
 
-## P4: Movement & defense
-- [ ] **Controller support:** PS5 DualSense in Skyrim. Skyrim only reads XInput, so it needs Steam Input, which doesn't apply when SKSE starts
-  outside Steam (a plain Steam launch option fails: the loader rejects Steam's extra argument). Options: a `cmd /c start` launch option,
-  a Non-Steam-game shortcut, or reading the pad in the plugin itself. Also check that the hidden ER doesn't read the same pad (double input)
-- [ ] Swallow vanilla Skyrim dodge/sprint/block/attack input while the bridge is on (F10 toggle)
-- [ ] Skyrim player follows ER's roll movement curve. Rolls play an animation in Skyrim
+## P4: Movement & defense (plan: `docs/P4-PLAN.md`)
+- [x] Swallow vanilla Skyrim Sprint while the bridge is on (it's the ER dodge now), F10 toggles the bridge. The hidden ER character only
+  gets the move stick around a dodge, so it stays parked (2026-10-04)
+- [ ] Rolls cost ER stamina while the Skyrim player is in combat (ER makes them free out of combat, so ER is put in its combat state)
+- [ ] Skyrim player follows ER's roll movement curve, with Skyrim's collision
+- [ ] Rolls play an animation in Skyrim (vanilla only: the sneak "Silent Roll"; no extra animation mods)
 - [ ] Skyrim's stamina bar mirrors ER's stamina. Out of stamina = no roll
 - [ ] NPC hits during ER i-frames are cancelled
+- [ ] **Controller support (last):** PS5 DualSense in Skyrim. Skyrim only reads XInput, so it needs Steam Input, which doesn't apply when SKSE
+  starts outside Steam (a plain Steam launch option fails: the loader rejects Steam's extra argument). Options: a `cmd /c start` launch
+  option, a Non-Steam-game shortcut, or reading the pad in the plugin itself. Also check that the hidden ER doesn't read the same pad (double input)
 **Accept:** the user rolls through an NPC's attack without taking damage, and spamming rolls is limited by stamina.
 
 ## P5: Combat bridge
 - [ ] Weapon mapping table (Skyrim weapon → ER weapon ID) in `config/`
+- [ ] Swallow vanilla attack/block while the bridge is on, and forward them to ER instead
 - [ ] Player light/heavy attacks: ER timing + damage math → applied to Skyrim actors (HitResult)
 - [ ] NPC → player damage goes through ER defenses. ER HP is the authority. Skyrim HP mirrors it
 - [ ] Poise/stagger both ways. Logs show every damage calculation input

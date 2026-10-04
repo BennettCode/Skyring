@@ -12,6 +12,9 @@ namespace sxer::input
 {
 	namespace
 	{
+		// DirectInput scan code of the bridge toggle key.
+		constexpr std::uint32_t kToggleKey = 0x44;  // F10
+		std::atomic<bool> g_bridgeOn{ true };
 		std::atomic<bool> g_sprint{ false };
 		std::atomic<int> g_sprintDevice{ -1 };
 		std::array<std::atomic<bool>, 8> g_seenDevice{};
@@ -68,6 +71,9 @@ namespace sxer::input
 						continue;
 					}
 					const auto* button = e->AsButtonEvent();
+					if (e->GetDevice() == RE::INPUT_DEVICE::kKeyboard && button->GetIDCode() == kToggleKey && button->IsDown()) {
+						g_bridgeOn.store(!g_bridgeOn.load(std::memory_order_relaxed), std::memory_order_relaxed);
+					}
 					const auto& name = button->QUserEvent();
 					if (name == events->sprint) {
 						g_sprint.store(button->IsPressed(), std::memory_order_relaxed);
@@ -99,6 +105,8 @@ namespace sxer::input
 		devices->AddEventSink(Sink::Get());
 		installed = true;
 	}
+
+	bool BridgeOn() { return g_bridgeOn.load(std::memory_order_relaxed); }
 
 	bool SprintHeld() { return g_sprint.load(std::memory_order_relaxed); }
 
