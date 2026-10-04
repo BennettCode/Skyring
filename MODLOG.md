@@ -4,6 +4,13 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: POSE-PLAN step 1, ER skeleton pose found (ER only)
+- **Changed:**
+  - `er-plugin/src/pose.rs` (new, research): `pose_probe=1` / `tools/dev.ps1 -ErPoseProbe`. A one-time object-graph walk from the opaque pose pointers, using safe reads (ReadProcessMemory on the own process) and RTTI names. It detects transform and bone-name arrays, then samples them during rolls, and logs the parents, the bind pose and the key bones.
+  - Cargo: windows features `Win32_System_Diagnostics_Debug`, `Win32_System_Threading`.
+- **Tested:** 2 ER runs with the roll self-test (user pressed Continue). Found `ChrIns+0x398` → `CSFD4LocationHkaPoseImporter` → hkaPose: skeleton (150 named bones, parents, bind) plus local and model pose. During a roll all model bones move (pelvis 0.94 → 0.27 m); idle stays under 1°. Notes: `docs/research/elden-ring-pose.md`.
+- **Result:** ✔ step 1 accepted. Next: step 2, the Skyrim one-bone proof.
+
 ## 2026-10-04: Pose-streaming plan + reference study (docs only)
 - **Changed:**
   - `docs/POSE-PLAN.md` (new): plan for P4 step 5. ER plays the roll on the hidden character; its bone pose is retargeted onto the Skyrim player every frame. The plan has 6 steps and starts with an ER pose memory probe. P4-PLAN step 5 links to it.

@@ -20,6 +20,8 @@ pub struct Config {
     pub force_combat: String,
     /// Pin the character to its spot (park.rs, P4 step 4b). `pin=0` lets it move freely (debugging with `visible=1`, A/B tests).
     pub pin: bool,
+    /// Research: find the skeleton pose in memory (pose::PoseProbe, docs/POSE-PLAN.md step 1).
+    pub pose_probe: bool,
 }
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
@@ -39,6 +41,7 @@ pub fn load(dir: &Path) {
                 "dump" => config.dump = value == "1",
                 "force_combat" => config.force_combat = value.to_string(),
                 "pin" => config.pin = value != "0",
+                "pose_probe" => config.pose_probe = value == "1",
                 other => crate::error!("core", "skyrimxer_er.cfg: unknown key `{other}`"),
             }
         }

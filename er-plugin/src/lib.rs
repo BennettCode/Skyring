@@ -13,6 +13,7 @@ mod game;
 mod log;
 mod pad;
 mod park;
+mod pose;
 mod remote;
 mod window;
 
@@ -130,6 +131,11 @@ fn init(module: usize) {
     if config::get().dump {
         let mut dump = combat::Dump::new();
         std::mem::forget(task.run_recurring(move |_: &FD4TaskData| dump.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
+    }
+    if config::get().pose_probe {
+        let mut probe = pose::PoseProbe::new();
+        std::mem::forget(task.run_recurring(move |_: &FD4TaskData| probe.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
+        info!("pose", "pose probe in ChrIns_PostPhysics (research, pose_probe=1)");
     }
     info!("core", "PlayerState publisher in ChrIns_PostPhysics (FrameBegin while not in world), dodge watcher in ChrIns_PostPhysics");
     if config::get().probe {
