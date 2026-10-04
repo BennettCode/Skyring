@@ -94,3 +94,14 @@ Open hypotheses (next session):
   That happened during load-in and while the user was typing in another window. So `CSChrActionRequestModule`'s read from the pad needs
   the window to really be foreground; our two-flag spoof (`is_game_window_focused`, `is_back_ground_window`) isn't enough. Next: find that check (P3 step 2, Stage 3).
 - Stamina stayed 101 for both the real and the injected backstep (out of combat, idle); not a difference.
+
+## P3 step 2, session 3: hidden window solved (2026-10-04)
+- **Focus probe** (`er-plugin/src/focus.rs`, change-only, FrameBegin before our spoof + WorldChrMan_Prepare): with ER not foreground,
+  `FD4PadManager.is_back_ground_window` is **set to 1 again during PadStep every frame**; our FrameBegin spoof was too early.
+  `DLUserInputManagerImpl.is_game_window_focused` only flickers to 0 for a frame. Unnamed neighbours (pad manager unk10/unk2fa,
+  input manager unk889/88a/88c, foreground cooperative-level flags) don't change with focus. Pad entries `enable_use`/`allow_polling` churn with menus, not focus.
+- **Fix:** run the same spoof again in a WorldChrMan_Prepare task (after PadStep, before ChrIns_PreBehavior reads input).
+- **Result, window hidden, hands off:** 7/8 self-test pulses backstep (anim 27010; 4-, 9- and 30-frame holds), 60 fps. The miss was the
+  pulse sent while the character was still spawning (anim -1), as in every earlier run.
+- **Open (not blocking):** `perfect_invincibility` / `dodging` flags stayed 0 during 27010 for real and injected backsteps alike, and stamina
+  stayed 101 (idle, out of combat). Confirm where ER exposes backstep/roll i-frames before PlayerState relies on them (P3 step 3/4).

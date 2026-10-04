@@ -1,5 +1,5 @@
 //! Hidden-but-focused: ER must keep simulating while the player looks at Skyrim (SkyCraft's "hidden, told it's focused").
-//! Every frame: tell ER's input layer its window is focused and in the foreground. Once the player is in the world, hide the
+//! Every frame (FrameBegin and again after PadStep): tell ER's input layer its window is focused and in the foreground. Once the player is in the world, hide the
 //! window; show it again when the player leaves the world, so the title screen stays usable.
 //! `visible=1` in skyrimxer_er.cfg (`dev.ps1 -ErVisible`) keeps the window visible (debugging). Notes: docs/research/elden-ring-input.md.
 
@@ -11,6 +11,22 @@ use eldenring::fd4::FD4PadManager;
 use fromsoftware_shared::FromStatic;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{IsWindowVisible, SW_HIDE, SW_SHOW, ShowWindow};
+
+/// Tells ER's input layer its window is focused and in the foreground. Runs at FrameBegin and again at WorldChrMan_Prepare:
+/// while ER isn't the foreground window, PadStep sets `is_back_ground_window` again every frame, and the player's action requests
+/// (read in ChrIns_PreBehavior) ignore the pad while it's set (focus probe, docs/research/elden-ring-input.md session 3).
+pub fn spoof_focus() {
+    // SAFETY: main thread (task callback).
+    unsafe {
+        if let Ok(input) = DLUserInputManagerImpl::instance_mut() {
+            input.is_game_window_focused = true;
+        }
+        if let Ok(pads) = FD4PadManager::instance_mut() {
+            pads.is_back_ground_window = false;
+            pads.exit_foreground_signaled = false;
+        }
+    }
+}
 
 pub struct WindowControl {
     keep_visible: bool,
@@ -27,16 +43,7 @@ impl WindowControl {
 
     /// FrameBegin. `in_world` = the main player exists.
     pub fn frame(&mut self, in_world: bool) {
-        // SAFETY: main thread (task callback).
-        unsafe {
-            if let Ok(input) = DLUserInputManagerImpl::instance_mut() {
-                input.is_game_window_focused = true;
-            }
-            if let Ok(pads) = FD4PadManager::instance_mut() {
-                pads.is_back_ground_window = false;
-                pads.exit_foreground_signaled = false;
-            }
-        }
+        spoof_focus();
         let want_hidden = in_world && !self.keep_visible;
         if want_hidden != self.hidden {
             self.set_hidden(want_hidden);

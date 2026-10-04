@@ -42,8 +42,8 @@ ER character dodges (ER's own gating and stamina) → ER state (stamina, i-frame
   frame + timestamp, plus `new_action_presses` readback. If the bit gets overwritten (no anim change), try in order: an earlier group
   (`ChrIns_CalcUpdateInfo` / `ChrIns_AILogic`), then virtual digital `Backstep` input at `PadStep`. Two failed attempts → stuck protocol (CLAUDE §10).
 - **Result (session 3):** works while focused: hold `Backstep` + `BackstepTapped` on the press frame only (a real tap raises both; the
-  release then becomes request bit 16 `backstep`). Left: the hidden/unfocused case (the action module ignores the pad unless ER is
-  foreground). Next: compare typed focus fields focused vs unfocused, spoof the one that differs.
+  release then becomes request bit 16 `backstep`). Hidden: PadStep re-sets `is_back_ground_window` every frame, so the focus spoof also
+  runs at WorldChrMan_Prepare. ✔ 7/8 pulses backstep with ER hidden (miss = during spawn-in).
 - **Test:** ER only, hidden. The log shows a backstep anim, `dodging`/`perfect_invincibility` on→off, and stamina dropping.
 
 ### 3. Protocol v2: seqlock slots (no game needed)

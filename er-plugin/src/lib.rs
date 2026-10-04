@@ -7,6 +7,7 @@
 mod actions;
 mod bridge;
 mod config;
+mod focus;
 mod game;
 mod log;
 mod pad;
@@ -78,6 +79,9 @@ fn init(module: usize) {
     // Dropping the handle cancels the task; it must live as long as the game.
     std::mem::forget(handle);
 
+    // PadStep re-sets the background flag every frame while ER isn't foreground; clear it again before the characters read input.
+    std::mem::forget(task.run_recurring(|_: &FD4TaskData| window::spoof_focus(), CSTaskGroupIndex::WorldChrMan_Prepare));
+
     if actions::selftest_enabled() {
         let (group, group_name) = actions::inject_group();
         let mut injector = actions::Injector::new();
@@ -92,6 +96,8 @@ fn init(module: usize) {
             std::mem::forget(task.run_recurring(move |_: &FD4TaskData| actions::probe::sample(name, i == last), group));
         }
         info!("probe", "sp_move probe on {} task groups", last + 1);
+        std::mem::forget(task.run_recurring(|_: &FD4TaskData| focus::sample(1, "WPrep"), CSTaskGroupIndex::WorldChrMan_Prepare));
+        info!("probe", "focus probe on FrameBegin + WorldChrMan_Prepare");
     }
     info!("core", "per-frame task registered (FrameBegin)");
 }
@@ -122,6 +128,9 @@ impl FrameTask {
                 Some(p) => info!("core", "main player spawned (in world at {})", p.current_block_id),
                 None => info!("core", "main player gone (menu/loading)"),
             }
+        }
+        if config::get().probe {
+            focus::sample(0, "FrameBegin");
         }
         self.window.frame(in_world);
 

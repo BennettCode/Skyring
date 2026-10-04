@@ -4,6 +4,14 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P3 step 2 done: injected backstep works with ER hidden
+- **Changed:** `er-plugin/src/window.rs`: the focus spoof also runs at WorldChrMan_Prepare (PadStep re-sets `is_back_ground_window`
+  every frame while ER isn't foreground). `er-plugin/src/focus.rs`: change-only focus-flag probe (dev, `probe=1`).
+- **Tested in-game (ER only):** focus probe run (visible, user switched windows): backsteps stopped while another window was foreground,
+  `is_back_ground_window` was 1 after PadStep. After the fix, hidden run, hands off: 7/8 pulses backstepped (the miss was during spawn-in), 60 fps.
+  `tests/run-tests.ps1` passes.
+- **Result:** P3 step 2 ✔. Open note: i-frame/dodging flags read 0 during backsteps (real ones too), see research note.
+
 ## 2026-10-04: P3 step 2: injected backstep works (window focused)
 - **Changed:** `er-plugin/src/pad.rs` (`describe`, `poll_mask`, `layers`: read-only input diagnostics), `actions.rs` (wide per-frame probe:
   full action masks, all key polls, device layers; self-test also raises `BackstepTapped` on the press frame; holds 4/9/30). `tools/dev.ps1`
