@@ -18,13 +18,15 @@ pub struct Config {
     pub dump: bool,
     /// `on` / `off`: force ER's combat state every frame (combat::ForceCombat, P4 step 2 research). Empty = leave it to the game.
     pub force_combat: String,
+    /// Pin the character to its spot (park.rs, P4 step 4b). `pin=0` lets it move freely (debugging with `visible=1`, A/B tests).
+    pub pin: bool,
 }
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
 
 pub fn load(dir: &Path) {
     let path = dir.join("skyrimxer_er.cfg");
-    let mut config = Config::default();
+    let mut config = Config { pin: true, ..Config::default() };
     if let Ok(text) = std::fs::read_to_string(&path) {
         for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
             let Some((key, value)) = line.split_once('=') else { continue };
@@ -36,6 +38,7 @@ pub fn load(dir: &Path) {
                 "probe" => config.probe = value == "1",
                 "dump" => config.dump = value == "1",
                 "force_combat" => config.force_combat = value.to_string(),
+                "pin" => config.pin = value != "0",
                 other => crate::error!("core", "skyrimxer_er.cfg: unknown key `{other}`"),
             }
         }
@@ -45,5 +48,5 @@ pub fn load(dir: &Path) {
 }
 
 pub fn get() -> &'static Config {
-    CONFIG.get_or_init(Config::default)
+    CONFIG.get_or_init(|| Config { pin: true, ..Config::default() })
 }

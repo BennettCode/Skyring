@@ -1,81 +1,122 @@
-//! Keeps the hidden ER character parked (P4 step 4). Every dodge moves it in ER's world, so over many rolls it wandered into walls and
-//! enemies. The parking spot (anchor) is the character's position whenever neither a dodge nor Skyrim's input moves it (walking it
-//! yourself with `-ErVisible` moves the anchor along); once that has been true for RETURN_AFTER frames (so chained rolls aren't cut),
-//! it is put back on the anchor: physics position + `chr_proxy_pos_update_requested`. It then only needs a few metres of free ground.
-//! ChrIns_PostPhysics, main thread only.
+//! Pins the hidden ER character to its spot (P4 step 4b). ER walls and enemies used to shorten rolls: the character really moved in
+//! ER's world, and Skyrim copies its movement. Now, every frame after ER's physics has moved it by this frame's step, the horizontal
+//! step is added to a *virtual* position and the character is put back on its spot (physics position + `chr_proxy_pos_update_requested`).
+//! It never gets further than one frame's step (~0.1 m) from the spot; Skyrim gets the virtual position in PlayerState.pos
+//! (`remote::publish_state`), so its deltas are the full roll. Y stays ER's (slopes, gravity). A jump > MAX_STEP_M in one frame
+//! (loading, a grace warp) takes the new position as the spot. `pin=0` in skyrimxer_er.cfg (dev.ps1 `-ErNoPin`): no writes, the
+//! character moves freely (virtual = real). ChrIns_PostPhysics, main thread only.
 
+use std::sync::Mutex;
 use std::sync::atomic::Ordering;
 
 use eldenring::position::HavokPosition;
 
-use crate::{bridge, game, remote};
+use crate::{bridge, config, game};
 
-/// Frames without a dodge animation before the character goes back to the anchor.
-const RETURN_AFTER: u32 = 10;
-/// Farther than this from the anchor = a real move (loading, a grace warp, ...): take it as the new anchor instead.
-const MAX_RETURN_M: f32 = 40.0;
+/// Farther than this in one frame = a real move (loading, a grace warp, ...), never a dodge step: it becomes the new spot.
+/// Skyrim ignores jumps of the same size (Movement.cpp kMaxStepM).
+const MAX_STEP_M: f32 = 1.5;
+/// Smaller steps are left alone (no position write while standing still).
+const MIN_STEP_M: f32 = 0.001;
 
-pub struct Park {
-    anchor: Option<HavokPosition>,
-    /// A dodge moved the character away from the anchor and it hasn't been returned yet.
-    away: bool,
-    calm_frames: u32,
+/// Virtual position of this frame (Havok, Y-up, metres); `None` while there is no player.
+static VIRTUAL: Mutex<Option<[f32; 3]>> = Mutex::new(None);
+
+/// The position PlayerState publishes: where the character would be if it wasn't pinned.
+pub fn virtual_pos() -> Option<[f32; 3]> {
+    *VIRTUAL.lock().unwrap_or_else(|p| p.into_inner())
 }
 
 fn is_dodge_anim(anim: i32) -> bool {
     anim >= 0 && (anim % 1_000_000) / 1000 == 27
 }
 
+/// One dodge animation, for the `[park] dodge` line.
+struct Dodge {
+    anim: i32,
+    frames: u32,
+    start: [f32; 3],
+    max_drift: f32,
+}
+
+pub struct Park {
+    pin: bool,
+    /// The spot (pinned) or last frame's position (not pinned).
+    anchor: Option<HavokPosition>,
+    virt: [f32; 3],
+    dodge: Option<Dodge>,
+}
+
 impl Park {
     pub fn new() -> Self {
-        Self { anchor: None, away: false, calm_frames: 0 }
+        let pin = config::get().pin;
+        crate::info!("park", "{}", if pin { "pin on: the character stays on its spot, Skyrim gets its virtual position" } else { "pin OFF (pin=0): the character moves freely" });
+        Self { pin, anchor: None, virt: [0.0; 3], dodge: None }
     }
 
     pub fn run(&mut self) {
         // SAFETY: task callbacks run on the game's main thread.
         let Some(player) = (unsafe { game::main_player() }) else {
             self.anchor = None;
-            self.away = false;
+            self.dodge = None;
+            *VIRTUAL.lock().unwrap_or_else(|p| p.into_inner()) = None;
             return;
         };
-        let s = game::snapshot(player);
-        let pos = player.chr_ins.modules.physics.position;
-        if is_dodge_anim(s.anim_id) || remote::DRIVING.load(Ordering::Relaxed) {
-            if !self.away && self.anchor.is_none() {
-                self.anchor = Some(pos);
-            }
-            self.away = true;
-            self.calm_frames = 0;
-            return;
-        }
-        if !self.away {
-            self.anchor = Some(pos);
-            return;
-        }
-        self.calm_frames += 1;
-        if self.calm_frames < RETURN_AFTER {
-            return;
-        }
-        self.away = false;
-        let Some(anchor) = self.anchor else { return };
-        let (dx, dy, dz) = (pos.0 - anchor.0, pos.1 - anchor.1, pos.2 - anchor.2);
-        let dist = (dx * dx + dy * dy + dz * dz).sqrt();
+        let anim = game::snapshot(player).anim_id;
         let frame = bridge::FRAMES.load(Ordering::Relaxed);
-        if dist > MAX_RETURN_M {
-            crate::info!("park", "frame={frame} {dist:.1} m from the parking spot: taking the new position as the spot");
-            self.anchor = Some(pos);
-            return;
-        }
         let physics = &mut player.chr_ins.modules.physics;
-        physics.position = anchor;
-        physics.chr_proxy_pos_update_requested = true;
-        crate::info!(
-            "park",
-            "frame={frame} dodge over: back to the parking spot ({dist:.2} m) anim={} at ({:.2},{:.2},{:.2})",
-            s.anim_id,
-            anchor.0,
-            anchor.1,
-            anchor.2
-        );
+        let pos = physics.position;
+        let before = self.virt;
+        let step = match self.anchor {
+            None => {
+                crate::info!("park", "frame={frame} spot ({:.2},{:.2},{:.2})", pos.0, pos.1, pos.2);
+                self.virt = [pos.0, pos.1, pos.2];
+                self.anchor = Some(pos);
+                0.0
+            }
+            Some(a) => {
+                let (dx, dz) = (pos.0 - a.0, pos.2 - a.2);
+                let step = dx.hypot(dz);
+                if step > MAX_STEP_M {
+                    crate::info!("park", "frame={frame} moved {step:.1} m in one frame: new spot ({:.2},{:.2},{:.2})", pos.0, pos.1, pos.2);
+                    self.virt = [pos.0, pos.1, pos.2];
+                    self.anchor = Some(pos);
+                    self.dodge = None;
+                    0.0
+                } else {
+                    self.virt = [self.virt[0] + dx, pos.1, self.virt[2] + dz];
+                    if !self.pin {
+                        self.anchor = Some(pos);
+                    } else if step > MIN_STEP_M {
+                        physics.position = HavokPosition(a.0, pos.1, a.2, pos.3);
+                        physics.chr_proxy_pos_update_requested = true;
+                    }
+                    step
+                }
+            }
+        };
+        *VIRTUAL.lock().unwrap_or_else(|p| p.into_inner()) = Some(self.virt);
+        self.track_dodge(anim, step, before, frame);
+    }
+
+    fn track_dodge(&mut self, anim: i32, step: f32, before: [f32; 3], frame: u64) {
+        let dodging = is_dodge_anim(anim);
+        if self.dodge.as_ref().is_some_and(|d| !dodging || d.anim != anim) {
+            let d = self.dodge.take().unwrap();
+            let dist = (self.virt[0] - d.start[0]).hypot(self.virt[2] - d.start[2]);
+            crate::info!(
+                "park",
+                "frame={frame} dodge anim={} frames={} virtual={dist:.2} m max_drift={:.3} m (pin={})",
+                d.anim,
+                d.frames,
+                d.max_drift,
+                self.pin as u8
+            );
+        }
+        if dodging {
+            let d = self.dodge.get_or_insert(Dodge { anim, frames: 0, start: before, max_drift: 0.0 });
+            d.frames += 1;
+            d.max_drift = d.max_drift.max(step);
+        }
     }
 }

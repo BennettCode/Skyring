@@ -8,7 +8,8 @@ ER dodge), F10 toggles the bridge, and the hidden ER character only gets the mov
 Step 2 done: ER's combat flag found (`CSChrDataModule` +0x19a bit 0x40) and forced from code (rolls then cost stamina with no enemy).
 Step 3 done: protocol v3; Skyrim's combat state drives ER's, so rolls cost stamina only while the Skyrim player fights.
 Step 4 done: the Skyrim player follows ER's rolls (closed loop through `Actor::ApplyCurrent`, 96–99 % of ER's distance, camera-relative,
-chains, tap = dodge / hold = sprint, movement back at ER's move-cancel window); the hidden ER character returns to its spot after dodges.
+chains, tap = dodge / hold = sprint, movement back at ER's move-cancel window). Step 4b: the hidden ER character is pinned to its spot
+every frame and Skyrim follows its virtual position, so ER walls no longer shorten rolls (`er-plugin/src/park.rs`).
 Step 5 (vanilla roll animation) is stuck after 2 attempts: see Handoff notes.
 P3 (done): ER runs hidden at 60 fps; Sprint (+ W/A/S/D) → ER backsteps/rolls by ER's rules; stamina, animation and the roll i-frame
 window come back every frame; coordinate conversion measured (`protocol/src/coords.rs`). Region `Local\SkyrimXER_v3`.
@@ -33,10 +34,9 @@ window come back every frame; coordinate conversion measured (`protocol/src/coor
   Continue each run (no warp in P3). The user tests with a DualSense (PS5) over USB in both games.
 
 ## Next 3 steps (P4, `docs/P4-PLAN.md`)
-1. Pin the hidden ER character (it still rolls into ER walls): hold it on its spot every frame and take the roll from ER's root
-   motion (`CSChrPhysicsModule.root_motion`) instead of its position. Research first (self-test: log root motion vs position).
-2. Step 5 roll animation, fresh attempt (Handoff notes).
-3. Step 6: Skyrim's stamina bar mirrors ER's.
+1. Step 5 roll animation, fresh attempt (Handoff notes).
+2. Step 6: Skyrim's stamina bar mirrors ER's.
+3. Step 7: NPC hits during ER i-frames are cancelled.
 
 ## Handoff notes
 **P4 step 5, roll animation: stuck after 2 attempts (2026-10-04).** Goal: a roll animation in Skyrim with vanilla files only.

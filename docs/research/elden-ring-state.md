@@ -52,3 +52,8 @@ Game/version: eldenring.exe 2.7.1.0 (1.17.1), eldenring-rs `59fbd3b`. Read in `e
 - A Sprint hold past the tap window dashes (12020110/12020210); with the move stick dropped after 20 frames the character stands.
 - Teleport: write `CSChrPhysicsModule.position` and set `chr_proxy_pos_update_requested` (ChrIns_PostPhysics) → the character is there
   next frame (`er-plugin/src/park.rs`). Confidence: verified by test (2026-10-04).
+- **Pinning (P4 step 4b):** the same write *every frame* in ChrIns_PostPhysics (back to the spot's X/Z, Y left to ER) makes the next
+  physics step start from the spot again: the per-frame displacement is the full root-motion step (roll 27110 = 3.51 m total, the same
+  pinned and free, all four directions) and the character never gets further than ~0.17 m from its spot. I-frame window (27 frames),
+  anim ids and roll timing unchanged. So no root-motion read is needed: displacement after physics minus the spot = this frame's step.
+  Confidence: verified by test (2026-10-04, A/B self-test `-ErSelfTest roll` with/without `-ErNoPin`, then both games).

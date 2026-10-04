@@ -67,7 +67,7 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
   Skyrim shows a short on-screen message after each dodge, e.g. `ER dodge: anim 27110 | stamina 136->124 | i-frames yes`.
 - **Rolls cost stamina only while your Skyrim character is in combat**, like in Elden Ring (exploring, they're free).
 - **Your Skyrim character moves with the roll:** the same distance as Elden Ring's roll, in the direction you're looking + holding,
-  stopped by walls. Spamming chains rolls. **Tap** Sprint to dodge, **hold** it to sprint.
+  stopped by Skyrim's walls (Elden Ring's walls don't matter: the hidden character never leaves its spot). Spamming chains rolls. **Tap** Sprint to dodge, **hold** it to sprint.
 - **Roll i-frames reach Skyrim:** Skyrim knows the exact window (about 0.45 s) in which the Elden Ring roll makes you invincible.
 - Fail-safe: if either game closes, crashes or pauses, the other one notices within a moment and stops acting on stale input.
 

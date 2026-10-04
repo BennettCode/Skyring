@@ -70,7 +70,10 @@ First: copy this plan to `docs/P4-PLAN.md`, ROADMAP P4/P5 edits (swallow list, v
   **Tap = dodge, hold = sprint:** past 20 frames ER drops the stick and Skyrim's own sprint is let through (presented as a fresh press).
   **Parking (`er-plugin/src/park.rs`):** the hidden character returns to its spot after every dodge (physics position +
   `chr_proxy_pos_update_requested`); the spot only follows the character while Skyrim isn't driving it.
-  Open: ER-side walls still shorten rolls that start near one (next: pin the ER character and take the roll from root motion).
+  ~~Open: ER-side walls still shorten rolls.~~ **Step 4b (pin, 2026-10-04):** `park.rs` now puts the character back on its spot
+  every frame and integrates the per-frame step into a virtual position that PlayerState.pos carries (Skyrim unchanged). A/B self-test:
+  free rolls near the wall 0.07–3.51 m, pinned 3.51 m every time; both games: 40+ rolls at 92–100 % of ER's distance, ER character
+  never moved. `pin=0` (dev.ps1 `-ErNoPin`) for debugging.
 
 ### 5. Roll animation, vanilla (Skyrim; experiment, 2 tries)
 - Find the Silent Roll graph event: `BSTEventSink<BSAnimationGraphEvent>` on the player logs events while the user does a vanilla sneak

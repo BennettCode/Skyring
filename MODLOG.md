@@ -4,6 +4,17 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P4 step 4b: the hidden ER character is pinned (ER only)
+- **Changed:** `er-plugin/src/park.rs` rewritten: every frame (ChrIns_PostPhysics) the character's horizontal step is added to a virtual
+  position and the character is put back on its spot (physics position + `chr_proxy_pos_update_requested`); PlayerState.pos = the virtual
+  position (`remote.rs`, same task as the pin in `lib.rs`). A jump > 1.5 m in one frame = new spot. `pin` config key / dev.ps1 `-ErNoPin`.
+  `[park] dodge` line per dodge (virtual distance, max drift). dev.ps1 deletes the old ER log before launching (a just-killed ER's
+  "in world" line ended `-WaitInWorld` runs early).
+- **Tested:** ER self-test A/B: free 3.09/3.51/2.19/**0.07**/3.51/**0.08**/3.30/3.51 m (wall), pinned 3.51 m ×8, max drift 0.17 m,
+  i-frames 27 frames. Both games (keyboard, W/A/S/D + 10 chained): 40+ rolls at 92–100 % of ER's distance, ER real position constant.
+  `tests/run-tests.ps1` green.
+- **Result:** ✔ user request "the ER character must not move unless rolling" (it doesn't move at all now). Skyrim unchanged.
+
 ## 2026-10-04: P4 step 4: the Skyrim player follows ER's rolls (both games)
 - **Changed:** `skse/src/bridge/Movement.cpp` (new): while ER plays a dodge, ER's per-frame delta → character frame → Skyrim along the
   roll direction (camera yaw + move keys), applied closed-loop through `Actor::ApplyCurrent`; ends at ER's TAE movement-cancel window

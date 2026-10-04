@@ -97,16 +97,21 @@ fn init(module: usize) {
     }
     let mut watcher = actions::Watcher::new();
     std::mem::forget(task.run_recurring(move |_: &FD4TaskData| watcher.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
-    std::mem::forget(task.run_recurring(|_: &FD4TaskData| remote::publish_state(false), CSTaskGroupIndex::ChrIns_PostPhysics));
     std::mem::forget(task.run_recurring(|_: &FD4TaskData| remote::sample_coords(), CSTaskGroupIndex::ChrIns_PostPhysics));
     if config::get().dump {
         let mut speffects = combat::SpEffectWatch::new();
         std::mem::forget(task.run_recurring(move |_: &FD4TaskData| speffects.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
         info!("core", "SpEffect watch in ChrIns_PostPhysics (research, dump=1)");
     }
+    // One task so PlayerState always carries this frame's virtual position (park.rs pins the character, publish_state sends it).
     let mut park = park::Park::new();
-    std::mem::forget(task.run_recurring(move |_: &FD4TaskData| park.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
-    info!("core", "parking: the character returns to its spot after each dodge (ChrIns_PostPhysics)");
+    std::mem::forget(task.run_recurring(
+        move |_: &FD4TaskData| {
+            park.run();
+            remote::publish_state(false);
+        },
+        CSTaskGroupIndex::ChrIns_PostPhysics,
+    ));
     let mut combat_watch = combat::CombatWatch::new();
     std::mem::forget(task.run_recurring(move |_: &FD4TaskData| combat_watch.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
     let force = config::get().force_combat.as_str();

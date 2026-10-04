@@ -226,7 +226,8 @@ pub fn publish_state(from_frame_begin: bool) {
         state.block_id = s.block_id;
         state.poise = s.poise;
         state.poise_max = s.poise_max;
-        state.pos = s.pos;
+        // Pinned character (park.rs): Skyrim follows where it would be, not where it is.
+        state.pos = crate::park::virtual_pos().unwrap_or(s.pos);
         state.yaw = s.yaw;
     }
     writer.write(&state);
