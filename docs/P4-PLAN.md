@@ -93,6 +93,7 @@ First: copy this plan to `docs/P4-PLAN.md`, ROADMAP P4/P5 edits (swallow list, v
   host character every frame (no animation files converted or shipped). Here: ER plays the roll on the hidden character, the ER plugin
   reads its skeleton pose, Skyrim writes it onto the player's skeleton. New plan + research (ER pose location, bone map, protocol slot)
   in a fresh chat; it would animate every ER action (P5 attacks too), so it may become its own phase.
+  **Plan: `docs/POSE-PLAN.md`** (user chose pose streaming, 2026-10-04).
 
 ### 6. Stamina bar mirrors ER (Skyrim)
 - Every frame with fresh PlayerState: Skyrim Stamina current = Skyrim max × ER stamina/max (damage-modifier delta via

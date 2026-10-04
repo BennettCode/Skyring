@@ -4,6 +4,14 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: Pose-streaming plan + reference study (docs only)
+- **Changed:**
+  - `docs/POSE-PLAN.md` (new): plan for P4 step 5. ER plays the roll on the hidden character; its bone pose is retargeted onto the Skyrim player every frame. The plan has 6 steps and starts with an ER pose memory probe. P4-PLAN step 5 links to it.
+  - Studied Killcraft and 2010-rust-rewrite-mashup next to the existing references. THIRD-PARTY-NOTICES credits both.
+  - The AI workflow doc (`docs/ai/CLAUDE.md` §14) now lists, for each problem (pose, interpolation, hits, HUD, camera, input, debug tools), where the reference projects solved it, plus a "when stuck" checklist.
+- **Tested:** n/a (docs). Cited reference files checked to exist.
+- **Result:** ✔ plan approved in direction by the user. Next: POSE-PLAN step 1 (ER pose probe).
+
 ## 2026-10-04: P4 step 5, attempt 3: vanilla Silent Roll (off; handed off)
 - **Changed:** `skse/src/bridge/VanillaInput.{h,cpp}` (new): Sneak pressed through the game's SneakHandler with a synthetic ButtonEvent;
   Silent Roll perk added while the bridge is on (removed on F10 if added). `Movement.cpp`: trick = Sneak press → SprintStart once sneaking

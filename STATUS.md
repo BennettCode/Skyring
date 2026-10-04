@@ -34,7 +34,7 @@ window come back every frame; coordinate conversion measured (`protocol/src/coor
   Continue each run (no warp in P3). The user tests with a DualSense (PS5) over USB in both games.
 
 ## Next 3 steps (P4, `docs/P4-PLAN.md`)
-1. Step 5 roll animation: plan ER pose streaming onto the Skyrim skeleton (Handoff notes; fresh chat, plan mode).
+1. Step 5 roll animation by ER pose streaming: `docs/POSE-PLAN.md` step 1 (ER pose memory probe), then the Skyrim one-bone proof.
 2. Step 6: Skyrim's stamina bar mirrors ER's.
 3. Step 7: NPC hits during ER i-frames are cancelled.
 

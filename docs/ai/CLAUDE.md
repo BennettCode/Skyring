@@ -52,7 +52,8 @@ Docs: `STATUS.md` (now) · `docs/ROADMAP.md` (phases + accept criteria) · `docs
 14. Log everything on both sides with timestamps; logs are how you see the game.
 15. The obvious authority split is often wrong; prove each authority decision with a small test first.
 16. Profile before optimizing (frame-time logs). 17. Keep docs short and factual (they cost tokens every session).
-18. **Stuck-loop rule:** after 2 failed attempts at the same problem, stop. Write the handoff in `claudeprogress.md` (goal, what was tried + why it
+18. **Stuck-loop rule:** after the 1st failed attempt, run the §14 "When stuck" steps (how did a reference project solve it?) before
+    attempt 2. After 2 failed attempts at the same problem, stop. Write the handoff (incl. which references you checked) in `claudeprogress.md` (goal, what was tried + why it
     failed, hypothesis, files/log lines, 3 alternatives) + `STATUS.md` Handoff notes, commit what's verified, and tell the user to start a fresh
     chat (the next chat enters plan mode itself).
 
@@ -115,7 +116,7 @@ Machine paths live in `local/paths.json` (template `config/paths.example.json`);
 - If Steam updates ER: **stop and tell the user** (pins break). Params via eldenring-rs at runtime; Smithbox edits only in a `local/` me3 package.
 
 ## 8. Workflow details
-- **Loop:** research (reference/ + docs/research first, web last) → short plan → implement → build → tests → run/playtest → read logs → MODLOG → commit.
+- **Loop:** research (§14 table → reference/ + docs/research first, web last) → short plan → implement → build → tests → run/playtest → read logs → MODLOG → commit.
 - **Efficiency:** prefer fake peers over real games for protocol/logic; launch only the side you changed (`-Target`/`-Game`); read only the printed
   summary lines, open full logs only when they point to a problem; read files with offset/limit; background cold C++ builds.
   **Gotcha:** running `dev.ps1` through Bash with a pipe hangs until the games exit; redirect to a file (`< /dev/null > "$TEMP/x.log"`) and tail it.
@@ -162,8 +163,10 @@ complete. README: exact versions, test setup, what works, unofficial + offline-o
 License **GPL-3.0-or-later** (CommonLib is GPL-3.0): ship source or a link + `LICENSE`.
 
 ## 12. References
-Local clones (gitignored, read-only) in `reference/`: SkyCraft, eldenring-rs, CommonLibVR-ng, ai-game-modding-guides (clone them yourself).
-Web: guides https://github.com/trevaintdead/ai-game-modding-guides · SkyCraft https://github.com/chasmlol/SkyCraft · me3 https://me3.help ·
+Local clones (gitignored, read-only) in `reference/` (clone them yourself): SkyCraft, FalloutCraft, Killcraft, GTA-San-AnSkateas,
+2010-rust-rewrite-mashup, ai-game-modding-guides, CommonLibVR-ng, eldenring-rs, libER. What each teaches: §14.
+Web: guides https://github.com/trevaintdead/ai-game-modding-guides · SkyCraft https://github.com/chasmlol/SkyCraft ·
+Killcraft https://github.com/goonsn/Killcraft · mashup https://github.com/chasmlol/2010-rust-rewrite-mashup · me3 https://me3.help ·
 eldenring-rs https://github.com/vswarte/eldenring-rs · CommonLib https://github.com/alandtse/CommonLibVR (branch ng) · SKSE https://skse.silverlock.org ·
 Smithbox https://github.com/vawser/Smithbox · WitchyBND https://github.com/ividyon/WitchyBND (research unpacking only, output in `local/`).
 
@@ -178,3 +181,52 @@ Smithbox https://github.com/vawser/Smithbox · WitchyBND https://github.com/ivid
 | New tool/version/path | §3 here, `docs/RECON.md`, `config/paths.example.json`, `tools/setup-check.ps1` `$Expected`, README "Tested setup" |
 | New dependency or copied pattern | `THIRD-PARTY-NOTICES.md` |
 | New RE finding | `docs/research/<topic>.md` |
+
+## 14. Reference projects: how other AI-made game merges did it (study before inventing)
+Paths are relative to `reference/` (studied 2026-10-04). **A value or offset from a reference is not measured until a probe ran here.**
+| Project (license) | Merge | Read first |
+|---|---|---|
+| SkyCraft (MIT) | Skyrim host (SKSE) + hidden Minecraft (Fabric), shared memory. Closest to us. | `docs/DESIGN.md` §6–§12, `protocol/skycraft_protocol.h` |
+| FalloutCraft (MIT) | SkyCraft ported to Fallout 4: only the host plugin rewritten | `README.md`, `FO4_ModFiles/` |
+| Killcraft (MIT) | ULTRAKILL host (BepInEx/Harmony C#) + SkyCraft's hidden Minecraft | `src/{Host,Link,Combat,Patches}.cs` |
+| GTA-San-AnSkateas (own code **unlicensed: ideas only**) | GTA SA host + in-process Rust Skate 3 engine; pose streamed onto CJ | `mashup/docs/SKATE.md`, `sa-plugin/src/main.cpp` 1–7 (frame order) |
+| 2010-rust-rewrite-mashup (Apache-2.0; `skate/`, `third_party/` unclear) | one Rust process: MW2 rewrite host + headless Skate 3, pose retargeted onto the soldier | `AGENT.md`, `CONTEXT.md`, `crates/render_anim/src/skate{.rs,/rig.rs}` |
+| ai-game-modding-guides (MIT) | the method | `guides/02`, `05`, `09`, `templates/` |
+
+**The shared recipe (what we replicate):**
+- Decide authority first.
+- The hidden game runs hidden and focus-spoofed with pause-on-focus-loss off. Skipping its present call took one project from 25 to 60 fps (guides `09` step 8).
+- The host keeps OS focus and forwards input.
+- Transport: one-writer seqlock slots, event rings and a heartbeat.
+- The host player is a puppet of the hidden state; the host keeps AI, world and NPC combat.
+- Damage to the player is forwarded to the hidden game, which applies i-frames and armour. The host player is essential; the hidden game decides death.
+- The host's HP/stamina bars show the hidden game's fraction.
+- Prove in stages (one log line → one value → round trip → feature) and commit after each.
+
+**Where to look per problem:**
+| Problem | Read / copy |
+|---|---|
+| **Pose streaming / retarget** | mashup `crates/render_anim/src/skate/rig.rs:22-149` (copyable, credit it): bone map with a child bone per segment; basis `B·M·B⁻¹`; `fit` = `from_rotation_arc` of the bind segments; `skin = posed·bind⁻¹·fit`; terminal bones reuse the parent's fit; unmapped bones inherit; neck/head locked. GTA `skate-ffi/src/lib.rs:698-1220` (ideas): facing from hip/chest/foot body frames, keep host bone lengths, hip height ratio, twist cap 0.35 rad, two-bone arm IK. GTA `sa-plugin/src/main.cpp:853-960`: bind = inverse skin-to-bone, world matrices written just before render. Quat math: mashup `skate/crates/skate-core/src/animation/{output/sqt.rs,output/hierarchy.rs,pose_blend.rs:25-44}`, `crates/anim_iw4/src/quat.rs:57-96`. |
+| Interpolation / frame sync | SkyCraft `skse/src/Game.cpp:662-786` (tick history, render slightly in the past, adaptive delay, never extrapolate). Killcraft `src/Host.cs:485-506` (prev/cur + QPC stamp). mashup `crates/render_anim/src/skate.rs:248-261` (fixed step, clamp dt, reject non-finite poses, epoch on replies). |
+| Our hits on NPCs | SkyCraft `skse/src/Combat.cpp:217-398`: HitData (id 43995) → id 38586, only after a byte check that 38627+0x4A8 calls it; fallback DoDamage + stagger event. Gives stagger, blood, crime and kill credit. |
+| NPC hits on player / i-frames / death | SkyCraft `Combat.cpp:40-169` (TESHitEvent + HandleHealthDamage vfunc 0x104 refund) and `:869-871` (essential). FalloutCraft `FO4_ModFiles/fo_combat.cpp:130-295` (batch hits by the hidden game's i-frame spacing, nearest-foe attribution). Killcraft `src/Patches.cs:100-120`. |
+| HP / stamina bar mirror, HUD | FalloutCraft `fo_combat.cpp:151-188` (fraction mirror, ≥ 1, damage-modifier fallback when RestoreActorValue doesn't take). `fo_hud.cpp:151-198` (Scaleform only as UI tasks; calling from the main thread crashed). SkyCraft `Game.cpp:333-377` (re-hide HUD parts every frame). Killcraft `src/Overlay.cs` + `Link.cs:450-476` (triple-buffer overlay). |
+| Camera | SkyCraft `Game.cpp:1070-1125, 1257-1277` (hook every PlayerCamera::Update call site, axis convention voted over 240 frames, FOV conversion at :231). GTA `main.cpp:695-775` (smoothstep blend, byte check before patching). mashup `crates/render_anim/src/occupancy/view_kick.rs:270-292`. |
+| Input / controller | SkyCraft `skse/src/Input.cpp:93-248`: sink, menu-key allow-list, and swallow PlayerControls rather than disabling controls (disabling stops NPCs fighting you). GTA `main.cpp:1501` (blank the host pad), `skate-ffi/src/lib.rs:28-36` (XINPUT_GAMEPAD-shaped struct), `sa-plugin/src/stick_combo.h` (tested chord detector; DualSense through DS4Windows). Killcraft `src/InputForward.cs` (release-all on hand-back). mashup `skate.rs:503-541`. |
+| Debug tooling | SkyCraft `tools/{fake_skyrim,fake_guest,probe_feet,tick_monitor,trace_motion}.py`, auto-capture of 120–240 frames on a jump and frame-order markers (`Game.cpp:1141-1186`), screenshot-on-request file (`WorldRender.cpp:2347`), `Perf.h`. GTA `-sktest` scripts that inject pad input and photograph a contact sheet (`test_script.h`, `capture.h`), `SK_*` env overrides without a rebuild, NaN recovery (`main.cpp:1340`), 2 m teleport guard (`:1985`). |
+
+**Workflow rules adopted from them:**
+- "A negative needs a probe that ran."
+- Reports say what was NOT done, and whether a fix treats the symptom or the cause.
+- Probes come out before shipping; the findings stay in `docs/research/`.
+- Record failures, not only successes.
+- Log the same value on both sides with timestamps, so you never eyeball a match.
+
+**When stuck (after attempt 1, before attempt 2):**
+1. Find the problem in the table above and read that code.
+2. `rg -i "<engine function / concept>" reference/` across all projects, including CommonLibVR-ng, eldenring-rs and libER.
+3. Try the layer they used instead: a call-site hook instead of a vfunc, the damage modifier instead of RestoreActorValue, a fake peer instead of the game, an auto-capture probe instead of watching.
+4. Build a probe (memory dump/diff, frame trace) instead of guessing.
+5. Name the references you checked in the handoff.
+
+**Copying:** code only from MIT/Apache sources (SkyCraft, FalloutCraft, Killcraft, mashup outside `skate/`/`third_party/`, guides), credited in `THIRD-PARTY-NOTICES.md` in the same commit. GTA-San-AnSkateas' own code and mashup `skate/`/`third_party/` are ideas only (re-implement; ask the user before copying).
