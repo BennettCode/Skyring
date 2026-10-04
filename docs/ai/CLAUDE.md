@@ -27,7 +27,8 @@ Docs: `STATUS.md` (now) · `docs/ROADMAP.md` (phases + accept criteria) · `docs
    `regulation.bin`, `.dcx`, extracted/converted assets, fonts, shaders, movies). `.gitignore` is a **whitelist**: new source file types need a deliberate `!` rule.
 2. **No decompiled code, no Ghidra/IDA databases.** RE findings = plain-language notes in `docs/research/` (fields, offsets, "RVA X does Y").
 3. ER param changes = small CSV/diff notes or runtime patches. **Never commit a modified `regulation.bin`.**
-4. Credit every project built on / copied from in `THIRD-PARTY-NOTICES.md`, in the same commit.
+4. Credit every project built on / copied from in `THIRD-PARTY-NOTICES.md`, in the same commit. Copying reference code is
+   allowed and encouraged (user, 2026-10-04) when credited: see §14 "Copying".
 
 **Online / anti-cheat**
 5. **Offline only.** Modded ER only via **me3** (no EAC). Never `start_protected_game.exe` with mods, never touch `ELDEN RING\Game\EasyAntiCheat\`,
@@ -229,4 +230,12 @@ Paths are relative to `reference/` (studied 2026-10-04). **A value or offset fro
 4. Build a probe (memory dump/diff, frame trace) instead of guessing.
 5. Name the references you checked in the handoff.
 
-**Copying:** code only from MIT/Apache sources (SkyCraft, FalloutCraft, Killcraft, mashup outside `skate/`/`third_party/`, guides), credited in `THIRD-PARTY-NOTICES.md` in the same commit. GTA-San-AnSkateas' own code and mashup `skate/`/`third_party/` are ideas only (re-implement; ask the user before copying).
+**Copying (user, 2026-10-04: "copy as much code as you want as long as you credit them on GitHub"):** copy freely from the
+licensed references: SkyCraft, FalloutCraft, Killcraft, the guides (MIT), and 2010-rust-rewrite-mashup outside `skate/`/`third_party/`
+(Apache-2.0). Prefer proven reference code over writing it yourself. In the same commit:
+- add a THIRD-PARTY-NOTICES row;
+- put the license text in `licenses/<project>.txt`;
+- add a source comment above the copied code (`// Adapted from <project> <path> (<license>)`);
+- mention the credit in the README's credits.
+
+**Exception: no license file** (GTA-San-AnSkateas' own code, the mashup's `skate/` and `third_party/`). Credit alone doesn't give us the right to copy, and the user can't grant it. Either re-implement the idea, or have the user ask the author first and record the permission in THIRD-PARTY-NOTICES.

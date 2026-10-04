@@ -162,7 +162,10 @@ Run scripts with `powershell -ExecutionPolicy Bypass -File <script>`. More in [`
 
 ## Credits
 
-Built on SKSE, CommonLibSSE-NG, Address Library, me3 and eldenring-rs, with the passthrough design from SkyCraft.
+Built on SKSE, CommonLibSSE-NG, Address Library, me3 and eldenring-rs. Design and code patterns are borrowed (with thanks) from
+other game-merge projects: [SkyCraft](https://github.com/chasmlol/SkyCraft), [FalloutCraft](https://github.com/zeyvu/FalloutCraft),
+[Killcraft](https://github.com/goonsn/Killcraft), [2010-rust-rewrite-mashup](https://github.com/chasmlol/2010-rust-rewrite-mashup)
+and the ideas of [GTA San AnSkateas](https://github.com/ryglizzy/GTA-San-AnSkateas).
 Full list and licenses: [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
 
 ## Legal
