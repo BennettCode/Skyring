@@ -51,3 +51,8 @@ macro_rules! info {
 macro_rules! error {
     ($subsystem:literal, $($arg:tt)*) => { $crate::log::write("error", $subsystem, &format!($($arg)*)) };
 }
+
+#[macro_export]
+macro_rules! warn {
+    ($subsystem:literal, $($arg:tt)*) => { $crate::log::write("warning", $subsystem, &format!($($arg)*)) };
+}

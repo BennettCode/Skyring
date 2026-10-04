@@ -78,6 +78,10 @@ ER character dodges (ER's own gating and stamina) → ER state (stamina, i-frame
 - **Test order:** `fake-peer er` + real Skyrim, then real ER + `fake-peer skyrim`, then both games (the user presses Continue in ER, loads a Skyrim test save,
   taps Sprint 3× and holds it once). The agent merges the logs by timestamp. **The P3 accept is met here.**
 
+- **Result (2026-10-04):** the loop works in both games (keyboard Sprint in Skyrim; Skyrim gets no DualSense without Steam Input, so the
+  controller is deferred). Tap → ER backstep (27010), seen in Skyrim's log ~170 ms after the press; stale input releases the key.
+  Not shown yet: stamina stays 101 and no i-frame flag is set during backsteps out of combat (`docs/research/elden-ring-state.md`).
+
 ### 5. Roll direction + coordinate test (finishes the ROADMAP P3 list)
 - Skyrim forward/strafe user events + gamepad move stick → `move_x/move_y`. ER: `set_virtual_analog_state` on MoveForwards/… at `PadStep`
   (the experiment: does ER then walk/roll in that direction?).

@@ -1,11 +1,11 @@
 //! The ER end of the shared-memory link: a thread ticks `skyrimxer_protocol::link::Link` every LINK_TICK_MS.
-//! While Skyrim is absent or lost, ER just idles (Phase 3+ will stop applying Skyrim input then).
+//! While Skyrim is absent or lost, ER just idles: the game threads see `connected() == false` through [`shared`] and inject nothing.
 
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
-use skyrimxer_protocol::link::{Identity, Level, Link, Side};
+use skyrimxer_protocol::link::{Identity, Level, Link, LinkShared, Side};
 use skyrimxer_protocol::now_ms;
 use skyrimxer_protocol::proto::LINK_TICK_MS;
 
@@ -13,6 +13,13 @@ use skyrimxer_protocol::proto::LINK_TICK_MS;
 pub static FRAMES: AtomicU64 = AtomicU64::new(0);
 
 static LINK: Mutex<Option<Link>> = Mutex::new(None);
+/// Region + connected flag for the game-thread tasks (remote.rs): never take LINK's lock from a task.
+static SHARED: OnceLock<Arc<LinkShared>> = OnceLock::new();
+
+/// `None` until `start()` ran (the version check passed).
+pub fn shared() -> Option<&'static Arc<LinkShared>> {
+    SHARED.get()
+}
 
 /// eldenring-rs only accepts this exe version, and the link starts after that check passed.
 const GAME_VERSION: [u16; 4] = [2, 7, 1, 0];
@@ -32,6 +39,7 @@ pub fn start() {
         crate::log::write(level, "link", msg);
     });
     let link = Link::new(Side::EldenRing, Identity { plugin_version: plugin_version(), game_version: GAME_VERSION }, log);
+    let _ = SHARED.set(link.shared());
     *LINK.lock().unwrap_or_else(|p| p.into_inner()) = Some(link);
 
     std::thread::spawn(|| loop {

@@ -11,6 +11,7 @@ mod focus;
 mod game;
 mod log;
 mod pad;
+mod remote;
 mod window;
 
 use std::ffi::c_void;
@@ -82,14 +83,20 @@ fn init(module: usize) {
     // PadStep re-sets the background flag every frame while ER isn't foreground; clear it again before the characters read input.
     std::mem::forget(task.run_recurring(|_: &FD4TaskData| window::spoof_focus(), CSTaskGroupIndex::WorldChrMan_Prepare));
 
+    let (group, group_name) = actions::inject_group();
     if actions::selftest_enabled() {
-        let (group, group_name) = actions::inject_group();
         let mut injector = actions::Injector::new();
         std::mem::forget(task.run_recurring(move |_: &FD4TaskData| injector.run(), group));
-        let mut watcher = actions::Watcher::new();
-        std::mem::forget(task.run_recurring(move |_: &FD4TaskData| watcher.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
-        info!("action", "SELFTEST dodge: injector in {group_name}, watcher in ChrIns_PostPhysics");
+        info!("action", "SELFTEST dodge: injector in {group_name} (Skyrim input ignored)");
+    } else {
+        let mut dodge = remote::DodgeFromSkyrim::new();
+        std::mem::forget(task.run_recurring(move |_: &FD4TaskData| dodge.run(), group));
+        info!("core", "Skyrim input → dodge injector in {group_name}");
     }
+    let mut watcher = actions::Watcher::new();
+    std::mem::forget(task.run_recurring(move |_: &FD4TaskData| watcher.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
+    std::mem::forget(task.run_recurring(|_: &FD4TaskData| remote::publish_state(false), CSTaskGroupIndex::ChrIns_PostPhysics));
+    info!("core", "PlayerState publisher in ChrIns_PostPhysics (FrameBegin while not in world), dodge watcher in ChrIns_PostPhysics");
     if config::get().probe {
         let last = actions::probe::GROUPS.len() - 1;
         for (i, (group, name)) in actions::probe::GROUPS.into_iter().enumerate() {
@@ -133,6 +140,7 @@ impl FrameTask {
             focus::sample(0, "FrameBegin");
         }
         self.window.frame(in_world);
+        remote::publish_state(true);
 
         let elapsed = self.last_log.elapsed();
         if elapsed >= STATE_LOG_INTERVAL {

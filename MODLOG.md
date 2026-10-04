@@ -4,6 +4,18 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-04: P3 step 4b: the loop runs in both games (Skyrim Sprint → hidden ER backstep → state back)
+- **Changed:** `er-plugin/src/remote.rs`: `DodgeFromSkyrim` (in WorldChrMan_Prepare, replaces the self-test unless `selftest=dodge`) holds
+  Backstep (+ BackstepTapped on the press frame) while InputState is fresh + connected + Dodge held; it releases on stale/lost.
+  `publish_state` writes PlayerState every frame (ChrIns_PostPhysics in world, FrameBegin while not in world). `bridge::shared()`.
+  `actions.rs`: the watch window now always runs, plus a bounded word-diff probe of the action-flag module (i-frame search).
+- **Tested in-game:** (1) real ER (hidden) + `fake-peer skyrim --dodge-every 4`: every press after spawn-in backstepped (anim 27010 +9 frames);
+  fake-peer killed mid-hold → ER `InputState stale` 266 ms later + release, then the link timeout. (2) **Both games** (keyboard in
+  Skyrim): Left Shift tap → `[ER] Dodge down` 9 ms later → `[SKY] anim 0→27010` ~170 ms after the press, for 3 taps + a hold;
+  both games at 60 fps (Skyrim p50 17.0 ms). `tests/run-tests.ps1` passes.
+- **Not shown yet:** stamina stays 101 and no i-frame flag gets set (real backsteps behave the same). Findings: `docs/research/elden-ring-state.md`.
+- **Result:** step 4 loop ✔. The P3 accept's stamina-drop + i-frame part is still open.
+
 ## 2026-10-04: P3 step 4a: Skyrim frame hook + Sprint → InputState (vs fake ER)
 - **Changed:** `skse/src/hooks/PlayerUpdate.cpp` (PlayerCharacter::Update vfunc 0xAD), `skse/src/bridge/Input.cpp` (input sink: Sprint
   user event held → Dodge; logs the first event per device and each user event once), `Bridge.cpp` `OnFrame` (writes InputState, reads

@@ -39,6 +39,25 @@ pub fn selftest_enabled() -> bool {
     crate::config::get().selftest == "dodge"
 }
 
+/// Starts a WATCH_FRAMES watch window from `frame` (remote.rs calls this on each Dodge press from Skyrim).
+pub fn watch(frame: u64) {
+    WATCH_LEFT.store(WATCH_FRAMES, Ordering::Relaxed);
+    INJECT_FRAME.store(frame, Ordering::Relaxed);
+}
+
+/// Cap for the action_flag word-diff lines (i-frame search), per session.
+const MAX_FLAG_DIFF_LINES: u32 = 300;
+static FLAG_DIFF_LINES: AtomicU32 = AtomicU32::new(0);
+
+/// The action-flag module as raw u32 words (bounded probe: which words change during a dodge, since the eldenring-rs
+/// `perfect_invincibility`/`dodging` bits read 0 on 2.7.1).
+fn action_flag_words(player: &eldenring::cs::PlayerIns) -> Vec<u32> {
+    let module: &eldenring::cs::CSChrActionFlagModule = &player.chr_ins.modules.action_flag;
+    let words = size_of::<eldenring::cs::CSChrActionFlagModule>() / 4;
+    // SAFETY: reads the module's own bytes on the main thread (task callback); u32 has no invalid bit patterns.
+    unsafe { std::slice::from_raw_parts((module as *const eldenring::cs::CSChrActionFlagModule).cast::<u32>(), words) }.to_vec()
+}
+
 /// Runs in `inject_group()`. Self-test only for now; P3 step 4 feeds it from Skyrim's InputState.
 pub struct Injector {
     frames: u64,
@@ -89,20 +108,22 @@ impl Injector {
     }
 }
 
-/// Runs in ChrIns_PostPhysics (after behavior): logs what the injected press did.
+/// Runs in ChrIns_PostPhysics (after behavior): logs what the injected press did, and which action_flag words changed.
 pub struct Watcher {
     last: Option<game::Snapshot>,
+    last_words: Option<Vec<u32>>,
 }
 
 impl Watcher {
     pub fn new() -> Self {
-        Self { last: None }
+        Self { last: None, last_words: None }
     }
 
     pub fn run(&mut self) {
         let left = WATCH_LEFT.load(Ordering::Relaxed);
         if left == 0 {
             self.last = None;
+            self.last_words = None;
             return;
         }
         WATCH_LEFT.store(left - 1, Ordering::Relaxed);
@@ -132,6 +153,16 @@ impl Watcher {
                 ar.action_timers.roll
             );
         }
+        let words = action_flag_words(player);
+        if let Some(prev) = &self.last_words {
+            // Words 0..4 are the vtable and owner pointers.
+            for (i, (old, new)) in prev.iter().zip(&words).enumerate().skip(4) {
+                if old != new && FLAG_DIFF_LINES.fetch_add(1, Ordering::Relaxed) < MAX_FLAG_DIFF_LINES {
+                    crate::info!("probe", "frame={frame} +{since}: action_flag +{:#05x}: {old:#010x}→{new:#010x} anim={}", i * 4, s.anim_id);
+                }
+            }
+        }
+        self.last_words = Some(words);
         if left == 1 {
             crate::info!("action", "frame={frame} watch window over: {}", s.line());
         }

@@ -45,7 +45,7 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
 | P0 | Tooling and version research | ✅ done |
 | P1 | Both plugins load and log | ✅ done |
 | P2 | Shared memory link: handshake, heartbeats, crash fail-safe | ✅ done |
-| **P3** | **Controller dodge in Skyrim → Elden Ring rolls → stamina comes back** | 🔄 in progress: ER runs hidden at 60 fps ✅, injected backstep (hidden) ✅, protocol v2 state slots ✅, wiring the loop next 🔧 |
+| **P3** | **Controller dodge in Skyrim → Elden Ring rolls → stamina comes back** | 🔄 in progress: ER runs hidden at 60 fps ✅, injected backstep (hidden) ✅, protocol v2 state slots ✅, Skyrim Sprint → ER backstep → state back ✅, stamina/i-frame readout 🔧 |
 | P4 | Rolls, i-frames, stamina and sprint drive the Skyrim player | ⏳ |
 | P5 | Damage both ways uses Elden Ring's math (poise, stagger) | ⏳ |
 | P6 | Elden Ring-style HUD | ⏳ |
