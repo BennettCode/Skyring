@@ -127,8 +127,6 @@ namespace sxer::movement
 			SKSE::log::info("[move] roll animation: NotifyAnimationGraph('{}') = {}", a_event, ok);
 		}
 
-		float LookYaw(const RE::PlayerCharacter* a_player);
-
 		RE::ThirdPersonState* ThirdPerson()
 		{
 			auto* camera = RE::PlayerCamera::GetSingleton();
@@ -203,15 +201,6 @@ namespace sxer::movement
 			if (!a_keepSneak) {
 				g.trickEnteredSneak = false;
 			}
-		}
-
-		// Where the player looks: the camera's yaw (heading convention), or the body's heading without a camera.
-		float LookYaw(const RE::PlayerCharacter* a_player)
-		{
-			if (const auto* camera = RE::PlayerCamera::GetSingleton()) {
-				return camera->GetRuntimeData2().yaw;
-			}
-			return a_player->GetAngleZ();
 		}
 
 		bool IsDodgeAnim(std::int32_t a_anim) { return a_anim >= 0 && (a_anim % 1000000) / 1000 == 27; }
@@ -292,6 +281,46 @@ namespace sxer::movement
 		}
 	}
 
+	float LookYaw(const RE::PlayerCharacter* a_player)
+	{
+		if (const auto* camera = RE::PlayerCamera::GetSingleton()) {
+			return camera->GetRuntimeData2().yaw;
+		}
+		return a_player->GetAngleZ();
+	}
+
+	RE::NiPoint3 Follow(RE::NiPoint3& a_target, const RE::NiPoint3& a_here, const RE::NiPoint3& a_step, float a_delta, float* a_lead)
+	{
+		a_target += a_step;
+		RE::NiPoint3 err{ a_target.x - a_here.x, a_target.y - a_here.y, 0.0f };
+		const float lead = std::hypot(err.x, err.y);
+		if (a_lead) {
+			*a_lead = lead;
+		}
+		if (lead > kMaxLeadUnits) {
+			err = err * (kMaxLeadUnits / lead);
+			a_target = { a_here.x + err.x, a_here.y + err.y, a_target.z };
+		}
+		// Feed-forward: this frame's ER step, plus a gentle pull on whatever gap is left from before.
+		const RE::NiPoint3 gap{ err.x - a_step.x, err.y - a_step.y, 0.0f };
+		auto speed = a_step * (1.0f / a_delta) + gap * kCorrectionPerS;
+		const float v = std::hypot(speed.x, speed.y);
+		if (v > kMaxSpeed) {
+			speed = speed * (kMaxSpeed / v);
+		}
+		return speed;
+	}
+
+	void Reset(bool a_spent)
+	{
+		g.active = false;
+		g.spent = a_spent;
+		g.handedBack = a_spent;
+		g.haveLast = false;
+		g.lastIframe = false;
+		g.pressed = false;
+	}
+
 	bool Active() { return g.active; }
 
 	std::optional<float> RollHeading() { return g.active ? std::optional<float>(g.rollHeading) : std::nullopt; }
@@ -359,7 +388,6 @@ namespace sxer::movement
 				local.up = 0;
 				const auto sky = coords::LocalToSkyrimDelta(local, g.rollHeading);
 				step = RE::NiPoint3{ sky[0], sky[1], 0.0f };
-				g.target += step;
 				g.erDistM += m;
 				g.erFrames = static_cast<int>(s.frame - g.startErFrame);
 				fresh = m > 0;
@@ -440,19 +468,8 @@ namespace sxer::movement
 		g.series += std::format("{:.0f}/{:.0f} ", real, erSpeed);
 		g.lastRealSpeed = real;
 		g.lastHere = here;
-		RE::NiPoint3 err{ g.target.x - here.x, g.target.y - here.y, 0.0f };
-		const float lead = std::hypot(err.x, err.y);
-		if (lead > kMaxLeadUnits) {
-			err = err * (kMaxLeadUnits / lead);
-			g.target = { here.x + err.x, here.y + err.y, g.target.z };
-		}
-		// Feed-forward: this frame's ER step, plus a gentle pull on whatever gap is left from before.
-		const RE::NiPoint3 gap{ err.x - step.x, err.y - step.y, 0.0f };
-		auto speed = step * (1.0f / a_delta) + gap * kCorrectionPerS;
-		const float v = std::hypot(speed.x, speed.y);
-		if (v > kMaxSpeed) {
-			speed = speed * (kMaxSpeed / v);
-		}
+		float lead = 0;
+		const auto speed = Follow(g.target, here, step, a_delta, &lead);
 		const float scale = RE::bhkWorld::GetWorldScale();
 		if (auto* controller = a_player->GetCharController()) {
 			hooks::SetVelocityOverride(controller, speed.x * scale, speed.y * scale);

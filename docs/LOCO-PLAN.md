@@ -1,6 +1,11 @@
 # LOCO-PLAN: Elden Ring drives the Skyrim body (smooth rolls, then ER locomotion)
 
-Approved 2026-10-04. Status: **Stage A done** (2026-10-05): protocol v5, timeline with 0 late frames, pose fixes, whole-roll follow, smooth player movement (ER's velocity goes into Skyrim's character controller: 0 stalls, 98–100 % distance). Stage B not started.
+Approved 2026-10-04. Status: **Stage A done** (2026-10-05): protocol v5, timeline with 0 late frames, pose fixes, whole-roll follow, smooth player movement (ER's velocity goes into Skyrim's character controller: 0 stalls, 98–100 % distance). **Stage B done, agent-tested** (2026-10-05): probe (B1), protocol v7 `Locomote` (B2), `skse/src/bridge/Locomotion.cpp` (B3). Walk/run/strafe 98–100 %, sprint 100 %, roll → run with no hand-back, jump/F10/weapon draw fall back to vanilla and come back, mouse turns don't turn the body, frame time unchanged. Waiting for the user's feel test.
+
+**Correction to B3 (2026-10-05, before coding):** a per-frame `off = ER cam yaw − Skyrim cam yaw` would spin the body whenever the Skyrim
+mouse turns. Instead a **world offset W = Skyrim heading − ER yaw** is fixed when the mode starts (and re-synced each restart): facing =
+ER yaw + W, ER displacement turns by W, and Skyrim sends its look as a yaw in ER's world (`cam_yaw = look − W`); ER turns the keys by
+`cam_yaw − its camera yaw`. The hidden ER camera never turns by itself (B1 probe).
 
 **Accept A, smoothness (measured):** the realized speed is ER's own speed one frame later, so frame-to-frame change equals ER's roll curve (18–35 % of peak). "Under 15 %" is not reachable without changing ER's motion; the bar is "no worse than ER's own".
 

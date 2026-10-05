@@ -4,6 +4,36 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: Elden Ring drives walking, running and sprinting (LOCO-PLAN stage B3)
+- **Changed:** new `skse/src/bridge/Locomotion.{h,cpp}`. While the bridge is on, ER drives the player:
+  - Skyrim's keys go to ER's stick (Caps Lock walk = stick 0.6) with Locomote + `cam_yaw` = look − W. W = Skyrim heading − ER yaw,
+    fixed at each start.
+  - ER's interpolated displacement is turned by W and goes to the controller velocity (`movement::Follow`, lifted out of Movement.cpp).
+  - The pose faces ER yaw + W. `MoveSwallow` refuses Skyrim's movement keys and `moveInputVec` is zeroed. Sprint hold = ER sprint
+    (no vanilla kick).
+  - Suspended = vanilla, nothing to ER: jump (`bInJumpState`), falling > 0.5 s, swimming, sneaking, mounted, furniture, stagger/knockdown,
+    dead, kill move, menu.
+  - Yield = vanilla + stage A Sprint-roll: attack, block, spell, weapon draw/sheathe (`IsEquipping`/`IsUnequipping`), a stage A dodge
+    in progress.
+  - `SKYRIMXER_LOCO=0` = stage A only. `tools/game-input` knows CapsLock.
+- **Tested** (both games, auto load-in, key scripts, screenshots):
+  - W run 99 %, D strafe 98 %, S run 100 %, sprint 100 % (anim 20210), Caps Lock walk 100 % (20010); 0–1 stalls per 2 s window.
+  - Roll from a run: 27110 → 20110 with no hand-back.
+  - A wall stops the player: the first sprint ran into a house corner, and the screenshot shows the body against the wall.
+  - Jump: vanilla, then back on landing.
+  - F10 off/on: stop/start. R draw/sheathe: vanilla for the whole animation (32/20 frames).
+  - Mouse turn ~90° standing: the body keeps its facing (screenshot).
+  - Frame time p95 17 ms, hook p99 ~100 µs (unchanged). `tests/run-tests.ps1` all passed.
+- **Fixed during testing:**
+  - A 6-frame "in the air" limit broke a sprint off a porch. Now: jump state, or 30 frames.
+  - The pose blinked for 2 frames at each restart (ER's Active flag lags a frame); it's forced Active while running.
+- **Review agent** (diff before the commit) found that a roll interrupted by a yield/suspend was picked up half-way by the stage A path.
+  Fixed (`movement::Reset(spent)`) and retested: jump mid-roll → no stage A start. Also fixed: override cleared when there's no
+  controller, a Sprint hold begun under locomotion never becomes vanilla sprint, midair counter reset.
+- **Not done:** the user's feel test. Jumps and other vanilla states show Skyrim's own heading, so the body can flip (seen on a jump
+  toward the camera: the jump faced away). Combat stamina drain while sprinting was only measured ER-side (B1). NPCs still see Skyrim's own
+  heading (the visible body turns, the actor doesn't). Footstep sounds untested.
+
 ## 2026-10-05: protocol v7, ER drives locomotion on request (LOCO-PLAN stage B2)
 - **Changed:** protocol v7: new `InputFlag::Locomote`; InputState `cam_yaw` = Skyrim's look as a yaw in ER's world; PlayerState
   `cam_yaw` = ER's camera yaw (filled now). No layout change. ER `remote.rs`, with Locomote: the stick is forwarded every frame and

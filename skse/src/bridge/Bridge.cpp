@@ -4,6 +4,7 @@
 #include "bridge/Hud.h"
 #include "bridge/Input.h"
 #include "bridge/Link.h"
+#include "bridge/Locomotion.h"
 #include "bridge/Movement.h"
 #include "bridge/PlayerWatch.h"
 #include "bridge/Pose.h"
@@ -43,6 +44,7 @@ namespace sxer::bridge
 		constexpr std::uint32_t kErInCombat = 1u << static_cast<std::uint32_t>(proto::PlayerFlag::InCombat);
 		constexpr std::uint32_t kInCombat = 1u << static_cast<std::uint32_t>(proto::InputFlag::InCombat);
 		constexpr std::uint32_t kBridgeOn = 1u << static_cast<std::uint32_t>(proto::InputFlag::BridgeOn);
+		constexpr std::uint32_t kLocomote = 1u << static_cast<std::uint32_t>(proto::InputFlag::Locomote);
 		constexpr std::uint64_t kReportMs = 5000;
 		// Sprint held longer than this (frames) is Skyrim's sprint, not an ER dodge (matches er-plugin remote.rs DASH_AFTER).
 		constexpr std::uint32_t kSprintAfterFrames = 20;
@@ -107,6 +109,7 @@ namespace sxer::bridge
 			bool swallow = false;
 			bool held = false;
 			std::uint32_t heldFrames = 0;
+			bool heldInLoco = false;  // this Sprint hold began while ER drove locomotion: it's ER's sprint to the end
 			bool inCombat = false;
 			std::uint32_t stance = ~0u;
 			bool erInCombat = false;
@@ -288,22 +291,24 @@ namespace sxer::bridge
 		const bool on = input::BridgeOn();
 		if (on != f.bridgeOn) {
 			f.bridgeOn = on;
-			hud::Notify(on ? "SkyrimXER: bridge ON (Sprint = Elden Ring dodge), F10 toggles" : "SkyrimXER: bridge OFF (vanilla Skyrim), F10 toggles");
+			hud::Notify(on ? "SkyrimXER: bridge ON (Elden Ring movement: W/A/S/D, Sprint = roll/sprint), F10 toggles" : "SkyrimXER: bridge OFF (vanilla Skyrim), F10 toggles");
 		}
 		const bool held = on && input::SprintHeld();
 		const bool pressed = held && !f.held;
 		if (held != f.held) {
 			f.held = held;
 			f.heldFrames = 0;
+			f.heldInLoco = held && locomotion::Running();
 			SKSE::log::info("[input] Dodge {} frame={} (Sprint from {})", held ? "down" : "up", frame, input::SprintDevice());
 		}
 		if (held) {
 			++f.heldFrames;
 		}
 		// Tap = ER dodge, hold = Skyrim's own sprint: past kSprintAfterFrames ER drops the stick (er-plugin remote.rs DASH_AFTER) and
-		// vanilla sprint is let through.
+		// vanilla sprint is let through. While ER drives locomotion (bridge/Locomotion), a hold is ER's sprint and vanilla stays off.
+		// (Locomotion's state is last frame's: it's decided after the timeline below; one frame late is fine for input.)
 		const auto& last = f.watch.Last();
-		const bool sprintHold = held && f.heldFrames > kSprintAfterFrames;
+		const bool sprintHold = held && f.heldFrames > kSprintAfterFrames && !locomotion::Running() && !f.heldInLoco;
 		const bool swallow = on && connected && last && (last->flags & kInWorld) && !sprintHold;
 		if (swallow != f.swallow) {
 			f.swallow = swallow;
@@ -333,10 +338,14 @@ namespace sxer::bridge
 		proto::InputState state{};
 		state.frame = frame;
 		state.time_ms = now;
-		state.buttons = held ? kDodge : 0;
-		state.flags = on ? (kBridgeOn | (inCombat ? kInCombat : 0)) : 0;
-		state.move_x = move.x;
-		state.move_y = move.y;
+		// Suspended locomotion (swimming, mounted, in the air...) = vanilla Skyrim: Sprint is Skyrim's, nothing goes to ER.
+		state.buttons = held && !locomotion::Suspended() ? kDodge : 0;
+		const bool locoIn = on && locomotion::Running();
+		state.flags = on ? (kBridgeOn | (inCombat ? kInCombat : 0) | (locoIn ? kLocomote : 0)) : 0;
+		const auto stick = locoIn ? locomotion::Stick(move) : move;
+		state.move_x = stick.x;
+		state.move_y = stick.y;
+		state.cam_yaw = locoIn ? locomotion::CamYaw() : 0.0f;
 		const auto stance = static_cast<std::uint32_t>(SkyrimStance(a_player));
 		if (stance != f.stance) {
 			f.stance = stance;
@@ -365,10 +374,23 @@ namespace sxer::bridge
 		} else {
 			timeline::Reset();
 		}
-		movement::Update(a_player, on ? view.player : fresh, move, on, pressed, a_delta, frame);
+		// ER drives locomotion (stage B) or, when it doesn't, the stage A path follows ER's dodges only.
+		if (!locomotion::Running()) {
+			movement::Update(a_player, on ? view.player : fresh, move, on, pressed, a_delta, frame);
+		}
+		locomotion::Update(a_player, on ? view.player : std::nullopt, move, on && connected, a_delta, frame);
+		const bool loco = locomotion::Running();
 		// Steering out of a roll hands the body back to Skyrim at ER's move-cancel window (the pose would otherwise keep playing the recovery).
-		const bool showPose = poseFresh && view.pose && !movement::HandedBack();
-		pose::Apply(a_player, showPose ? view.pose : std::nullopt, f.lastBind, movement::RollHeading().value_or(a_player->GetAngleZ()), frame);
+		// Outside locomotion only dodges are shown (ER may still flag a few frames Active after Locomote went off).
+		const bool erDodge = view.player && view.player->anim_id >= 0 && (view.player->anim_id % 1000000) / 1000 == 27;
+		const bool showPose = poseFresh && view.pose && (loco || (erDodge && !movement::HandedBack()));
+		const float facing = loco ? locomotion::Facing() : movement::RollHeading().value_or(a_player->GetAngleZ());
+		auto pose = showPose ? view.pose : std::nullopt;
+		if (pose && loco) {
+			// ER sets Active one frame after it gets Locomote; while locomotion runs the pose is always shown (no blink on a restart).
+			pose->flags |= 1u << static_cast<std::uint32_t>(proto::PoseFlag::Active);
+		}
+		pose::Apply(a_player, pose, f.lastBind, facing, frame);
 		animprobe::Update(a_player, frame);
 		UpdateHud(f, connected, pressed, now);
 

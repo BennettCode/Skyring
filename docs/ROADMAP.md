@@ -45,7 +45,10 @@ Tick boxes as you go. Keep each phase small. If a phase grows, split it.
 - [x] Rolls cost ER stamina while the Skyrim player is in combat (ER makes them free out of combat, so ER is put in its combat state) (2026-10-04)
 - [x] Skyrim player follows ER's roll movement curve, with Skyrim's collision (2026-10-04: 96–99 % of ER's distance, camera-relative,
   chained rolls, tap = dodge / hold = sprint)
-- [ ] Rolls play an animation in Skyrim (vanilla only: the sneak "Silent Roll"; no extra animation mods)
+- [x] Rolls play an animation in Skyrim: ER's own skeleton pose is streamed onto the Skyrim player every frame (no animation files
+  converted or shipped; the vanilla "Silent Roll" route was dropped) (2026-10-04)
+- [x] ER drives walking, running, sprinting and rolling while the bridge is on, with ER's animations and speeds on Skyrim's collision
+  (`docs/LOCO-PLAN.md` stage B, 2026-10-05; agent-tested, user feel test pending)
 - [ ] Skyrim's stamina bar mirrors ER's stamina. Out of stamina = no roll
 - [ ] NPC hits during ER i-frames are cancelled
 - [ ] **Controller support (last):** PS5 DualSense in Skyrim. Skyrim only reads XInput, so it needs Steam Input, which doesn't apply when SKSE

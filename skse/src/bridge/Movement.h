@@ -22,4 +22,15 @@ namespace sxer::movement
 	// True from the moment the player steered out of a dodge (ER's move-cancel window) until that dodge animation ends: Skyrim moves the
 	// player again, so the ER pose must not keep playing the recovery.
 	bool HandedBack();
+	// Forget the current dodge without logging it (bridge/Locomotion takes the player's movement over or hands it back; the next call
+	// starts fresh). a_spent = ER is in the middle of a dodge it started under locomotion: this path must not pick it up half-way (nor show
+	// its pose over the action that ended locomotion); the next dodge animation starts normally.
+	void Reset(bool a_spent = false);
+	// Where the player looks: the camera's yaw (heading convention), or the body's heading without a camera.
+	float LookYaw(const RE::PlayerCharacter* a_player);
+	// The follow step (stage A), shared with bridge/Locomotion: moves a_target by a_step (Skyrim units, this frame's ER step) and returns the
+	// velocity (units/s) that steers the player at a_here onto it: the step itself (feed-forward) plus a gentle pull on the gap left from
+	// before, capped. The target never runs more than a short lead ahead (a wall stops the player, so it holds the target too).
+	// a_lead = the gap before this frame's step (for the logs).
+	RE::NiPoint3 Follow(RE::NiPoint3& a_target, const RE::NiPoint3& a_here, const RE::NiPoint3& a_step, float a_delta, float* a_lead = nullptr);
 }

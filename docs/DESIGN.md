@@ -22,7 +22,8 @@ exchange state (passthrough mod, based on SkyCraft).
 | Domain | Owner | Reason |
 |---|---|---|
 | World, collision, NPC AI, quests | Skyrim | It's the host. ER has no copy of Skyrim's geometry. |
-| Player position integration | Skyrim ⚠ | ER can't collide with Skyrim terrain. ER supplies movement *intent* (roll distance curve, attack root motion). **Test:** does a roll feel like ER when Skyrim moves the player along ER's curve? |
+| Player position integration | Skyrim | ER can't collide with Skyrim terrain. ER supplies the movement (its displacement, put into Skyrim's character controller as velocity, `hooks/ControllerVelocity.cpp`); Skyrim's collision and gravity apply. Measured: 98–100 % of ER's distance, walls stop it. |
+| Locomotion (walk/run/sprint/roll speed, facing, animation) | ER while the bridge is on (LOCO-PLAN stage B) | Skyrim's movement keys go to ER's stick, turned by a world offset W (Skyrim heading − ER yaw) fixed each time the mode starts, so camera turns never turn the body. Skyrim plays vanilla while jumping, falling, swimming, sneaking, mounted, in furniture, staggered or knocked down (nothing to ER), and during its own attack/block/spell/weapon draw (Sprint still = ER roll). `skse/src/bridge/Locomotion.cpp`. |
 | Player input | Skyrim captures → ER | The player is looking at the Skyrim window. ER receives actions as `ChrActions` bits written into `CSChrActionRequestModule.action_requests` (no OS keystrokes). ER's own gating (`possible_action_inputs`) decides whether they happen. See `docs/research/elden-ring-input.md`. |
 | Stamina/FP/HP math, i-frames, poise, attack timing, recovery | ER | This is the gameplay we're importing. |
 | Player→NPC damage | ER calculates, Skyrim applies | Skyrim knows *what* got hit. ER knows *how much*. Applying it in Skyrim keeps stagger, crime and AI reactions. |

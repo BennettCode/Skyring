@@ -60,9 +60,15 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
 ## What works today
 
 - Elden Ring runs **hidden** at a full 60 fps while you play Skyrim (it keeps running when its window isn't focused).
+- **You move like an Elden Ring character.** While the link is on, W/A/S/D walk and run with Elden Ring's own animations and
+  speeds, turning toward where you look and press, on Skyrim's ground and walls. **Left Shift: tap = roll, hold = sprint** (Elden Ring's
+  sprint, which costs stamina in combat). A roll flows straight back into the run. Turning the camera doesn't turn your character.
+  **Caps Lock** (Skyrim's walk toggle) walks. Jumping, swimming, sneaking, riding, sitting and getting knocked down are plain Skyrim, and
+  your character goes back to Elden Ring's movement as soon as they end. Attacking, blocking, casting and drawing a weapon also use
+  Skyrim's own animations for now (Left Shift still rolls then).
 - **Sprint in Skyrim (Left Shift) → the Elden Ring character dodges.** Hold a movement key (W/A/S/D) while you tap Sprint and it **rolls**
-  in that direction; tap Sprint alone and it backsteps. Elden Ring's own rules decide what happens (tap = dodge, hold = dash).
-  While the link is active, Skyrim's own sprint is off (Sprint is the dodge now). **F10** turns the link off and on (off = plain Skyrim).
+  in that direction; tap Sprint alone and it backsteps. Elden Ring's own rules decide what happens.
+  While the link is active, Skyrim's own sprint is off. **F10** turns the link off and on (off = plain Skyrim).
 - **Elden Ring's state comes back to Skyrim every frame:** stamina (a dodge costs stamina in combat), HP, animation.
   Skyrim shows a short on-screen message after each dodge, e.g. `ER dodge: anim 27110 | stamina 136->124 | i-frames yes`.
 - **Rolls cost stamina only while your Skyrim character is in combat**, like in Elden Ring (exploring, they're free).
@@ -70,11 +76,13 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
   stopped by Skyrim's walls (Elden Ring's walls don't matter: the hidden character never leaves its spot). Spamming chains rolls. **Tap** Sprint to dodge, **hold** it to sprint.
 - **Your Skyrim character plays Elden Ring's real roll animation.** Elden Ring plays the roll on its hidden character, and its skeleton
   pose (spine, head, arms, legs) is copied onto your Skyrim character every frame, facing the way you roll. No animation files are
-  converted or shipped. Hands and feet keep Skyrim's own pose, and the body blends in and out over a few frames.
+  converted or shipped. The body blends in and out over a few frames. The same goes for walking, running and sprinting.
 - **Roll i-frames reach Skyrim:** Skyrim knows the exact window (about 0.45 s) in which the Elden Ring roll makes you invincible.
 - Fail-safe: if either game closes, crashes or pauses, the other one notices within a moment and stops acting on stale input.
 
-**Not working yet:** fighting is still vanilla (P5). Elden Ring's character holds its weapon the way yours does (fists when you're unarmed
+**Not working yet:** fighting is still vanilla (P5). Footstep sounds may be missing while Elden Ring moves you, and Skyrim's
+NPCs still see your character facing the way it last faced in Skyrim (only the body you see turns); a jump can briefly flip the body
+to that old facing. Elden Ring's character holds its weapon the way yours does (fists when you're unarmed
 or sheathed, one- or two-handed when you draw a weapon), but it doesn't use the same *kind* of weapon yet. The roll animation copies the main bones (fingers and toes follow their hands and feet); cloth and armour
 helpers follow Skyrim's own pose, and feet can slide a little (no foot placement yet). **Controller support isn't added yet:**
 Skyrim is keyboard-and-mouse only for now (details below). The i-frames are known to Skyrim but don't protect your Skyrim character yet (P4).
@@ -87,7 +95,7 @@ Skyrim is keyboard-and-mouse only for now (details below). The i-frames are know
 | P1 | Both plugins load and log | ✅ done |
 | P2 | Shared memory link: handshake, heartbeats, crash fail-safe | ✅ done |
 | P3 | Dodge in Skyrim → Elden Ring dodges → its stamina and i-frames come back | ✅ done |
-| **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 in progress (5/7: Sprint = dodge, combat stamina, rolls move you, Elden Ring's roll animation plays in Skyrim) |
+| **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 in progress (5/7: Sprint = dodge, combat stamina, rolls move you, Elden Ring's roll animation plays in Skyrim; walking, running and sprinting are Elden Ring's) |
 | P5 | Damage both ways uses Elden Ring's math (poise, stagger) | ⏳ |
 | P6 | Elden Ring-style HUD | ⏳ |
 | P7 | Runes from kills, leveling, flasks refill at "graces" | ⏳ |

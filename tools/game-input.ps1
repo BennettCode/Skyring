@@ -5,7 +5,7 @@
   powershell -ExecutionPolicy Bypass -File tools/game-input.ps1 -Game skyrim -Focus
   powershell -ExecutionPolicy Bypass -File tools/game-input.ps1 -Game skyrim -Keys "down W; wait 500; tap LShift 60; wait 1500; up W"
 .NOTES
-  Steps: down K | up K | tap K [ms] | wait ms | mouse dx dy. Keys: W A S D LShift Space Enter E Esc Tab Q R F F1 F5 F7-F10 1-4 Up/Down/Left/Right ...
+  Steps: down K | up K | tap K [ms] | wait ms | mouse dx dy. Keys: W A S D LShift Space CapsLock Enter E Esc Tab Q R F F1 F5 F7-F10 1-4 Up/Down/Left/Right ...
   The script stops and releases every key if the game stops being the foreground window.
 #>
 [CmdletBinding()]

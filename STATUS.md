@@ -10,9 +10,11 @@ Step 3 done: protocol v3; Skyrim's combat state drives ER's, so rolls cost stami
 Step 4 done: the Skyrim player follows ER's rolls (ER's velocity put into Skyrim's character controller every frame, 98–100 % of ER's distance, camera-relative,
 chains, tap = dodge / hold = sprint, movement back at ER's move-cancel window). Step 4b: the hidden ER character is pinned to its spot
 every frame and Skyrim follows its virtual position, so ER walls no longer shorten rolls (`er-plugin/src/park.rs`).
-Step 5 (vanilla roll animation) is stuck after 2 attempts: see Handoff notes.
+Step 5 done by pose streaming: ER's roll animation plays on the Skyrim player (`docs/POSE-PLAN.md`).
+LOCO-PLAN (`docs/LOCO-PLAN.md`): stage A (smooth, faithful rolls) and stage B (ER drives walking, running, sprinting and rolling while
+the bridge is on, protocol v7) done and agent-tested; waiting for the user's feel test.
 P3 (done): ER runs hidden at 60 fps; Sprint (+ W/A/S/D) → ER backsteps/rolls by ER's rules; stamina, animation and the roll i-frame
-window come back every frame; coordinate conversion measured (`protocol/src/coords.rs`). Region `Local\SkyrimXER_v6` (v4 PoseState, v5 stamps + PoseBind, v6 stance).
+window come back every frame; coordinate conversion measured (`protocol/src/coords.rs`). Region `Local\SkyrimXER_v7` (v4 PoseState, v5 stamps + PoseBind, v6 stance, v7 Locomote).
 
 ## What exists
 - `protocol/`: schema `schema/messages.toml` (v3) → `tools/protogen` → `generated/skyrimxer_protocol.{h,rs}`. Rust crate `skyrimxer-protocol`
@@ -34,14 +36,16 @@ window come back every frame; coordinate conversion measured (`protocol/src/coor
   Continue each run (no warp in P3). The user tests with a DualSense (PS5) over USB in both games.
 
 ## Next 3 steps (P4, `docs/P4-PLAN.md`)
-1. Step 5 roll animation by ER pose streaming (`docs/POSE-PLAN.md`): step 1 done (ER pose found, `docs/research/elden-ring-pose.md`);
-   step 2 done (bone writes after PlayerCharacter::Update show on screen); step 3 done (protocol v4 PoseState slot);
-   step 4 done (ER writes the pose every frame, Active during dodges); **step 5 done: the ER roll animation plays on the Skyrim player**
-   (all directions; polish list in docs/research/skyrim-hooks.md).
+1. User feel test of ER locomotion (W/A/S/D, Caps Lock walk, Left Shift tap = roll / hold = sprint, mouse turns, jump, F10).
 2. Step 6: Skyrim's stamina bar mirrors ER's.
 3. Step 7: NPC hits during ER i-frames are cancelled.
 
 ## Handoff notes
+**LOCO-PLAN stage B done, agent-tested (2026-10-05).** ER drives walking/running/sprinting/rolling while the bridge is on
+(`skse/src/bridge/Locomotion.cpp`, protocol v7 `Locomote`, ER `remote.rs`). World offset W instead of a per-frame camera offset
+(`docs/LOCO-PLAN.md`). Waiting for the user's feel test. Known gaps: NPCs see the actor's own heading, footsteps untested,
+attacks/blocks/spells yield to vanilla until P5.
+
 **LOCO-PLAN stage A, smooth player movement: solved (2026-10-05).** ApplyCurrent was refused on alternate frames, and writing
 the controller's velocity or `velocityMod` after PlayerCharacter::Update didn't stick (Skyrim sets both again before the Havok step).
 `hooks/ControllerVelocity.cpp` overrides `bhkCharProxyController::SetLinearVelocityImpl` (vtable [1], AE 240560) for the player:
