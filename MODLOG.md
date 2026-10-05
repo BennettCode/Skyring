@@ -4,6 +4,11 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: Hit sound for Elden Ring swings
+- **User report:** hits land and look right, but make no sound. `PlayImpactEffect` only spawns the visuals.
+- **Fix:** `Combat.cpp` PlayHitSound plays the weapon's impact sound for the target race's blood impact material (fallback: any of the
+  weapon's impacts) at the hit node. **Tested:** virtual-pad swing on a wolf, sound handle played (log); user listening test pending.
+
 ## 2026-10-05: Elden Ring swings hit Skyrim enemies, protocol v9 (P5 step 1)
 - **Probe (stage A):** ER's hit window found in memory: `action_modifiers_flags` bit 9/10 + action_flag +0x1d0, 2-3 frames mid-sweep in
   every swing (`docs/research/elden-ring-combat.md`). The dump tool (`-ErDump`) now records every frame of attack anims plus three untyped

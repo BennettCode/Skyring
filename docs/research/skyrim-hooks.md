@@ -183,6 +183,9 @@ before use (a missing id makes CommonLib abort the game at load).
 - SkyCraft's path works on AE 1.7.104: HitData ctor 43995 + Populate 44001 (aggressor player, weapon null), damage written into
   totalDamage/physicalDamage, then 38586(victim, hit) gives the hit reaction, kill, combat start. Skyrim's difficulty multiplier still
   applies inside 38586 (6.6 sent → 13 taken on the test save).
+- **No hit sound** from 38586 or `BGSImpactManager::PlayImpactEffect` (visuals only; user report). The sound is the weapon's
+  `impactDataSet->impactMap[race->bloodImpactMaterial]` → `sound1`/`sound2`, played with `BSAudioManager::GetSoundHandle(…, 16)` +
+  SetPosition/SetObjectToFollow/Play (AE 67652, 67666, 67631, 67636, 67616).
 - Targets: `ProcessLists::highActorHandles`, distance on the ground plane vs weapon reach x 150 + `GetBoundRadius`, cone ±65°
   from the shown body's heading. Ids: 37335 DoDamage, 38561 StartCombat, 37334 GetLevel, 37439 GetBoundRadius, 37275 IsGhost,
   400315 ProcessLists, 401262/36215 impact effect.

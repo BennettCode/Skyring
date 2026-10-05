@@ -75,6 +75,45 @@ namespace sxer::combat
 			return root;
 		}
 
+		// The weapon-on-flesh sound. PlayImpactEffect (SkyCraft's call) only spawns the visuals: the sound is in the weapon's impact
+		// data for the target's material (its race's blood impact material: flesh, shell, bone...), played at the hit node.
+		// Address Library (AE): BSAudioManager 67652, GetSoundHandle 67666, BSSoundHandle SetPosition 67631 / SetObjectToFollow 67636 /
+		// Play 67616 (tools/addrlib-check.ps1).
+		bool PlayHitSound(RE::Actor* a_target, RE::TESObjectWEAP* a_weapon, RE::NiAVObject* a_node, const RE::NiPoint3& a_pos)
+		{
+			auto* set = a_weapon ? a_weapon->impactDataSet : nullptr;
+			if (!set || set->impactMap.empty()) {
+				return false;
+			}
+			auto* race = a_target->GetRace();
+			const RE::BGSMaterialType* material = race ? race->bloodImpactMaterial : nullptr;
+			RE::BGSImpactData* data = nullptr;
+			if (material) {
+				if (auto it = set->impactMap.find(material); it != set->impactMap.end()) {
+					data = it->second;
+				}
+			}
+			if (!data) {
+				data = set->impactMap.begin()->second;  // no match for this material: any of the weapon's impacts beats silence
+			}
+			auto* audio = RE::BSAudioManager::GetSingleton();
+			bool played = false;
+			for (auto* sound : { data ? data->sound1 : nullptr, data ? data->sound2 : nullptr }) {
+				if (!sound || !audio) {
+					continue;
+				}
+				RE::BSSoundHandle handle;
+				if (audio->GetSoundHandle(handle, sound, 16)) {
+					handle.SetPosition(a_pos.x, a_pos.y, a_pos.z);
+					if (a_node) {
+						handle.SetObjectToFollow(a_node);
+					}
+					played = handle.Play() || played;
+				}
+			}
+			return played;
+		}
+
 		float Stance(float a_level) { return 20.0f + a_level * 0.6f; }
 
 		const char* KindName(std::uint32_t a_kind)
@@ -157,15 +196,16 @@ namespace sxer::combat
 			if (auto* impacts = RE::BGSImpactManager::GetSingleton(); impacts && weapon && weapon->impactDataSet && node && r.damage > 0.0f) {
 				impacts->PlayImpactEffect(a_target, weapon->impactDataSet, node->name.c_str(), dir, 128.0f, false, false);
 			}
+			const bool sound = r.damage > 0.0f && PlayHitSound(a_target, weapon, node, hitPos);
 			if (!a_target->IsDead() && !a_target->IsPlayerTeammate() && !a_target->IsInCombat()) {
 				a_target->StartCombat(a_player);
 			}
 			SKSE::log::info(
 				"[combat] hit {} ({:08X}) lvl {:.0f} armor {:.0f} hp {:.0f}->{:.0f}/{:.0f} | ER #{} {} atk phys {:.0f} mag {:.0f} fire {:.0f} ltn {:.0f} holy {:.0f} "
-				"| def {:.0f} abs {:.2f} -> ER dmg {:.0f}, ref HP {:.0f}, x{:.2f} -> {:.1f} | poise {:.1f}/{:.0f}{}{} frame={}",
+				"| def {:.0f} abs {:.2f} -> ER dmg {:.0f}, ref HP {:.0f}, x{:.2f} -> {:.1f} | poise {:.1f}/{:.0f}{}{}{} frame={}",
 				a_target->GetDisplayFullName(), a_target->GetFormID(), in.level, in.armor, hpBefore, av->GetActorValue(RE::ActorValue::kHealth), in.maxHp,
 				a_s.attack_seq, KindName(a_s.atk_kind), in.atk[0], in.atk[1], in.atk[2], in.atk[3], in.atk[4], r.defense, r.absorption, r.erDamage,
-				r.refHp, g_scale, r.damage, broken ? stance : p.damage, stance, broken ? " STAGGER" : "", viaPipeline ? "" : " (fallback DoDamage)", a_frame);
+				r.refHp, g_scale, r.damage, broken ? stance : p.damage, stance, broken ? " STAGGER" : "", viaPipeline ? "" : " (fallback DoDamage)", sound ? "" : " (no hit sound)", a_frame);
 		}
 
 		// Actors the swing reaches: alive, loaded, not the player or a follower, within reach and in front of the body.
