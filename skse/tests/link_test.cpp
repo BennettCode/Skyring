@@ -14,6 +14,7 @@
 //
 // The generated header's static_asserts also make this target the C++ layout test.
 
+#include "bridge/CombatMath.h"
 #include "bridge/Coords.h"
 #include "bridge/Link.h"
 #include "bridge/PadReport.h"
@@ -291,6 +292,33 @@ namespace
 		Check(Parse("  # comment ; tap cross 50 ;") && At(*Parse("tap cross 50"), 10).buttons == kCross, "padscript: comments, blanks, case");
 	}
 
+	// ER-like damage model (bridge/CombatMath.h).
+	void CombatTests()
+	{
+		using namespace sxer::combat;
+		Check(DefenseCurve(0, 100) == 0 && Near(DefenseCurve(100, 100), 0.4f, 1e-4f) && Near(DefenseCurve(250, 100), 0.7f, 1e-4f) &&
+				  Near(DefenseCurve(800, 100), 0.9f, 1e-4f) && Near(DefenseCurve(10, 100), 0.1f, 1e-4f),
+			"combat: ER defense curve key points (1x 0.4, 2.5x 0.7, 8x 0.9, <=1/8 0.1)");
+		bool rising = true;
+		for (float a = 1; a < 1000; a += 7) {
+			rising = rising && DefenseCurve(a + 7, 100) >= DefenseCurve(a, 100);
+		}
+		Check(rising, "combat: defense curve never falls as attack rises");
+		DamageInput bandit;
+		bandit.atk[0] = 300;
+		bandit.level = 10;
+		bandit.maxHp = 150;
+		const auto r = ComputeDamage(bandit);
+		Check(Near(r.defense, 140, 1e-3f) && Near(r.refHp, 420, 1e-3f) && r.damage > 0 && Near(r.damage, r.erDamage * 150 / 420, 1e-2f),
+			std::format("combat: level 10 bandit, 300 phys -> ER {:.0f} -> Skyrim {:.0f}", r.erDamage, r.damage).c_str());
+		DamageInput armored = bandit;
+		armored.armor = 2000;
+		Check(Near(ComputeDamage(armored).absorption, 0.5f, 1e-4f) && ComputeDamage(armored).damage < r.damage, "combat: armour absorbs, capped at 50%");
+		DamageInput twice = bandit;
+		twice.scale = 2;
+		Check(Near(ComputeDamage(twice).damage, 2 * r.damage, 1e-2f), "combat: fDamageScale multiplies");
+	}
+
 	void SlotTests(std::uint8_t* a_base)
 	{
 		using namespace sxer;
@@ -363,6 +391,7 @@ namespace
 		RigTests();
 		PadTests();
 		PadScriptTests();
+		CombatTests();
 		std::ostringstream lines;
 		auto logger = std::make_shared<spdlog::logger>("selftest", std::make_shared<spdlog::sinks::ostream_sink_mt>(lines));
 		logger->set_pattern("%l %v");

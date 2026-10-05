@@ -175,7 +175,17 @@ before use (a missing id makes CommonLib abort the game at load).
   It has no touchpad (Steam mapped it to Start → Journal) and sends slow analog triggers; as Skyrim's source it broke the touchpad and
   the Journal tabs. The plugin's HID copy must win; other pads are hidden while it's open.
 - A button held while a menu opens/closes must be ignored until released, or it arrives in the other layout as a different button.
+- Skyrim also asks `XInputGetCapabilities` (imported, patched the same way) before it polls a pad: with no pad at startup (DualSense
+  unplugged, no Steam copy) it never calls XInputGetState at all. Our pad answers the capabilities call too.
 - Menu mode = any open menu with PausesGame / UsesCursor / UsesMenuContext (MenuOpenCloseEvent + `UI::menuMap` seed at kDataLoaded).
+
+## Hits from the player on NPCs (P5 step 1, 2026-10-05)
+- SkyCraft's path works on AE 1.7.104: HitData ctor 43995 + Populate 44001 (aggressor player, weapon null), damage written into
+  totalDamage/physicalDamage, then 38586(victim, hit) gives the hit reaction, kill, combat start. Skyrim's difficulty multiplier still
+  applies inside 38586 (6.6 sent → 13 taken on the test save).
+- Targets: `ProcessLists::highActorHandles`, distance on the ground plane vs weapon reach x 150 + `GetBoundRadius`, cone ±65°
+  from the shown body's heading. Ids: 37335 DoDamage, 38561 StartCombat, 37334 GetLevel, 37439 GetBoundRadius, 37275 IsGhost,
+  400315 ProcessLists, 401262/36215 impact effect.
 
 ## Fingers and toes are not nodes (2026-10-05)
 - The player's third-person tree has 51 nodes and no finger or toe nodes. The skinned hands (36 bones), feet (6) and body (24) still skin

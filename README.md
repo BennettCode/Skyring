@@ -74,6 +74,11 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
   (pause menu), **d-pad up** shout, **d-pad down** favorites, **d-pad left/right** hotkeys. In menus the pad works like an Xbox pad
   (Circle = back, L1/R1 or L2/R2 switch Journal tabs). On the mouse: left click = Elden Ring attack, right click = guard.
   A press with your weapon sheathed draws it first. An Xbox controller gets the same layout.
+- **Your Elden Ring swings hit Skyrim enemies.** When the Elden Ring swing reaches its hit frames, whoever is in reach in front of you
+  takes Elden Ring's damage: your Elden Ring weapon's real attack rating (its upgrade level and your Elden Ring stats count), Elden Ring's
+  defense formula against the enemy's level and armour, scaled to Skyrim health so enemies take about as many hits as a comparable Elden
+  Ring enemy. Heavy hits build poise damage that staggers. Skyrim plays the blood, hit reaction, crime and kill like any hit.
+  `SkyrimXER.ini` → `[Combat] fDamageScale` tunes it (Skyrim's difficulty setting still multiplies your damage too).
 - **Sprint in Skyrim (Left Shift) → the Elden Ring character dodges.** Hold a movement key (W/A/S/D) while you tap Sprint and it **rolls**
   in that direction; tap Sprint alone and it backsteps. Elden Ring's own rules decide what happens.
   While the link is active, Skyrim's own sprint is off. **F10** turns the link off and on (off = plain Skyrim).
@@ -96,8 +101,9 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
 NPCs still see your character facing the way it last faced in Skyrim (only the body you see turns); a jump can briefly flip the body
 to that old facing. Elden Ring's character holds its weapon the way yours does (fists when you're unarmed
 or sheathed, one- or two-handed when you draw a weapon), but it doesn't use the same *kind* of weapon yet. The roll animation copies the main bones (fingers and toes follow their hands and feet); cloth and armour
-helpers follow Skyrim's own pose, and feet can slide a little (no foot placement yet). **Your Elden Ring attacks don't hurt
-anyone yet** (they play, but deal no damage: that's P5), and it doesn't matter yet which Skyrim weapon you hold: Elden Ring uses its own.
+helpers follow Skyrim's own pose, and feet can slide a little (no foot placement yet). **Which Skyrim weapon you hold doesn't pick
+the Elden Ring weapon yet:** Elden Ring swings its own equipped weapon (one-handed or two-handed like yours). Enemy hits on you still use
+Skyrim's health and armour.
 While the link is on, Skyrim spells, bows and shield bashes aren't on any button (F10 gives them back), and Skyrim's Wait has no pad
 button (keyboard T works). Arrows and spells still hit you during a roll.
 
@@ -110,7 +116,7 @@ button (keyboard T works). Arrows and spells still hit you during a roll.
 | P2 | Shared memory link: handshake, heartbeats, crash fail-safe | ✅ done |
 | P3 | Dodge in Skyrim → Elden Ring dodges → its stamina and i-frames come back | ✅ done |
 | **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 in progress (8/8 built, final playtest pending: Sprint = dodge, combat stamina, rolls move you, Elden Ring's roll animation plays in Skyrim; walking, running and sprinting are Elden Ring's; Skyrim's stamina bar shows Elden Ring's; roll i-frames make melee hits miss; DualSense with Elden Ring's buttons) |
-| P5 | Damage both ways uses Elden Ring's math (poise, stagger) | ⏳ |
+| **P5** | **Damage both ways uses Elden Ring's math (poise, stagger)** | 🔄 in progress (your Elden Ring swings hit Skyrim enemies with Elden Ring damage and poise) |
 | P6 | Elden Ring-style HUD | ⏳ |
 | P7 | Runes from kills, leveling, flasks refill at "graces" | ⏳ |
 | P8 | Visual polish and performance | ⏳ |
@@ -190,7 +196,7 @@ Run scripts with `powershell -ExecutionPolicy Bypass -File <script>`. More in [`
 ## Credits
 
 Built on SKSE, CommonLibSSE-NG, Address Library, me3 and eldenring-rs. Design and code patterns are borrowed (with thanks) from
-other game-merge projects (SkyCraft's frame interpolation is adapted in `skse/src/bridge/Timeline.cpp` and its hit call-site check in `skse/src/hooks/PlayerHit.cpp`, FalloutCraft's bar mirror in `skse/src/bridge/Stamina.cpp`, both MIT): [SkyCraft](https://github.com/chasmlol/SkyCraft), [FalloutCraft](https://github.com/zeyvu/FalloutCraft),
+other game-merge projects (SkyCraft's frame interpolation is adapted in `skse/src/bridge/Timeline.cpp` its hit call-site check in `skse/src/hooks/PlayerHit.cpp` and its hit apply in `skse/src/bridge/Combat.cpp`, FalloutCraft's bar mirror in `skse/src/bridge/Stamina.cpp`, both MIT): [SkyCraft](https://github.com/chasmlol/SkyCraft), [FalloutCraft](https://github.com/zeyvu/FalloutCraft),
 [Killcraft](https://github.com/goonsn/Killcraft), [2010-rust-rewrite-mashup](https://github.com/chasmlol/2010-rust-rewrite-mashup)
 and the ideas of [GTA San AnSkateas](https://github.com/ryglizzy/GTA-San-AnSkateas).
 Full list and licenses: [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).

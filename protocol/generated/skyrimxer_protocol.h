@@ -7,9 +7,9 @@
 
 namespace sxer::proto
 {
-	inline constexpr std::uint32_t kVersion = 8;
+	inline constexpr std::uint32_t kVersion = 9;
 	inline constexpr std::uint32_t kMagic = 0x52455853;  // "SXER" as little-endian bytes
-	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v8";
+	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v9";
 
 	// Peer counts as gone when its heartbeat is older than this.
 	inline constexpr std::uint64_t kHeartbeatTimeoutMs = 2000;
@@ -102,6 +102,17 @@ namespace sxer::proto
 		PoiseBroken = 4,
 		InCombat = 5,  // ER's own combat state (CSChrDataModule +0x19a bit 0x40 clear): dodges cost stamina.
 		MoveCancel = 6,  // ER's TAE movement-cancel window (CANCEL_LS_MOVEMENT): movement may end the current animation.
+		AttackActive = 7,  // v9: the swing's hit window is open (CSChrActionFlagModule action_modifiers_flags bit 9 or 10, or +0x1d0 != 0; 2-3 frames mid-sweep, docs/research/elden-ring-combat.md). Skyrim lands the hit once per attack_seq.
+	};
+
+	// PlayerState.atk_kind (v9): which motion value ER's numbers used.
+	enum class AttackKind : std::uint32_t
+	{
+		None = 0,
+		Light = 1,  // R1 chain (anim group 300xx).
+		Heavy = 2,  // R2 / charged R2 (305xx).
+		Skill = 3,  // Weapon art (40xxx).
+		Other = 4,  // Running / rolling / jumping / backstep attacks (other 3xxxx).
 	};
 
 	// PoseState.flags. Values are BIT INDICES: mask = 1 << value.
@@ -254,10 +265,18 @@ namespace sxer::proto
 		float yaw;  // ER yaw, radians.
 		std::uint64_t time_us;  // QueryPerformanceCounter time when written, microseconds (one clock for both processes): interpolation.
 		float cam_yaw;  // ER camera yaw, radians (same convention as yaw); the stick is relative to it. Diagnostics.
+		std::uint32_t attack_seq;  // v9: +1 each time a hit window opens (PlayerFlag AttackActive rising edge).
+		float atk_phys;  // v9: ER physical damage of the current/last swing before defense: weapon attack rating x motion value.
+		float atk_mag;  // v9: magic, same.
+		float atk_fire;  // v9: fire, same.
+		float atk_thun;  // v9: lightning, same.
+		float atk_holy;  // v9: holy, same.
+		float atk_poise;  // v9: poise damage of the swing.
+		std::uint32_t atk_kind;  // v9: AttackKind.
 		std::uint32_t _pad1;
 	};
 	static_assert(std::is_trivially_copyable_v<PlayerState> && std::is_standard_layout_v<PlayerState>);
-	static_assert(sizeof(PlayerState) == 96);
+	static_assert(sizeof(PlayerState) == 128);
 	static_assert(alignof(PlayerState) == 8);
 	static_assert(offsetof(PlayerState, seq) == 0);
 	static_assert(offsetof(PlayerState, flags) == 4);
@@ -277,7 +296,15 @@ namespace sxer::proto
 	static_assert(offsetof(PlayerState, yaw) == 76);
 	static_assert(offsetof(PlayerState, time_us) == 80);
 	static_assert(offsetof(PlayerState, cam_yaw) == 88);
-	static_assert(offsetof(PlayerState, _pad1) == 92);
+	static_assert(offsetof(PlayerState, attack_seq) == 92);
+	static_assert(offsetof(PlayerState, atk_phys) == 96);
+	static_assert(offsetof(PlayerState, atk_mag) == 100);
+	static_assert(offsetof(PlayerState, atk_fire) == 104);
+	static_assert(offsetof(PlayerState, atk_thun) == 108);
+	static_assert(offsetof(PlayerState, atk_holy) == 112);
+	static_assert(offsetof(PlayerState, atk_poise) == 116);
+	static_assert(offsetof(PlayerState, atk_kind) == 120);
+	static_assert(offsetof(PlayerState, _pad1) == 124);
 
 	// At OFF_SLOT_POSE. Written by ER's game thread every frame, read by Skyrim's.
 	struct PoseState

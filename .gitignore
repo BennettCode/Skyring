@@ -26,6 +26,7 @@
 !/docs/**/*.svg
 !/config/*.example.json
 !/config/*.example.toml
+!/config/SkyrimXER.ini
 
 # 5) Allowed: source code, by extension (only outside the hard-ignored folders below)
 !*.cpp

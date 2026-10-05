@@ -156,4 +156,7 @@ namespace sxer::pad::script
 	void Start();
 	// The virtual pad right now; nullopt when no script is playing.
 	std::optional<DsState> Overlay();
+	// Dev virtual pad on (SKYRIMXER_PADSCRIPT set): Skyrim must always see a connected pad, even with no DualSense plugged in,
+	// because it only polls a pad it already found.
+	bool Enabled();
 }

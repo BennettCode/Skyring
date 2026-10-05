@@ -13,6 +13,7 @@ every frame and Skyrim follows its virtual position, so ER walls no longer short
 Step 5 done by pose streaming: ER's roll animation plays on the Skyrim player (`docs/POSE-PLAN.md`).
 Step 6 done (2026-10-05): Skyrim's stamina bar shows ER's stamina share (`skse/src/bridge/Stamina.cpp`).
 Step 7 done for melee (2026-10-05): NPC melee hits during ER's roll i-frames are dropped (`skse/src/hooks/PlayerHit.cpp`); arrows/spells → P5.
+**P5 in progress** (`docs/P5-PLAN.md`): step 1 done (2026-10-05): ER swings hit Skyrim NPCs (hit window from ER memory, ER attack rating, ER-like damage, poise stagger; protocol v9).
 Step 8 done (2026-10-05): DualSense with Elden Ring's layout (plugin reads it over HID; protocol v8 forwards R1/R2/L1/L2 to ER; ER ignores the physical pad while bridged).
 LOCO-PLAN (`docs/LOCO-PLAN.md`): stage A (smooth, faithful rolls) and stage B (ER drives walking, running, sprinting and rolling while
 the bridge is on, protocol v7) done. The run/sprint pose was checked bone by bone against ER and fixed (COM yaw, spine conjugation;
@@ -39,11 +40,10 @@ window come back every frame; coordinate conversion measured (`protocol/src/coor
 - None blocking. Arena settled: the test character is parked in m10_01_00_00 and the user presses
   Continue each run (no warp in P3). The user tests with a DualSense (PS5) over USB in both games.
 
-## Next 3 steps (P4, `docs/P4-PLAN.md`)
-1. P5 plan (`docs/P5-PLAN.md`): ER swings damage Skyrim NPCs (ER attack window + damage → SkyCraft's HitData path), then Skyrim weapon
-   type → ER weapon, then NPC hits through ER HP.
-2. P4 accept playtest: roll through an NPC's swings with the pad.
-3. Find why ER freezes for seconds during load-in (the link now survives it).
+## Next 3 steps (P5, `docs/P5-PLAN.md`)
+1. User playtest of P5 step 1 with the pad (bandits/wolves): does the hit count feel ER-like? Tune `fDamageScale`, reach, motion values.
+2. P5 step 2: Skyrim weapon type → ER weapon (moveset + attack rating).
+3. P5 step 3: NPC hits on the player go through ER's HP and defenses. (Also open: P4 accept playtest; ER freezes for seconds at load-in.)
 
 ## Handoff notes
 **LOCO-PLAN stage B done, agent-tested (2026-10-05).** ER drives walking/running/sprinting/rolling while the bridge is on

@@ -5,6 +5,7 @@
 //! Phase 3: hidden-but-focused window (window.rs), player state readout (game.rs). Plan: docs/P3-PLAN.md.
 
 mod actions;
+mod attack;
 mod body;
 mod bridge;
 mod combat;

@@ -58,8 +58,9 @@ Tick boxes as you go. Keep each phase small. If a phase grows, split it.
 
 ## P5: Combat bridge
 - [ ] Weapon mapping table (Skyrim weapon → ER weapon ID) in `config/`
-- [ ] Swallow vanilla attack/block while the bridge is on, and forward them to ER instead
-- [ ] Player light/heavy attacks: ER timing + damage math → applied to Skyrim actors (HitResult)
+- [x] Swallow vanilla attack/block while the bridge is on, and forward them to ER instead (P4 step 8)
+- [x] Player light/heavy attacks: ER hit window + attack rating x motion value → ER-like damage applied to Skyrim actors through
+  Skyrim's hit function (2026-10-05, `docs/P5-PLAN.md` step 1)
 - [ ] NPC → player damage goes through ER defenses. ER HP is the authority. Skyrim HP mirrors it
 - [ ] Poise/stagger both ways. Logs show every damage calculation input
 **Accept:** damage numbers in the logs match ER's formula. Staggers happen when they should.

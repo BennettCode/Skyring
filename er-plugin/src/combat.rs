@@ -173,17 +173,64 @@ fn describe(entry: &SpecialEffectEntry) -> String {
     text
 }
 
-/// Research dump (`dump=1`, `tools/dev.ps1 -ErDump`): every DUMP_EVERY frames, raw bytes of the PlayerIns struct, its PlayerGameData and
-/// the typed ChrIns modules go to `logs/combat_dump.bin`, so the combat-state word can be found offline (words that flip exactly when
-/// rolls start/stop costing stamina). Record: u64 frame, i32 stamina, i32 anim, then the regions in the order of `combat_dump.txt`.
+/// Research dump (`dump=1`, `tools/dev.ps1 -ErDump`): raw bytes of the PlayerIns struct, its PlayerGameData, the typed ChrIns modules
+/// and (P5 stage A) three untyped regions behind private pointers (time_act's TAE anim-event object, the `hitstop` and `damage`
+/// modules, first RAW_LEN bytes, only if readable) go to `logs/combat_dump.bin`, so a state word can be found offline. Every
+/// DUMP_EVERY frames, and **every frame** while an attack anim plays (group 3/4, see `is_attack_anim`) and ATTACK_TAIL frames after,
+/// so a hit window inside a swing can be found. Record: u64 frame, i32 stamina, i32 anim, f32 play_time, then the regions in the
+/// order of `combat_dump.txt` (a missing raw region is zero-filled).
 pub struct Dump {
     file: Option<std::fs::File>,
     records: u32,
     layout: Vec<(&'static str, usize)>,
+    /// Frames left to dump every frame (attack anim playing or just ended).
+    attack_frames: u32,
 }
 
 const DUMP_EVERY: u64 = 15;
-const DUMP_MAX_RECORDS: u32 = 4000;
+const DUMP_MAX_RECORDS: u32 = 6000;
+/// Bytes read behind each untyped pointer (P5 stage A).
+const RAW_LEN: usize = 0x400;
+/// Frames still dumped every frame after an attack anim ends.
+const ATTACK_TAIL: u32 = 20;
+
+/// ER player attack animations: groups 30xxx (light/heavy/running/rolling) and 40xxx (skills), any stance prefix.
+pub fn is_attack_anim(anim: i32) -> bool {
+    anim >= 0 && matches!((anim % 1_000_000) / 10_000, 3 | 4)
+}
+
+/// `len` bytes at `addr` if the whole range is committed, readable memory (VirtualQuery), else None.
+fn read_raw(addr: usize, len: usize) -> Option<Vec<u8>> {
+    use windows::Win32::System::Memory::{MEM_COMMIT, MEMORY_BASIC_INFORMATION, PAGE_GUARD, VirtualQuery};
+    // PAGE_READONLY | READWRITE | WRITECOPY | EXECUTE_READ | EXECUTE_READWRITE | EXECUTE_WRITECOPY: anything else can't be read.
+    const READABLE: u32 = 0x02 | 0x04 | 0x08 | 0x20 | 0x40 | 0x80;
+    if addr < 0x10000 {
+        return None;
+    }
+    let mut at = addr;
+    while at < addr + len {
+        let mut info = MEMORY_BASIC_INFORMATION::default();
+        // SAFETY: VirtualQuery only reads the page tables for `at`.
+        let n = unsafe { VirtualQuery(Some(at as *const _), &mut info, std::mem::size_of::<MEMORY_BASIC_INFORMATION>()) };
+        if n == 0 || info.State != MEM_COMMIT || (info.Protect.0 & READABLE) == 0 || (info.Protect.0 & PAGE_GUARD.0) != 0 {
+            return None;
+        }
+        at = info.BaseAddress as usize + info.RegionSize;
+    }
+    // SAFETY: the whole range was just checked to be committed and readable.
+    Some(unsafe { std::slice::from_raw_parts(addr as *const u8, len) }.to_vec())
+}
+
+/// Untyped regions behind private pointers: (name, address). Offsets from the eldenring-rs layouts: time_act +0x18 =
+/// `chr_tae_anim_event`; ChrInsModuleContainer +0x90 = `hitstop`, +0x98 = `damage`.
+fn raw_regions(player: &eldenring::cs::PlayerIns) -> [(&'static str, usize); 3] {
+    let m = &player.chr_ins.modules;
+    // `modules` is a pointer field (OwnedPtr): the container is where it points, not the field itself.
+    let container = &**m as *const eldenring::cs::ChrInsModuleContainer as *const usize;
+    let time_act = &*m.time_act as *const _ as *const usize;
+    // SAFETY: both are live structs at least this long (eldenring-rs layouts); main thread.
+    unsafe { [("tae_anim_event", *time_act.add(3)), ("hitstop", *container.add(0x90 / 8)), ("damage", *container.add(0x98 / 8))] }
+}
 
 /// (name, start, length) of each dumped region. Lengths come from the eldenring-rs types, so they never read past the object.
 fn dump_regions(player: &eldenring::cs::PlayerIns) -> Vec<(&'static str, *const u8, usize)> {
@@ -211,21 +258,32 @@ fn dump_regions(player: &eldenring::cs::PlayerIns) -> Vec<(&'static str, *const 
 
 impl Dump {
     pub fn new() -> Self {
-        Self { file: None, records: 0, layout: Vec::new() }
+        Self { file: None, records: 0, layout: Vec::new(), attack_frames: 0 }
     }
 
     pub fn run(&mut self) {
         use std::io::Write;
         let frame = bridge::FRAMES.load(Ordering::Relaxed);
-        if self.records >= DUMP_MAX_RECORDS || frame % DUMP_EVERY != 0 {
+        if self.records >= DUMP_MAX_RECORDS {
             return;
         }
         // SAFETY: task callbacks run on the game's main thread.
         let Some(player) = (unsafe { game::main_player() }) else { return };
+        let s = game::snapshot(player);
+        if is_attack_anim(s.anim_id) {
+            self.attack_frames = ATTACK_TAIL;
+        } else {
+            self.attack_frames = self.attack_frames.saturating_sub(1);
+        }
+        if self.attack_frames == 0 && frame % DUMP_EVERY != 0 {
+            return;
+        }
         let regions = dump_regions(player);
+        let raws = raw_regions(player);
         if self.file.is_none() {
             let Some(dir) = crate::log::LOG_DIR.get() else { return };
             self.layout = regions.iter().map(|&(n, _, len)| (n, len)).collect();
+            self.layout.extend(raws.iter().map(|&(n, _)| (n, RAW_LEN)));
             let text: Vec<String> = self.layout.iter().map(|(n, len)| format!("{n} {len}")).collect();
             if let Err(e) = std::fs::write(dir.join("combat_dump.txt"), text.join("\n") + "\n") {
                 crate::error!("probe", "combat dump layout: {e}");
@@ -242,14 +300,27 @@ impl Dump {
             }
             crate::info!("probe", "combat dump started every {DUMP_EVERY} frames: {}", text.join(", "));
         }
-        let s = game::snapshot(player);
-        let mut buf = Vec::with_capacity(16 + self.layout.iter().map(|l| l.1).sum::<usize>());
+        let anims = &player.chr_ins.modules.time_act;
+        let play_time = anims.anim_queue.get(anims.read_idx as usize).map_or(-1.0, |a| a.play_time);
+        let mut buf = Vec::with_capacity(20 + self.layout.iter().map(|l| l.1).sum::<usize>());
         buf.extend_from_slice(&frame.to_le_bytes());
         buf.extend_from_slice(&s.stamina.to_le_bytes());
         buf.extend_from_slice(&s.anim_id.to_le_bytes());
+        buf.extend_from_slice(&play_time.to_le_bytes());
         for (_, ptr, len) in regions {
             // SAFETY: each region is a live object of exactly `len` bytes (dump_regions); main thread.
             buf.extend_from_slice(unsafe { std::slice::from_raw_parts(ptr, len) });
+        }
+        for (name, addr) in raws {
+            match read_raw(addr, RAW_LEN) {
+                Some(bytes) => buf.extend_from_slice(&bytes),
+                None => {
+                    if self.records == 0 {
+                        crate::warn!("probe", "combat dump: {name} at {addr:#x} not readable; zero-filled");
+                    }
+                    buf.resize(buf.len() + RAW_LEN, 0);
+                }
+            }
         }
         if let Some(f) = &mut self.file {
             let _ = f.write_all(&buf);
@@ -306,3 +377,4 @@ impl SpEffectWatch {
         self.last = Some(now);
     }
 }
+

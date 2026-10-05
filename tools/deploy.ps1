@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Copies SkyrimXER.dll/.pdb into Skyrim's Data\SKSE\Plugins and records them in local/deploy-manifest.json.
+  Copies SkyrimXER.dll/.pdb/.ini into Skyrim's Data\SKSE\Plugins and records them in local/deploy-manifest.json.
   -Undo removes exactly the files the manifest lists. The Elden Ring DLL is never deployed: me3 loads it from build/.
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File tools/deploy.ps1 -WhatIf
@@ -35,6 +35,8 @@ if ($Undo) {
 }
 
 $sources = @('SkyrimXER.dll', 'SkyrimXER.pdb') | ForEach-Object { Join-Path $paths.BuildDir "skse\$_" }
+# Settings (P5: [Combat] fDamageScale) from the repo's config/.
+$sources += Join-Path (Split-Path $PSScriptRoot -Parent) 'config\SkyrimXER.ini'
 if (-not (Test-Path -LiteralPath $sources[0])) { throw "$($sources[0]) not found. Run tools/build.ps1 -Target skse first." }
 
 $deployed = @()

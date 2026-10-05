@@ -321,6 +321,15 @@ pub fn publish_state(from_frame_begin: bool) {
             | if s.poise_broken { flag(PlayerFlag::PoiseBroken) } else { 0 }
             | if combat::in_combat(player) { flag(PlayerFlag::InCombat) } else { 0 }
             | if s.move_cancel { flag(PlayerFlag::MoveCancel) } else { 0 };
+        // P5: the swing's hit window and ER's numbers for it (attack.rs).
+        let swing = crate::attack::sample(player, s.anim_id);
+        if swing.active {
+            state.flags |= flag(PlayerFlag::AttackActive);
+        }
+        state.attack_seq = swing.seq;
+        [state.atk_phys, state.atk_mag, state.atk_fire, state.atk_thun, state.atk_holy] = swing.atk;
+        state.atk_poise = swing.poise;
+        state.atk_kind = swing.kind as u32;
         state.hp = s.hp;
         state.max_hp = s.max_hp;
         state.fp = s.fp;

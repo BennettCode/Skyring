@@ -31,6 +31,8 @@ namespace sxer::hooks
 	{
 		using GetStateFn = DWORD(WINAPI*)(DWORD, XINPUT_STATE*);
 		GetStateFn g_real = nullptr;
+		using GetCapsFn = DWORD(WINAPI*)(DWORD, DWORD, XINPUT_CAPABILITIES*);
+		GetCapsFn g_realCaps = nullptr;
 		std::atomic<bool> g_menuMode{ false };
 		std::atomic<bool> g_loggedPad{ false };
 		std::atomic<bool> g_loggedReal{ false };
@@ -106,7 +108,8 @@ namespace sxer::hooks
 			// Our own pad first: the DualSense we read over HID, plus the dev virtual pad (bridge/PadScript). It is user 0 and the only
 			// pad Skyrim sees, so a second copy of the same DualSense (Steam Input) can't double or swallow presses.
 			const auto ds = pad::Latest();
-			const auto overlay = pad::script::Overlay();
+			// Dev virtual pad: an idle pad when no script plays, so Skyrim keeps polling (it never re-checks a pad it lost).
+			const auto overlay = pad::script::Enabled() ? std::optional(pad::script::Overlay().value_or(pad::DsState{})) : std::nullopt;
 			if (ds || overlay) {
 				// Once per user: is there another pad (logged, then hidden)? XInputGetState on an empty slot is slow, so never per frame.
 				if (a_user < g_probed.size() && !g_probed[a_user].exchange(true) && g_real) {
@@ -153,6 +156,30 @@ namespace sxer::hooks
 				g_erButtons.store(0, std::memory_order_relaxed);
 			}
 			return result;
+		}
+
+		// Skyrim asks XInputGetCapabilities whether a pad is there before it polls one: our pad (DualSense, or the dev virtual pad)
+		// must answer as a standard Xbox gamepad on user 0, and other users stay empty while it is ours.
+		DWORD WINAPI GetCaps(DWORD a_user, DWORD a_flags, XINPUT_CAPABILITIES* a_caps)
+		{
+			const bool ours = pad::Latest().has_value() || pad::script::Enabled();
+			if (!ours || !a_caps) {
+				return g_realCaps ? g_realCaps(a_user, a_flags, a_caps) : ERROR_DEVICE_NOT_CONNECTED;
+			}
+			if (a_user != 0) {
+				return ERROR_DEVICE_NOT_CONNECTED;
+			}
+			*a_caps = XINPUT_CAPABILITIES{};
+			a_caps->Type = XINPUT_DEVTYPE_GAMEPAD;
+			a_caps->SubType = XINPUT_DEVSUBTYPE_GAMEPAD;
+			a_caps->Gamepad.wButtons = 0xF3FF;
+			a_caps->Gamepad.bLeftTrigger = a_caps->Gamepad.bRightTrigger = 0xFF;
+			a_caps->Gamepad.sThumbLX = a_caps->Gamepad.sThumbLY = a_caps->Gamepad.sThumbRX = a_caps->Gamepad.sThumbRY = static_cast<SHORT>(0xFFC0);
+			static std::atomic<bool> logged{ false };
+			if (!logged.exchange(true)) {
+				SKSE::log::info("[pad] XInputGetCapabilities: our pad answers as an Xbox gamepad on user 0");
+			}
+			return ERROR_SUCCESS;
 		}
 
 		// Patches every import thunk of a_dll in the main module whose resolved address is a_target. Returns how many.
@@ -259,6 +286,10 @@ namespace sxer::hooks
 			return;
 		}
 		SKSE::log::info("[pad] XInputGetState import patched ({} entries): Skyrim sees the DualSense as an Xbox pad", patched);
+		if (auto* caps = reinterpret_cast<void*>(GetProcAddress(xinput, "XInputGetCapabilities"))) {
+			g_realCaps = reinterpret_cast<GetCapsFn>(caps);
+			SKSE::log::info("[pad] XInputGetCapabilities import patched ({} entries)", PatchImports("XINPUT1_3.dll", caps, reinterpret_cast<void*>(&GetCaps)));
+		}
 	}
 
 	std::uint32_t PadErButtons() { return g_erButtons.load(std::memory_order_relaxed); }

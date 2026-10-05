@@ -43,6 +43,18 @@ namespace sxer::hooks
 
 	void SetPlayerIFrame(bool a_on) { iframe.store(a_on, std::memory_order_relaxed); }
 
+	bool HitPipelineReady() { return ApplyHitHook::func.address() != 0; }
+
+	bool ApplyHit(RE::Actor* a_victim, RE::HitData& a_hit)
+	{
+		if (!HitPipelineReady() || !a_victim) {
+			return false;
+		}
+		// Straight to 38586 (the original target), not through the hooked call site: hits on NPCs aren't ours to filter.
+		ApplyHitHook::func(a_victim, a_hit);
+		return true;
+	}
+
 	void InstallPlayerHit()
 	{
 		const auto site = REL::ID(38627).address() + 0x4A8;

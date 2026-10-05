@@ -1,0 +1,28 @@
+# Elden Ring combat state (P5)
+
+## The swing's hit window (2026-10-05)
+- **Signal:** `CSChrActionFlagModule.action_modifiers_flags` bit 9 (`invokeknockbackvalue`) and bit 10 (`parryable`), plus the byte at
+  module **+0x1d0** (reads 6), all set together for **2 frames** of a light attack and **3 frames** of a heavy release at 60 fps, in every
+  swing measured (6 single R1, a 6-hit chain, 5 charged R2, 3 weapon arts, colossal sword one-handed; greatsword two-handed in the live
+  test). They sit inside the fastest part of the sweep: right-hand model-space speed 21–29 units/s against ~2 at rest.
+- Two-handed swings open **two** windows ~0.25 s apart in one animation play (e.g. 24032000 at t≈0.45 and 0.70): count them as one swing.
+- **Not it:** action_flag +0x84 (f32 −1 → 720 at the top of the wind-up, hand still: a turn-speed value), bit 32 (`disable_direction_change`,
+  wind-up), bit 36 (`ai_parry_signal`, just before the swing: what AI uses to react), physics +0x120 (root-motion lunge velocity).
+- **Method:** `-ErDump` (combat.rs Dump, every frame during attack anims, untyped regions behind time_act's `chr_tae_anim_event` and the
+  container's `hitstop`/`damage` pointers read only after VirtualQuery) + a bit-window analysis; then a full-rate per-frame text probe
+  (the 18 KB/frame dump slowed ER to 14 fps). Gotcha: `ChrIns.modules` is an `OwnedPtr` field: the container is where it points (reading
+  the field's own address as the container crashed ER).
+- **No AtkParam row id** exists in the player's typed modules, PlayerIns or the three untyped regions during the window. Exact rows would
+  need a hook on `FieldInsBaseVmt::get_atk_param_for_behavior` (eldenring-rs `field_ins.rs:99-126`).
+
+## Attack kinds (anim id mod 1 000 000, any stance prefix)
+- 300xx one-handed R1 chain, 320xx two-handed R1; 305xx / 325xx R2 (…505 = release after a charge); 40xxx weapon art; other 3xxxx =
+  running/rolling/jumping/backstep attacks.
+
+## Attack rating from params (attack.rs)
+- Weapon = `equipment_param_ids[active_weapon_slot(Right)]` (upgrade level = id mod 100; param row = id rounded down to 100).
+- Per type: base = attack_base_* x ReinforceParamWeapon *_atk_rate (row = reinforce_type_id + level); bonus per stat allowed by
+  AttackElementCorrectParam = base x correct_<stat> x correct_<stat>_rate / 100 x CalcCorrectGraph(correct_type_*, stat) / 100.
+  Two-handing: strength x1.5 (cap 148). Poise = sa_weapon_damage x sa_weapon_atk_rate.
+- Example (test character, str 55): fists 110000 → phys 29; weapon 10050000 two-handed → phys 88, fire 75. **Not yet checked against
+  ER's own status screen.**

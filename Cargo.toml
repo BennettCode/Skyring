@@ -13,7 +13,7 @@ publish = false
 # (docs/RECON.md and the $Expected table in tools/setup-check.ps1).
 eldenring = { git = "https://github.com/vswarte/eldenring-rs", rev = "59fbd3b3b7daaf14aca47c9f73530493dba6bc79" }
 fromsoftware-shared = { git = "https://github.com/vswarte/eldenring-rs", rev = "59fbd3b3b7daaf14aca47c9f73530493dba6bc79" }
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Diagnostics_Debug", "Win32_System_LibraryLoader", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Diagnostics_Debug", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 
 [profile.release]

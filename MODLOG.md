@@ -4,6 +4,20 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: Elden Ring swings hit Skyrim enemies, protocol v9 (P5 step 1)
+- **Probe (stage A):** ER's hit window found in memory: `action_modifiers_flags` bit 9/10 + action_flag +0x1d0, 2-3 frames mid-sweep in
+  every swing (`docs/research/elden-ring-combat.md`). The dump tool (`-ErDump`) now records every frame of attack anims plus three untyped
+  regions (VirtualQuery-checked); a first version misread `modules` (an OwnedPtr) and crashed ER once.
+- **ER:** `er-plugin/src/attack.rs`: hit window, attack rating from ER's params and stats, motion value by attack kind (one-/two-handed
+  light 300xx/320xx, heavy 305xx/325xx, skill 40xxx), one swing per animation play. **Protocol v9:** PlayerState attack fields + AttackActive.
+- **Skyrim:** `bridge/Combat.cpp` (targets in reach in front of the shown body, poise build-up → stagger, SkyCraft's HitData → 38586
+  apply, fallback DoDamage), `bridge/CombatMath.h` (ER defense curve, level defense, armour absorption, HP scaling), `SkyrimXER.ini`
+  `[Combat] fDamageScale` (deployed with the DLL). XInputGetCapabilities hooked too: Skyrim never polled a pad it didn't find at startup
+  (the dev virtual pad failed with the DualSense unplugged).
+- **Tested:** run-tests green (5 damage-model cases); ER alone + fake-peer: one window per swing (light/heavy/skill); both games, console
+  wolves, greatsword two-handed, virtual pad: light hits 22→12→1 HP, a heavy kill, one hit per swing after the two-window fix; AR logged
+  (phys 88 fire 75). Not yet: user playtest, AR checked against ER's status screen, bandits/armoured NPCs.
+
 ## 2026-10-05: Link no longer deadlocks after an Elden Ring stall
 - **Bug:** ER froze 36 s while loading. Skyrim timed it out and, in the same tick, connected on ER's queued Hello. On the next tick it read
   the same ER (same attach#) beating again as a restart, dropped the connection and sent a Hello, which ER (not connected yet) took

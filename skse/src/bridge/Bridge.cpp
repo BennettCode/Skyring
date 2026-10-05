@@ -13,6 +13,7 @@
 #include "bridge/Timeline.h"
 #include "hooks/PlayerUpdate.h"
 #include "hooks/ControllerVelocity.h"
+#include "bridge/Combat.h"
 #include "hooks/AttackSwallow.h"
 #include "hooks/MoveSwallow.h"
 #include "hooks/PlayerHit.h"
@@ -294,6 +295,7 @@ namespace sxer::bridge
 		hooks::InstallControllerVelocity();
 		hooks::InstallPlayerHit();
 		hooks::InstallAttackSwallow();
+		combat::LoadConfig();
 		input::Install();
 		SKSE::log::info("[core] hooks installed: PlayerCharacter::Update (vfunc 0xAD; ER pose applier) → InputState/PlayerState slots, SprintHandler::CanProcess "
 		                "(vfunc 0x1, vanilla sprint off while bridged), MovementHandler::CanProcess (vfunc 0x1, keys off during a dodge), bhkCharProxyController::SetLinearVelocityImpl (vfunc 0x7, ER roll velocity), input sink (Sprint → Dodge, movement keys → move stick, F10 toggle)");
@@ -449,6 +451,9 @@ namespace sxer::bridge
 			pose->flags |= 1u << static_cast<std::uint32_t>(proto::PoseFlag::Active);
 		}
 		pose::Apply(a_player, pose, f.lastBind, facing, frame);
+		// P5: ER's swings land on what is in front of that body. The freshest PlayerState (not the delayed timeline view): a hit
+		// window is only 2-3 ER frames long and attack_seq says when one opened.
+		combat::Update(a_player, on && connected ? fresh : std::optional<proto::PlayerState>{}, facing, frame);
 		animprobe::Update(a_player, frame);
 		UpdateHud(f, connected, pressed, now);
 

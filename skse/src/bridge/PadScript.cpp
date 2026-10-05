@@ -18,6 +18,7 @@ namespace sxer::pad::script
 		std::vector<Event> g_events;
 		Clock::time_point g_start;
 		bool g_playing = false;
+		bool g_enabled = false;
 
 		// Polls the file every 200 ms; a new write time = a new script, played once from now.
 		void Watch(std::filesystem::path a_path)
@@ -59,11 +60,14 @@ namespace sxer::pad::script
 			return;
 		}
 		static std::once_flag once;
+		g_enabled = true;
 		std::call_once(once, [p = std::filesystem::path(path)] {
 			SKSE::log::info("[padscript] dev virtual pad on: watching {}", p.string());
 			std::thread(Watch, p).detach();
 		});
 	}
+
+	bool Enabled() { return g_enabled; }
 
 	std::optional<DsState> Overlay()
 	{
