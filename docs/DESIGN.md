@@ -27,7 +27,7 @@ exchange state (passthrough mod, based on SkyCraft).
 | Player input | Skyrim captures → ER | The player is looking at the Skyrim window. ER receives actions as `ChrActions` bits written into `CSChrActionRequestModule.action_requests` (no OS keystrokes). ER's own gating (`possible_action_inputs`) decides whether they happen. See `docs/research/elden-ring-input.md`. |
 | Stamina/FP/HP math, i-frames, poise, attack timing, recovery | ER | This is the gameplay we're importing. |
 | Player→NPC damage | ER calculates, Skyrim applies | Skyrim knows *what* got hit. ER knows *how much*. Applying it in Skyrim keeps stagger, crime and AI reactions. |
-| NPC→player damage | Skyrim detects, ER applies | ER's i-frames/defense/HP must decide the outcome. |
+| NPC→player damage | Skyrim detects, ER applies | ER's i-frames/defense/HP must decide the outcome. Today (P4 step 7): a melee hit on the player during ER's roll i-frames is dropped at Skyrim's hit-apply call (`hooks/PlayerHit.cpp`); other hits stay vanilla until P5. |
 | Death | ER HP | |
 
 Alternatives considered (if the draft fails the tests):

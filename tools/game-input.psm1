@@ -82,6 +82,9 @@ $script:Keys = @{
     LCtrl = 0x1D; A = 0x1E; S = 0x1F; D = 0x20; F = 0x21; G = 0x22; LShift = 0x2A; Z = 0x2C; X = 0x2D; C = 0x2E; V = 0x2F
     LAlt = 0x38; Space = 0x39; CapsLock = 0x3A; F1 = 0x3B; F5 = 0x3F; F7 = 0x41; F8 = 0x42; F9 = 0x43; F10 = 0x44; Grave = 0x29
     Up = 0x148; Left = 0x14B; Right = 0x14D; Down = 0x150
+    # For `type` (console commands): the rest of the letters and digits, and punctuation.
+    '5' = 0x06; '6' = 0x07; '7' = 0x08; '8' = 0x09; '9' = 0x0A; '0' = 0x0B; Minus = 0x0C; T = 0x14; Y = 0x15; U = 0x16; I = 0x17; O = 0x18
+    P = 0x19; H = 0x23; J = 0x24; K = 0x25; L = 0x26; B = 0x30; N = 0x31; M = 0x32; Comma = 0x33; Period = 0x34
 }
 
 $script:ProcessNames = @{ skyrim = 'SkyrimSE'; eldenring = 'eldenring' }
@@ -125,7 +128,8 @@ function Resolve-Key([string]$Name) {
 <#
 .SYNOPSIS
   Runs a key script on the focused game: "down W; wait 500; tap LShift 60; wait 1500; up W".
-  Steps: down K | up K | tap K [ms, default 50] | wait ms | mouse dx dy (relative, turns the camera; split into 20 px moves).
+  Steps: down K | up K | tap K [ms, default 50] | wait ms | mouse dx dy (relative, turns the camera; split into 20 px moves) |
+  type text (letters, digits, space . , -; for Skyrim's console: "tap Grave; wait 300; type player.placeatme 23abe; tap Enter").
   Stops (keys released) if the game loses focus.
 #>
 function Send-GameKeys {
@@ -152,6 +156,16 @@ function Send-GameKeys {
                     & $send $code $true
                 }
                 'wait' { Start-Sleep -Milliseconds ([int]$parts[1]) }
+                'type' {
+                    foreach ($ch in $step.Substring(4).TrimStart().ToCharArray()) {
+                        $name = switch ($ch) { ' ' { 'Space' } '.' { 'Period' } ',' { 'Comma' } '-' { 'Minus' } default { [string]$ch } }
+                        $code = Resolve-Key $name
+                        & $send $code $false
+                        Start-Sleep -Milliseconds 30
+                        & $send $code $true
+                        Start-Sleep -Milliseconds 30
+                    }
+                }
                 'mouse' {
                     $dx = [int]$parts[1]; $dy = if ($parts.Count -gt 2) { [int]$parts[2] } else { 0 }
                     $n = [math]::Max(1, [math]::Ceiling([math]::Max([math]::Abs($dx), [math]::Abs($dy)) / 20))
@@ -161,7 +175,7 @@ function Send-GameKeys {
                         Start-Sleep -Milliseconds 10
                     }
                 }
-                default { throw "unknown step '$step' (use: down K; up K; tap K [ms]; wait ms; mouse dx dy)" }
+                default { throw "unknown step '$step' (use: down K; up K; tap K [ms]; wait ms; mouse dx dy; type text)" }
             }
             Write-Host ("  [keys] {0:HH:mm:ss.fff} {1}" -f (Get-Date), $step)
         }

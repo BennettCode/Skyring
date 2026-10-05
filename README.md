@@ -11,7 +11,8 @@ stamina, dodge rolls with i-frames, poise, light/heavy/charged attacks, weapon a
 ![license](https://img.shields.io/badge/license-GPL--3.0--or--later-green)
 
 > **Pre-alpha. Not playable yet.** Both games run together and talk to each other every frame. Today, pressing Sprint in Skyrim makes
-> the hidden Elden Ring character dodge, and Elden Ring's stamina comes back into Skyrim. Turning that into real combat in Skyrim is next.
+> the hidden Elden Ring character dodge, Elden Ring's stamina comes back into Skyrim, and rolling through an enemy's swing makes it miss.
+> Turning that into real combat in Skyrim is next.
 > Live progress: [`STATUS.md`](STATUS.md) · Plan: [`docs/ROADMAP.md`](docs/ROADMAP.md) · Change log: [`MODLOG.md`](MODLOG.md)
 
 <!-- Screenshot / GIF goes here once the first roll works in Skyrim. -->
@@ -79,7 +80,9 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
 - **Your Skyrim character plays Elden Ring's real roll animation.** Elden Ring plays the roll on its hidden character, and its skeleton
   pose (spine, head, arms, legs) is copied onto your Skyrim character every frame, facing the way you roll. No animation files are
   converted or shipped. The body blends in and out over a few frames. The same goes for walking, running and sprinting.
-- **Roll i-frames reach Skyrim:** Skyrim knows the exact window (about 0.45 s) in which the Elden Ring roll makes you invincible.
+- **Roll i-frames protect you in Skyrim:** during the window (about 0.45 s) in which the Elden Ring roll makes you invincible, enemy
+  melee hits on your Skyrim character are cancelled whole (no damage, no stagger). Hits outside that window land as usual.
+  Arrows and spells still hit you during a roll (next phase).
 - Fail-safe: if either game closes, crashes or pauses, the other one notices within a moment and stops acting on stale input.
 
 **Not working yet:** fighting is still vanilla (P5). Footstep sounds may be missing while Elden Ring moves you, and Skyrim's
@@ -87,7 +90,7 @@ NPCs still see your character facing the way it last faced in Skyrim (only the b
 to that old facing. Elden Ring's character holds its weapon the way yours does (fists when you're unarmed
 or sheathed, one- or two-handed when you draw a weapon), but it doesn't use the same *kind* of weapon yet. The roll animation copies the main bones (fingers and toes follow their hands and feet); cloth and armour
 helpers follow Skyrim's own pose, and feet can slide a little (no foot placement yet). **Controller support isn't added yet:**
-Skyrim is keyboard-and-mouse only for now (details below). The i-frames are known to Skyrim but don't protect your Skyrim character yet (P4).
+Skyrim is keyboard-and-mouse only for now (details below).
 
 ## Progress
 
@@ -97,7 +100,7 @@ Skyrim is keyboard-and-mouse only for now (details below). The i-frames are know
 | P1 | Both plugins load and log | ✅ done |
 | P2 | Shared memory link: handshake, heartbeats, crash fail-safe | ✅ done |
 | P3 | Dodge in Skyrim → Elden Ring dodges → its stamina and i-frames come back | ✅ done |
-| **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 in progress (6/7: Sprint = dodge, combat stamina, rolls move you, Elden Ring's roll animation plays in Skyrim; walking, running and sprinting are Elden Ring's; Skyrim's stamina bar shows Elden Ring's) |
+| **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 in progress (7/8: Sprint = dodge, combat stamina, rolls move you, Elden Ring's roll animation plays in Skyrim; walking, running and sprinting are Elden Ring's; Skyrim's stamina bar shows Elden Ring's; roll i-frames make melee hits miss) |
 | P5 | Damage both ways uses Elden Ring's math (poise, stagger) | ⏳ |
 | P6 | Elden Ring-style HUD | ⏳ |
 | P7 | Runes from kills, leveling, flasks refill at "graces" | ⏳ |
@@ -178,7 +181,7 @@ Run scripts with `powershell -ExecutionPolicy Bypass -File <script>`. More in [`
 ## Credits
 
 Built on SKSE, CommonLibSSE-NG, Address Library, me3 and eldenring-rs. Design and code patterns are borrowed (with thanks) from
-other game-merge projects (SkyCraft's frame interpolation is adapted in `skse/src/bridge/Timeline.cpp`, FalloutCraft's bar mirror in `skse/src/bridge/Stamina.cpp`, both MIT): [SkyCraft](https://github.com/chasmlol/SkyCraft), [FalloutCraft](https://github.com/zeyvu/FalloutCraft),
+other game-merge projects (SkyCraft's frame interpolation is adapted in `skse/src/bridge/Timeline.cpp` and its hit call-site check in `skse/src/hooks/PlayerHit.cpp`, FalloutCraft's bar mirror in `skse/src/bridge/Stamina.cpp`, both MIT): [SkyCraft](https://github.com/chasmlol/SkyCraft), [FalloutCraft](https://github.com/zeyvu/FalloutCraft),
 [Killcraft](https://github.com/goonsn/Killcraft), [2010-rust-rewrite-mashup](https://github.com/chasmlol/2010-rust-rewrite-mashup)
 and the ideas of [GTA San AnSkateas](https://github.com/ryglizzy/GTA-San-AnSkateas).
 Full list and licenses: [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).

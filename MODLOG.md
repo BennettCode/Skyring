@@ -4,6 +4,15 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: Roll i-frames cancel NPC melee hits (P4 step 7)
+- **Changed:** new `skse/src/hooks/PlayerHit.{h,cpp}`: the `call 38586` (apply hit to victim) at melee handler 38627+0x4A8 is replaced
+  after a byte check (adapted from SkyCraft `Combat.cpp`, MIT). On the player while ER's i-frames are on, the hit is dropped whole;
+  every hit on the player is logged (`[hit] skipped/landed`). `Bridge.cpp` sets the flag every frame from fresh PlayerState only.
+  `main.cpp` allocates a 64 B trampoline. `tools/game-input.psm1`: a `type` step and all letters/digits (for console commands).
+- **Tested** (both games, wolves via `player.placeatme 23abe N`, key-script rolls): 6 hits skipped, each inside a logged IFrame window;
+  12 landed outside; F10 off → 7/7 landed. No stagger on skipped hits; stamina drains as before. `tests/run-tests.ps1` green.
+- **Not done:** arrows and spells (other hit paths) still land during rolls → P5. User roll-through feel test pending.
+
 ## 2026-10-05: Skyrim's stamina bar shows Elden Ring's stamina (P4 step 6)
 - **Changed:** new `skse/src/bridge/Stamina.{h,cpp}`, called every frame from `bridge::OnFrame`. While the link is on and ER is in the
   world, the player's Stamina = Skyrim max × ER stamina/max, set through the damage modifier (`ModActorValue` vfunc, read back to check it took). Max uses

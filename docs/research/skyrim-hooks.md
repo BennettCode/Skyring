@@ -156,6 +156,14 @@ before use (a missing id makes CommonLib abort the game at load).
 - Both references move their player with `SetPosition` each frame (controller velocity zeroed): SkyCraft `Game.cpp:790`, FalloutCraft
   `fo_game.cpp:786`. They rely on the hidden game's collision, which we can't (ER's world isn't Skyrim's).
 
+## Melee hits on the player (P4 step 7, 2026-10-05)
+- AE 38627 = the melee HitFrame handler; it builds a HitData (43995) and at **+0x4A8** does `call 38586` (apply the hit to the victim:
+  damage, block, stagger, hit reaction, TESHitEvent, kill credit). Same site SkyCraft hooks. Byte-checked at load (`E8` + target), both
+  ids pass `addrlib-check`. `write_call<5>` there needs `SKSE::AllocTrampoline` (64 B).
+- Skipping the call drops the whole hit: verified with wolves, no damage and no stagger inside i-frames.
+- Not covered: projectiles and spells (they don't go through 38627). Find their apply path in P5.
+- SkyCraft hooks the same call: never run both plugins at once.
+
 ## Fingers and toes are not nodes (2026-10-05)
 - The player's third-person tree has 51 nodes and no finger or toe nodes. The skinned hands (36 bones), feet (6) and body (24) still skin
   fingers and toes, through `NiSkinInstance::boneWorldTransforms` entries that point **outside the tree**: loose world transforms the

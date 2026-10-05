@@ -49,8 +49,8 @@ Tick boxes as you go. Keep each phase small. If a phase grows, split it.
   converted or shipped; the vanilla "Silent Roll" route was dropped) (2026-10-04)
 - [x] ER drives walking, running, sprinting and rolling while the bridge is on, with ER's animations and speeds on Skyrim's collision
   (`docs/LOCO-PLAN.md` stage B, 2026-10-05; agent-tested, user feel test pending)
-- [ ] Skyrim's stamina bar mirrors ER's stamina. Out of stamina = no roll
-- [ ] NPC hits during ER i-frames are cancelled
+- [x] Skyrim's stamina bar mirrors ER's stamina. Out of stamina = no roll (2026-10-05)
+- [x] NPC melee hits during ER i-frames are cancelled (2026-10-05; arrows/spells: P5)
 - [ ] **Controller support (last):** PS5 DualSense in Skyrim. Skyrim only reads XInput, so it needs Steam Input, which doesn't apply when SKSE
   starts outside Steam (a plain Steam launch option fails: the loader rejects Steam's extra argument). Options: a `cmd /c start` launch
   option, a Non-Steam-game shortcut, or reading the pad in the plugin itself. Also check that the hidden ER doesn't read the same pad (double input)

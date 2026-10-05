@@ -46,6 +46,8 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
 	// CommonLib's own logger would replace ours (local time, different line format), so turn it off.
 	SKSE::Init(a_skse, SKSE::InitInfo{ .log = false });
 	SetupLog();
+	// Call hooks (hooks/PlayerHit) write a 5-byte call to a trampoline stub.
+	SKSE::AllocTrampoline(64);
 
 	const auto* plugin = SKSE::PluginDeclaration::GetSingleton();
 	SKSE::log::info("[core] {} v{} loaded, runtime {}", plugin->GetName(), plugin->GetVersion().string("."sv),

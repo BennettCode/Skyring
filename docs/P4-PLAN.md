@@ -103,7 +103,11 @@ First: copy this plan to `docs/P4-PLAN.md`, ROADMAP P4/P5 edits (swallow list, v
 - "Out of stamina = no roll" is ER's own gating. **Test:** in Skyrim combat, spam Sprint+W: bar drains, ER refuses rolls at 0
   (log: Dodge press with no dodge anim), bar refills.
 
-### 7. NPC hits during ER i-frames are cancelled (Skyrim)
+### 7. NPC hits during ER i-frames are cancelled (Skyrim): melee done 2026-10-05
+- **Result:** option (a). `skse/src/hooks/PlayerHit.cpp` replaces the `call 38586` at 38627+0x4A8 (SkyCraft byte check, trampoline 64
+  in `main.cpp`); `bridge::OnFrame` sets the i-frame flag from fresh PlayerState (`kIFrame`), false when stale / link off. A hit on the
+  player while it's set is dropped whole (no damage, stagger, hit event). Wolves (`player.placeatme 23abe N`): 6 hits skipped, all inside
+  logged IFrame windows; 12 landed outside them; F10 off → 7/7 landed. **Not done:** projectile and magic hits (other paths) → P5.
 - `skse/src/hooks/PlayerHit.cpp`: skip the hit on the player while `IFrame` is fresh. Try (a) hook the hit-application call (id 38586 at the
   melee site 38627+0x4A8 with SkyCraft's byte check; find the projectile/magic sites) and log every skipped/landed hit with i-frame state;
   (b) fallback: player ghost flag during i-frames. All ids via addrlib-check first.

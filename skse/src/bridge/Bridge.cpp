@@ -14,6 +14,7 @@
 #include "hooks/PlayerUpdate.h"
 #include "hooks/ControllerVelocity.h"
 #include "hooks/MoveSwallow.h"
+#include "hooks/PlayerHit.h"
 #include "hooks/SprintSwallow.h"
 
 #include <algorithm>
@@ -258,6 +259,7 @@ namespace sxer::bridge
 		hooks::InstallSprintSwallow();
 		hooks::InstallMoveSwallow();
 		hooks::InstallControllerVelocity();
+		hooks::InstallPlayerHit();
 		input::Install();
 		SKSE::log::info("[core] hooks installed: PlayerCharacter::Update (vfunc 0xAD; ER pose applier) → InputState/PlayerState slots, SprintHandler::CanProcess "
 		                "(vfunc 0x1, vanilla sprint off while bridged), MovementHandler::CanProcess (vfunc 0x1, keys off during a dodge), bhkCharProxyController::SetLinearVelocityImpl (vfunc 0x7, ER roll velocity), input sink (Sprint → Dodge, movement keys → move stick, F10 toggle)");
@@ -382,6 +384,8 @@ namespace sxer::bridge
 		locomotion::Update(a_player, on ? view.player : std::nullopt, move, on && connected, a_delta, frame);
 		// ER owns stamina: Skyrim's bar shows ER's share (P4 step 6).
 		stamina::Update(a_player, on && connected ? view.player : std::nullopt, frame);
+		// ER owns i-frames: melee hits on the player are dropped while the roll the player sees has them on (P4 step 7).
+		hooks::SetPlayerIFrame(on && connected && view.player && (view.player->flags & PlayerWatch::kIFrame));
 		const bool loco = locomotion::Running();
 		// Steering out of a roll hands the body back to Skyrim at ER's move-cancel window (the pose would otherwise keep playing the recovery).
 		// Outside locomotion only dodges are shown (ER may still flag a few frames Active after Locomote went off).
