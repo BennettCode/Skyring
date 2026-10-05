@@ -13,9 +13,9 @@
 # All values are little-endian (both games are x64 Windows).
 
 [protocol]
-version = 11
+version = 12
 magic = "SXER"                      # stored as a little-endian u32: bytes 'S' 'X' 'E' 'R'
-region_name = 'Local\SkyrimXER_v11'  # must end in _v<version>
+region_name = 'Local\SkyrimXER_v12'  # must end in _v<version>
 
 [constants]
 HEARTBEAT_TIMEOUT_MS = { type = "u64", value = 2000, doc = "Peer counts as gone when its heartbeat is older than this." }
@@ -117,6 +117,7 @@ values = [
   { name = "Heavy", value = 2, doc = "R2 / charged R2 (305xx)." },
   { name = "Skill", value = 3, doc = "Weapon art (40xxx)." },
   { name = "Other", value = 4, doc = "Running / rolling / jumping / backstep attacks (other 3xxxx)." },
+  { name = "Shot", value = 5, doc = "v12: ER released an arrow/bolt (anim enters x36000): Skyrim fires its own arrow along the camera's aim." },
 ]
 
 [[enums]]
@@ -225,7 +226,8 @@ fields = [
   { name = "er_weapon", type = "i32", doc = "v10: ER weapon param id (with upgrade level) for the Skyrim weapon in the right hand (bridge/WeaponMap); 0 = ER keeps its own. ER writes it into the right-hand slot it uses." },
   { name = "respawn_seq", type = "u32", doc = "v11: +1 when Skyrim loads a save or starts a new game: ER refills its HP and clears Downed." },
   { name = "hurt_total", type = "f64", doc = "v11: running sum of the Skyrim player's health changes as a share of Skyrim max health (+ damage, - healing). ER applies the change since its last read to its own HP (a running total, so a skipped write loses nothing)." },
-  { name = "_pad2", type = "u64" },
+  { name = "er_ammo", type = "i32", doc = "v12: ER arrow/bolt param id for a Skyrim bow/crossbow (bridge/WeaponMap); ER equips it if owned (else any owned ammo of that kind). 0 = leave ER's." },
+  { name = "_pad2", type = "u32" },
 ]
 
 [[structs]]

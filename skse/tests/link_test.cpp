@@ -333,6 +333,9 @@ namespace
 		Table t = kDefaultIds;
 		t[static_cast<std::size_t>(Kind::kMace)] = 0;
 		Check(ErWeapon(Kind::kMace, 12, t) == 0, "weapons: a kind mapped to 0 leaves ER's own weapon");
+		Check(ErWeapon(Kind::kBow, 6, kDefaultIds) == 41000000 && ErWeapon(Kind::kCrossbow, 19, kDefaultIds) == 43000000 &&
+				  ErWeapon(Kind::kBow, 13, kDefaultIds) == 41000021,
+			"weapons: long bow → Longbow +0, crossbow → Light Crossbow, a better bow is upgraded");
 	}
 
 	void SlotTests(std::uint8_t* a_base)

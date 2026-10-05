@@ -35,3 +35,13 @@
 - Pitfall: picking the stance slot by the *current* ids after writing ours made the slot flip every frame; pick from the save's ids.
 - AR at str 55 / dex 15 (+0 one-handed): Dagger 102, Longsword 156 (+3: 187, +21: 390), Hand Axe 180, Mace 168; two-handed: Bastard
   Sword 214, Greataxe 236, Large Club 219.
+
+## Bows and ammo (2026-10-05)
+- A bow id written like a melee weapon (Longbow 41000000) loads and draws, but with only the ammo **param id** in the Arrow slot ER
+  plays 50050 (reach for the quiver, nothing there, 2.6 s, regardless of the button). ER fires only **owned** ammo **equipped the full
+  way**: Arrow1 = slot 6 / Bolt1 = slot 7 need the param id + gaitem handle in both ChrAsm copies, `equipment_item_idx_list[slot]` =
+  key-items capacity (384) + the entry's position in the normal inventory list (matched 4/4 equipped items of the save), and
+  `equipment_entries.arrow_primary`/`bolt_primary` = the entry's ItemId.
+- With that: R1 → x36010 (draw) → x36020 (hold at full draw while held) → **x36000 on release** → bow idle 14000000 (longbow,
+  two-handed: prefix 44). No hit-window flags fire for bows; the switch into x36000 is the shot.
+- The test character owns arrows 50000000 x20, 50010000 x10 and several bolts; the save had no arrows equipped (slot 6 = -1).

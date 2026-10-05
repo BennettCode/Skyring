@@ -34,5 +34,11 @@ movesets, ER's damage. Authority (DESIGN §3): **ER calculates, Skyrim applies.*
 - Found: the bool essential flag doesn't stop a hit bigger than the player's remaining health from killing in Skyrim directly. That
   outcome matches anyway (the bar equals ER's share, so ER would reach 0 too); the reload refills ER.
 
+## Bows and crossbows (done 2026-10-05, user request "bows also need an animation")
+- Skyrim bow → ER Longbow, crossbow → Light Crossbow (`[Weapons] Bow= Crossbow= Arrow= Bolt=`), protocol v12 (`er_ammo`, AttackKind
+  `Shot`). ER equips owned ammo the full way (`stance.rs` equip_ammo; any owned arrows/bolts if the mapped id isn't owned) and puts the
+  save's ammo back; `attack.rs` raises a Shot at the x36000 release. Skyrim `Combat.cpp` Shoot: `Projectile::Launch` with the equipped
+  bow + ammo along the camera's aim, one arrow used. Arrow damage = Skyrim's (ER arrow damage later). Crossbow path untested.
+
 ## Next steps
 4. Later: exact AtkParam rows (hook ER's attack-param lookup), status buildup, guard counters, ranged/magic.

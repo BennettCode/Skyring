@@ -9,6 +9,8 @@ namespace sxer::weapons
 	namespace
 	{
 		Table g_table = kDefaultIds;
+		std::int32_t g_arrow = kDefaultArrow;
+		std::int32_t g_bolt = kDefaultBolt;
 
 		std::wstring IniPath()
 		{
@@ -35,6 +37,8 @@ namespace sxer::weapons
 		case Type::kOneHandMace: return Kind::kMace;
 		case Type::kTwoHandSword: return Kind::kGreatsword;
 		case Type::kTwoHandAxe: return a_weapon->HasKeywordString("WeapTypeWarhammer") ? Kind::kWarhammer : Kind::kBattleaxe;
+		case Type::kBow: return Kind::kBow;
+		case Type::kCrossbow: return Kind::kCrossbow;
 		default: return Kind::kNone;
 		}
 	}
@@ -42,13 +46,18 @@ namespace sxer::weapons
 	void LoadTable()
 	{
 		const auto ini = IniPath();
-		static constexpr const wchar_t* kKeys[] = { L"", L"Dagger", L"Sword", L"WarAxe", L"Mace", L"Greatsword", L"Battleaxe", L"Warhammer" };
+		static constexpr const wchar_t* kKeys[] = { L"", L"Dagger", L"Sword", L"WarAxe", L"Mace", L"Greatsword", L"Battleaxe", L"Warhammer", L"Bow", L"Crossbow" };
 		for (std::size_t k = 1; k < g_table.size(); ++k) {
 			g_table[k] = static_cast<std::int32_t>(GetPrivateProfileIntW(L"Weapons", kKeys[k], kDefaultIds[k], ini.c_str()));
 		}
-		SKSE::log::info("[weapons] ER weapons: dagger {} sword {} war axe {} mace {} greatsword {} battleaxe {} warhammer {} (SkyrimXER.ini [Weapons])",
-			g_table[1], g_table[2], g_table[3], g_table[4], g_table[5], g_table[6], g_table[7]);
+		g_arrow = static_cast<std::int32_t>(GetPrivateProfileIntW(L"Weapons", L"Arrow", kDefaultArrow, ini.c_str()));
+		g_bolt = static_cast<std::int32_t>(GetPrivateProfileIntW(L"Weapons", L"Bolt", kDefaultBolt, ini.c_str()));
+		SKSE::log::info("[weapons] ER weapons: dagger {} sword {} war axe {} mace {} greatsword {} battleaxe {} warhammer {} bow {} crossbow {}, "
+						"arrow {} bolt {} (SkyrimXER.ini [Weapons])",
+			g_table[1], g_table[2], g_table[3], g_table[4], g_table[5], g_table[6], g_table[7], g_table[8], g_table[9], g_arrow, g_bolt);
 	}
+
+	std::int32_t AmmoFor(Kind a_kind) { return a_kind == Kind::kBow ? g_arrow : a_kind == Kind::kCrossbow ? g_bolt : 0; }
 
 	std::int32_t ForPlayer(RE::PlayerCharacter* a_player, Kind* a_kind)
 	{

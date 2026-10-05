@@ -421,6 +421,7 @@ namespace sxer::bridge
 		// P5 step 2: the Skyrim weapon picks the ER weapon (moveset + attack rating), only while it is drawn.
 		weapons::Kind kind = weapons::Kind::kNone;
 		state.er_weapon = stance != static_cast<std::uint32_t>(proto::Stance::Unarmed) ? weapons::ForPlayer(a_player, &kind) : 0;
+		state.er_ammo = state.er_weapon ? weapons::AmmoFor(kind) : 0;
 		if (state.er_weapon != f.erWeapon) {
 			f.erWeapon = state.er_weapon;
 			SKSE::log::info("[weapons] Skyrim {} → ER weapon {} frame={}", weapons::Name(kind), state.er_weapon, frame);

@@ -25,6 +25,7 @@ fn motion(kind: AttackKind) -> (f32, f32) {
         AttackKind::Heavy => (140.0, 1.6),
         AttackKind::Skill => (150.0, 1.5),
         AttackKind::Other => (110.0, 1.2),
+        AttackKind::Shot => (100.0, 1.0),
         _ => (0.0, 0.0),
     }
 }
@@ -38,6 +39,7 @@ pub fn kind_of(anim: i32) -> AttackKind {
     match a / 100 {
         300 | 320 => AttackKind::Light,
         305 | 325 => AttackKind::Heavy,
+        _ if a / 10 == 3600 => AttackKind::Shot,
         _ if a / 10_000 == 4 => AttackKind::Skill,
         _ if a / 10_000 == 3 => AttackKind::Other,
         _ => AttackKind::None,
@@ -68,12 +70,14 @@ struct State {
     /// ~0.25 s apart) is the same swing, so a target isn't hit twice by one swing.
     window_anim: i32,
     window_time: f32,
+    /// Last frame's anim (a bow release is the switch into x36000).
+    last_anim: i32,
     key: Option<(i32, [u32; 5], bool)>,
     rating: Rating,
     last: Swing,
 }
 
-static STATE: Mutex<State> = Mutex::new(State { seq: 0, was_active: false, window_anim: -1, window_time: 0.0, key: None, rating: Rating { ar: [0.0; 5], poise: 0.0 }, last: Swing {
+static STATE: Mutex<State> = Mutex::new(State { seq: 0, was_active: false, window_anim: -1, window_time: 0.0, last_anim: -1, key: None, rating: Rating { ar: [0.0; 5], poise: 0.0 }, last: Swing {
     active: false,
     seq: 0,
     atk: [0.0; 5],
@@ -210,7 +214,11 @@ pub fn sample(player: &PlayerIns, anim: i32) -> Swing {
         ((base.add(0x40) as *const u64).read_unaligned(), *base.add(0x1d0))
     };
     let kind = kind_of(anim);
-    let active = kind != AttackKind::None && ((mods >> 9) & 1 == 1 || (mods >> 10) & 1 == 1 || b1d0 != 0);
+    // Bows/crossbows: no hit-window flags; the release is the anim switching into x36000 (probe 2026-10-05: x36010 draw, x36020 hold,
+    // x36000 release). It counts as an active window for that one frame.
+    let shot = kind == AttackKind::Shot && anim != st.last_anim;
+    st.last_anim = anim;
+    let active = shot || (kind != AttackKind::None && kind != AttackKind::Shot && ((mods >> 9) & 1 == 1 || (mods >> 10) & 1 == 1 || b1d0 != 0));
     let anims = &player.chr_ins.modules.time_act;
     let play_time = anims.anim_queue.get(anims.read_idx as usize).map_or(0.0, |a| a.play_time);
     let same_swing = anim == st.window_anim && play_time >= st.window_time;

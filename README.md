@@ -83,6 +83,9 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
   war axe → hand axe, mace → mace, greatsword → greatsword, battleaxe → greataxe, warhammer → great hammer. Better Skyrim materials
   become higher Elden Ring upgrade levels (iron +0 up to about +25 for dragonbone), so they hit harder the Elden Ring way.
   `SkyrimXER.ini [Weapons]` lets you pick other Elden Ring weapons.
+- **Bows shoot like Elden Ring:** with a Skyrim bow, hold **R1** to draw (Elden Ring's longbow draw and hold, on your character) and let
+  go to shoot: a real Skyrim arrow flies where the camera aims, using your equipped bow and arrows (Skyrim's damage for now).
+  Crossbows map to Elden Ring's light crossbow (not tested yet).
 - **Your health is your Elden Ring HP.** Every hit, arrow, spell, fall or potion changes your Elden Ring HP by the same share it would
   change your Skyrim health, and Skyrim's health bar shows your Elden Ring HP. Rolling through an attack (its i-frames) blocks
   damage of any kind. When your Elden Ring HP runs out you die in Skyrim, and loading a save refills it.
@@ -109,7 +112,7 @@ NPCs still see your character facing the way it last faced in Skyrim (only the b
 to that old facing. Elden Ring's character holds its weapon the way yours does (fists when you're unarmed
 or sheathed, one- or two-handed when you draw a weapon), but it doesn't use the same *kind* of weapon yet. The roll animation copies the main bones (fingers and toes follow their hands and feet); cloth and armour
 helpers follow Skyrim's own pose, and feet can slide a little (no foot placement yet). How much an enemy hit hurts still comes from
-Skyrim (your Skyrim armour and perks); Elden Ring armour doesn't count yet. Bows, staves and spells have no Elden Ring counterpart yet.
+Skyrim (your Skyrim armour and perks); Elden Ring armour doesn't count yet. Staves and spells have no Elden Ring counterpart yet.
 While the link is on, Skyrim spells, bows and shield bashes aren't on any button (F10 gives them back), and Skyrim's Wait has no pad
 button (keyboard T works). 
 

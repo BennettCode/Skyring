@@ -1,6 +1,6 @@
 //! fake-peer: plays one side of the link so the other side can be tested without its game.
 //!
-//! `cargo run -p fake-peer -- <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always] [--walk DEG] [--buttons MASK] [--stance N] [--weapon ID]`
+//! `cargo run -p fake-peer -- <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always] [--walk DEG] [--buttons MASK] [--stance N] [--weapon ID] [--hold-ms MS]`
 //! - `--seconds N`: run for N seconds (default: until killed), then exit.
 //! - `--no-bye`: exit without a Bye, like a crash (the other side should log a heartbeat timeout).
 //! - `--region NAME`: use another mapping name (tests use one so they never touch a running game's region).
@@ -36,7 +36,7 @@ const DODGE: u32 = 1 << Button::Dodge as u32;
 const IFRAME: u32 = 1 << PlayerFlag::IFrame as u32;
 
 fn usage() -> ! {
-    eprintln!("usage: fake-peer <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always] [--walk DEG] [--buttons MASK] [--stance N] [--weapon ID]");
+    eprintln!("usage: fake-peer <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always] [--walk DEG] [--buttons MASK] [--stance N] [--weapon ID] [--hold-ms MS]");
     std::process::exit(2);
 }
 
@@ -138,6 +138,8 @@ struct FakeSky {
     stance: u32,
     /// `--weapon`: InputState.er_weapon (v10, ER weapon id with level; 0 = ER's own).
     weapon: i32,
+    /// `--hold-ms`: how long each pulse holds the button (default 250).
+    hold_ms: u64,
 }
 
 impl FakeSky {
@@ -151,7 +153,7 @@ impl FakeSky {
             self.next_pulse = Some(now + 1000);
         }
         let held = match self.next_pulse {
-            Some(start) if now >= start + 250 => {
+            Some(start) if now >= start + self.hold_ms => {
                 self.next_pulse = Some(start + self.every_ms);
                 false
             }
@@ -332,12 +334,14 @@ fn main() {
     let mut buttons = None;
     let mut stance = 0;
     let mut weapon = 0;
+    let mut hold_ms = 250;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--seconds" => seconds = args.next().and_then(|s| s.parse::<f64>().ok()).or_else(|| usage()),
             "--no-bye" => bye = false,
             "--pose-always" => pose_always = true,
             "--walk" => walk = Some(args.next().and_then(|s| s.parse::<f32>().ok()).unwrap_or_else(|| usage())),
+            "--hold-ms" => hold_ms = args.next().and_then(|s| s.parse::<u64>().ok()).unwrap_or_else(|| usage()),
             "--weapon" => weapon = args.next().and_then(|s| s.parse::<i32>().ok()).unwrap_or_else(|| usage()),
             "--stance" => stance = args.next().and_then(|s| s.parse::<u32>().ok()).unwrap_or_else(|| usage()),
             "--buttons" => buttons = Some(args.next().and_then(|s| s.parse::<u32>().ok()).unwrap_or_else(|| usage())),
@@ -395,6 +399,7 @@ fn main() {
                     buttons,
                     stance,
                     weapon,
+                    hold_ms,
                 }),
                 Side::EldenRing => Role::Er(FakeEr {
                     reader: SlotReader::new(r.clone(), OFF_SLOT_INPUT),

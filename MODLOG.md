@@ -4,6 +4,17 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: Bows draw and shoot with Elden Ring's animation, protocol v12
+- **User request:** "Bows also need an animation" (a Skyrim bow made ER swing its own melee weapon, no arrow).
+- **Probe:** ER fires only owned ammo equipped the full way (param id + gaitem handle + inventory index + equip entry; a param id alone
+  plays the empty-quiver gesture 50050). Release = anim x36000 (draw x36010, hold x36020). `docs/research/elden-ring-combat.md`.
+- **Changed:** protocol v12 (`er_ammo`, AttackKind Shot); WeaponMap bow/crossbow + ammo; ER `stance.rs` equip_ammo/restore, `attack.rs`
+  Shot at release; Skyrim `Combat.cpp` Shoot (`Projectile::Launch` AE 44108 with the equipped bow and ammo along the camera's aim, one
+  arrow removed). Research switch `-ErAmmo`, fake-peer `--hold-ms`.
+- **Tested:** run-tests green; ER alone (visible): draw/hold/release on screen; both games, console hunting bow + iron arrows, virtual pad
+  hold-release x4: four ER releases → four Skyrim arrows launched (log), contact sheet shows ER's bow draw on the Skyrim body.
+  Not tested: crossbows, arrows actually hitting a target, aim feel.
+
 ## 2026-10-05: Your health is your Elden Ring HP, protocol v11 (P5 step 3)
 - **Changed:** protocol v11 (InputState `hurt_total` f64 running share + `respawn_seq`; PlayerFlag `Downed`). Skyrim `bridge/Health.cpp`
   (adapted from SkyCraft BridgePlayerDamage/HitSink/KillPlayer, MIT): every health change refunded and forwarded as a share of max

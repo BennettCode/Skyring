@@ -26,22 +26,29 @@ namespace sxer::weapons
 		kGreatsword,
 		kBattleaxe,
 		kWarhammer,
+		kBow,
+		kCrossbow,
 		kCount
 	};
 
 	inline const char* Name(Kind a_kind)
 	{
-		static constexpr const char* kNames[] = { "none", "dagger", "sword", "war axe", "mace", "greatsword", "battleaxe", "warhammer" };
-		return kNames[std::min<std::uint32_t>(static_cast<std::uint32_t>(a_kind), 7)];
+		static constexpr const char* kNames[] = { "none", "dagger", "sword", "war axe", "mace", "greatsword", "battleaxe", "warhammer", "bow", "crossbow" };
+		return kNames[std::min<std::uint32_t>(static_cast<std::uint32_t>(a_kind), 9)];
 	}
 
-	// ER weapon param ids per kind (+0): Dagger, Longsword, Bastard Sword, Hand Axe, Mace, Greataxe, Large Club. Overridable in
-	// SkyrimXER.ini [Weapons] (keys = the kind names without spaces: Dagger, Sword, WarAxe, Mace, Greatsword, Battleaxe, Warhammer).
+	// ER weapon param ids per kind (+0): Dagger, Longsword, Bastard Sword, Hand Axe, Mace, Greataxe, Large Club, Longbow, Light
+	// Crossbow. Overridable in SkyrimXER.ini [Weapons] (keys: Dagger, Sword, WarAxe, Mace, Greatsword, Battleaxe, Warhammer, Bow, Crossbow).
 	using Table = std::array<std::int32_t, static_cast<std::size_t>(Kind::kCount)>;
-	inline constexpr Table kDefaultIds{ 0, 1000000, 2000000, 14000000, 11000000, 3000000, 15000000, 12000000 };
+	inline constexpr Table kDefaultIds{ 0, 1000000, 2000000, 14000000, 11000000, 3000000, 15000000, 12000000, 41000000, 43000000 };
 
-	// Damage of the iron weapon of each kind (vanilla Skyrim.esm), the bottom of its material ladder.
-	inline constexpr std::array<float, static_cast<std::size_t>(Kind::kCount)> kIronDamage{ 0, 4, 7, 8, 9, 15, 16, 18 };
+	// Damage of the lowest weapon of each kind (vanilla: iron, the Long Bow 6, the Dawnguard Crossbow 19), the bottom of its ladder.
+	inline constexpr std::array<float, static_cast<std::size_t>(Kind::kCount)> kIronDamage{ 0, 4, 7, 8, 9, 15, 16, 18, 6, 19 };
+
+	// ER ammo for a bow / crossbow (Arrow, Bolt; SkyrimXER.ini [Weapons] Arrow=, Bolt=). ER fires only ammo it owns: the ER side falls
+	// back to any arrows/bolts the character has.
+	inline constexpr std::int32_t kDefaultArrow = 50000000;
+	inline constexpr std::int32_t kDefaultBolt = 52000000;
 
 	// ER upgrade level from Skyrim's material tier: ~1 damage per tier above iron (2H a bit more), 3 levels per point, capped at +25
 	// (iron +0, steel +3, ... daedric ~+21, dragonbone +24/+25).
@@ -66,4 +73,6 @@ namespace sxer::weapons
 	Kind Classify(const RE::TESObjectWEAP* a_weapon);
 	void LoadTable();
 	std::int32_t ForPlayer(RE::PlayerCharacter* a_player, Kind* a_kind);
+	// The ER ammo for a kind (bow → arrow, crossbow → bolt), 0 for the rest.
+	std::int32_t AmmoFor(Kind a_kind);
 }

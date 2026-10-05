@@ -7,9 +7,9 @@
 
 namespace sxer::proto
 {
-	inline constexpr std::uint32_t kVersion = 11;
+	inline constexpr std::uint32_t kVersion = 12;
 	inline constexpr std::uint32_t kMagic = 0x52455853;  // "SXER" as little-endian bytes
-	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v11";
+	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v12";
 
 	// Peer counts as gone when its heartbeat is older than this.
 	inline constexpr std::uint64_t kHeartbeatTimeoutMs = 2000;
@@ -114,6 +114,7 @@ namespace sxer::proto
 		Heavy = 2,  // R2 / charged R2 (305xx).
 		Skill = 3,  // Weapon art (40xxx).
 		Other = 4,  // Running / rolling / jumping / backstep attacks (other 3xxxx).
+		Shot = 5,  // v12: ER released an arrow/bolt (anim enters x36000): Skyrim fires its own arrow along the camera's aim.
 	};
 
 	// PoseState.flags. Values are BIT INDICES: mask = 1 << value.
@@ -233,7 +234,8 @@ namespace sxer::proto
 		std::int32_t er_weapon;  // v10: ER weapon param id (with upgrade level) for the Skyrim weapon in the right hand (bridge/WeaponMap); 0 = ER keeps its own. ER writes it into the right-hand slot it uses.
 		std::uint32_t respawn_seq;  // v11: +1 when Skyrim loads a save or starts a new game: ER refills its HP and clears Downed.
 		double hurt_total;  // v11: running sum of the Skyrim player's health changes as a share of Skyrim max health (+ damage, - healing). ER applies the change since its last read to its own HP (a running total, so a skipped write loses nothing).
-		std::uint64_t _pad2;
+		std::int32_t er_ammo;  // v12: ER arrow/bolt param id for a Skyrim bow/crossbow (bridge/WeaponMap); ER equips it if owned (else any owned ammo of that kind). 0 = leave ER's.
+		std::uint32_t _pad2;
 	};
 	static_assert(std::is_trivially_copyable_v<InputState> && std::is_standard_layout_v<InputState>);
 	static_assert(sizeof(InputState) == 72);
@@ -251,7 +253,8 @@ namespace sxer::proto
 	static_assert(offsetof(InputState, er_weapon) == 48);
 	static_assert(offsetof(InputState, respawn_seq) == 52);
 	static_assert(offsetof(InputState, hurt_total) == 56);
-	static_assert(offsetof(InputState, _pad2) == 64);
+	static_assert(offsetof(InputState, er_ammo) == 64);
+	static_assert(offsetof(InputState, _pad2) == 68);
 
 	// At OFF_SLOT_PLAYER. Written by ER's game thread every frame, read by Skyrim's.
 	struct PlayerState

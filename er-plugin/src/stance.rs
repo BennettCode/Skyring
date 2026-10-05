@@ -142,6 +142,42 @@ fn weapon_exists(id: i32) -> bool {
     repo.get::<ReinforceParamWeapon>(w.reinforce_type_id() as u32 + (id % 100) as u32).is_some()
 }
 
+/// Equips owned ammo the way the game's equip does (bows probe 2026-10-05): arrows (param 50/51xxxxxx) into Arrow1 (slot 6), bolts
+/// (52/53xxxxxx) into Bolt1 (slot 7). Four fields: param id + gaitem handle in both ChrAsm copies, the inventory index
+/// (`equipment_item_idx_list`: key-items capacity + position in the normal list; matched 4/4 equipped items), and the equip entry
+/// (ItemId). ER only fires ammo it owns, so the entry must exist. Returns (slot, inventory position, quantity).
+fn equip_ammo(player: &mut PlayerIns, param: u32) -> Result<(usize, usize, u32), String> {
+    // SAFETY: PlayerGameData lives as long as the player; main thread.
+    let pgd = unsafe { player.player_game_data.as_mut() };
+    let inv = &pgd.equipment.equip_inventory_data.items_data;
+    let offset = inv.key_items_capacity as usize;
+    let (pos, handle, item, qty) = inv
+        .normal_entries()
+        .iter()
+        .enumerate()
+        .find_map(|(i, e)| {
+            let e = e.as_option()?;
+            (e.item_id.param_id() == param).then(|| {
+                // SAFETY: GaitemHandle / ItemId are u32 newtypes (eldenring-rs bitfields).
+                let h = unsafe { *(&e.gaitem_handle as *const _ as *const u32) };
+                let id = unsafe { *(&e.item_id as *const _ as *const u32) };
+                (i, h, id, e.quantity)
+            })
+        })
+        .ok_or_else(|| format!("no ammo {param} in the inventory"))?;
+    let slot = if matches!(param / 1_000_000, 52 | 53) { 7usize } else { 6 };
+    for asm in [&mut *player.chr_asm, &mut pgd.equipment.chr_asm] {
+        asm.equipment_param_ids[slot] = param as i32;
+        // SAFETY: as above.
+        unsafe { *(&mut asm.gaitem_handles[slot] as *mut _ as *mut u32) = handle };
+    }
+    pgd.equipment.equipment_item_idx_list[slot] = (offset + pos) as u32;
+    let entry = if slot == 6 { &mut pgd.equipment.equipment_entries.arrow_primary } else { &mut pgd.equipment.equipment_entries.bolt_primary };
+    // SAFETY: OptionalItemId is a u32 newtype.
+    unsafe { *(entry as *mut _ as *mut u32) = item };
+    Ok((slot, pos, qty))
+}
+
 pub struct StanceSync {
     reader: Option<SlotReader<InputState>>,
     last_input: Option<InputState>,
@@ -160,11 +196,61 @@ pub struct StanceSync {
     weapon_applied: Option<(u32, i32)>,
     /// An er_weapon ER doesn't have (logged once).
     missing: i32,
+    /// The save's Arrow1/Bolt1 equip (restored when we stop writing ammo) and the ammo we equipped last.
+    saved_ammo: Option<[AmmoSlot; 2]>,
+    ammo_applied: Option<u32>,
+}
+
+/// One ammo slot's four equip fields (see `equip_ammo`).
+#[derive(Clone, Copy, Debug)]
+struct AmmoSlot {
+    param: [i32; 2],
+    gaitem: [u32; 2],
+    idx: u32,
+    entry: u32,
+}
+
+fn read_ammo(player: &mut PlayerIns, slot: usize) -> AmmoSlot {
+    // SAFETY: PlayerGameData lives as long as the player; main thread. GaitemHandle / OptionalItemId are u32 newtypes.
+    let pgd = unsafe { player.player_game_data.as_mut() };
+    let live = &player.chr_asm;
+    let saved = &pgd.equipment.chr_asm;
+    let entry = if slot == 6 { &pgd.equipment.equipment_entries.arrow_primary } else { &pgd.equipment.equipment_entries.bolt_primary };
+    unsafe {
+        AmmoSlot {
+            param: [live.equipment_param_ids[slot], saved.equipment_param_ids[slot]],
+            gaitem: [*(&live.gaitem_handles[slot] as *const _ as *const u32), *(&saved.gaitem_handles[slot] as *const _ as *const u32)],
+            idx: pgd.equipment.equipment_item_idx_list[slot],
+            entry: *(entry as *const _ as *const u32),
+        }
+    }
+}
+
+fn write_ammo_slot(player: &mut PlayerIns, slot: usize, a: AmmoSlot) {
+    // SAFETY: as read_ammo.
+    let pgd = unsafe { player.player_game_data.as_mut() };
+    for (k, asm) in [&mut *player.chr_asm, &mut pgd.equipment.chr_asm].into_iter().enumerate() {
+        asm.equipment_param_ids[slot] = a.param[k];
+        unsafe { *(&mut asm.gaitem_handles[slot] as *mut _ as *mut u32) = a.gaitem[k] };
+    }
+    pgd.equipment.equipment_item_idx_list[slot] = a.idx;
+    let entry = if slot == 6 { &mut pgd.equipment.equipment_entries.arrow_primary } else { &mut pgd.equipment.equipment_entries.bolt_primary };
+    unsafe { *(entry as *mut _ as *mut u32) = a.entry };
+}
+
+/// First owned ammo of a family (arrows 50/51xxxxxx or bolts 52/53xxxxxx).
+fn any_owned_ammo(player: &PlayerIns, bolts: bool) -> Option<u32> {
+    // SAFETY: as read_ammo.
+    let pgd = unsafe { player.player_game_data.as_ref() };
+    pgd.equipment.equip_inventory_data.items_data.items().map(|e| e.item_id.param_id()).find(|id| {
+        let family = id / 1_000_000;
+        if bolts { matches!(family, 52 | 53) } else { matches!(family, 50 | 51) }
+    })
 }
 
 impl StanceSync {
     pub fn new() -> Self {
-        Self { reader: None, last_input: None, spawned_at: None, saved: None, applied: None, override_done: false, last_line: String::new(), saved_right: None, saved_ids: None, weapon_applied: None, missing: 0 }
+        Self { reader: None, last_input: None, spawned_at: None, saved: None, applied: None, override_done: false, last_line: String::new(), saved_right: None, saved_ids: None, weapon_applied: None, missing: 0, saved_ammo: None, ammo_applied: None }
     }
 
     pub fn run(&mut self) {
@@ -176,10 +262,15 @@ impl StanceSync {
             self.applied = None;
             self.saved_right = None;
             self.saved_ids = None;
+            self.saved_ammo = None;
+            self.ammo_applied = None;
             self.weapon_applied = None;
             return;
         };
         let saved_ids = *self.saved_ids.get_or_insert(player.chr_asm.equipment_param_ids);
+        if self.saved_ammo.is_none() {
+            self.saved_ammo = Some([read_ammo(player, 6), read_ammo(player, 7)]);
+        }
         let saved_right = *self.saved_right.get_or_insert_with(|| {
             let ids = &player.chr_asm.equipment_param_ids;
             [ids[1], ids[3], ids[5]]
@@ -194,6 +285,13 @@ impl StanceSync {
         let weapon = config::get().weapon;
         if weapon != 0 && !self.override_done && frame - spawned >= WRITE_AFTER_FRAMES {
             self.override_done = true;
+            let ammo = config::get().ammo;
+            if ammo != 0 {
+                match equip_ammo(player, ammo as u32) {
+                    Ok((slot, pos, qty)) => crate::info!("stance", "frame={frame} AMMO PROBE: equipped {ammo} in slot {slot} (inventory normal[{pos}], {qty} owned)"),
+                    Err(e) => crate::warn!("stance", "frame={frame} AMMO PROBE: {e}"),
+                }
+            }
             match write_weapon(player, weapon) {
                 Ok(old) => crate::info!("stance", "frame={frame} WEAPON PROBE: right-hand slots {old:?} → {weapon}; now {}", describe(&player.chr_asm)),
                 Err(e) => crate::warn!("stance", "frame={frame} WEAPON PROBE {weapon} not written: {e}"),
@@ -266,6 +364,37 @@ impl StanceSync {
                 crate::info!("stance", "frame={frame} weapon: ER's own back {saved_right:?}");
             }
             self.weapon_applied = want_weapon;
+        }
+        // Bows/crossbows (v12): ER fires only ammo it owns, equipped the full way (equip_ammo). Prefer the mapped id, else any owned of
+        // that family; the save's own ammo comes back when the weapon does.
+        let want_ammo = match (input, want_weapon) {
+            (Some(i), Some(_)) if i.er_ammo != 0 => {
+                let bolts = matches!(i.er_ammo / 1_000_000, 52 | 53);
+                let owned = |id: u32| {
+                    // SAFETY: as read_ammo.
+                    let pgd = unsafe { player.player_game_data.as_ref() };
+                    pgd.equipment.equip_inventory_data.items_data.items().any(|e| e.item_id.param_id() == id)
+                };
+                if owned(i.er_ammo as u32) { Some(i.er_ammo as u32) } else { any_owned_ammo(player, bolts) }
+            }
+            _ => None,
+        };
+        if want_ammo != self.ammo_applied {
+            if let (Some(_), Some(saved)) = (self.ammo_applied, self.saved_ammo) {
+                write_ammo_slot(player, 6, saved[0]);
+                write_ammo_slot(player, 7, saved[1]);
+            }
+            match want_ammo.map(|id| (id, equip_ammo(player, id))) {
+                Some((id, Ok((slot, pos, qty)))) => crate::info!("stance", "frame={frame} ammo: ER {id} equipped in slot {slot} (inventory [{pos}], {qty} owned)"),
+                Some((id, Err(e))) => crate::warn!("stance", "frame={frame} ammo {id}: {e}"),
+                None if self.ammo_applied.is_some() => crate::info!("stance", "frame={frame} ammo: the save's own back"),
+                None => {
+                    if input.is_some_and(|i| i.er_ammo != 0) {
+                        crate::warn!("stance", "frame={frame} ammo: the ER character owns no arrows/bolts for this bow: it can't shoot");
+                    }
+                }
+            }
+            self.ammo_applied = want_ammo;
         }
     }
 }

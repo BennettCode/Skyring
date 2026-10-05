@@ -208,6 +208,37 @@ namespace sxer::combat
 				r.refHp, g_scale, r.damage, broken ? stance : p.damage, stance, broken ? " STAGGER" : "", viaPipeline ? "" : " (fallback DoDamage)", sound ? "" : " (no hit sound)", a_frame);
 		}
 
+		// A bow/crossbow release in ER (v12 AttackKind Shot): Skyrim fires its own arrow along the camera's aim, with the equipped bow and
+		// ammo (its projectile, impact and damage), and one arrow is used up. Projectile::Launch = AE 44108, LaunchData vtable AE 187478
+		// (tools/addrlib-check.ps1).
+		void Shoot(RE::PlayerCharacter* a_player, const proto::PlayerState& a_s, std::uint64_t a_frame)
+		{
+			auto* bow = EquippedWeapon(a_player);
+			auto* ammo = a_player->GetCurrentAmmo();
+			if (!bow || !ammo || (bow->GetWeaponType() != RE::WEAPON_TYPE::kBow && bow->GetWeaponType() != RE::WEAPON_TYPE::kCrossbow)) {
+				SKSE::log::info("[combat] shot #{}: no bow/crossbow with ammo equipped in Skyrim (bow {}, ammo {}) frame={}", a_s.attack_seq,
+					bow ? bow->GetName() : "none", ammo ? ammo->GetName() : "none", a_frame);
+				return;
+			}
+			// Aim: the camera's forward (the crosshair). Origin: in front of the chest, so the arrow doesn't start inside the player.
+			RE::NiPoint3 fwd{ std::sin(a_player->GetAngleZ()), std::cos(a_player->GetAngleZ()), 0.0f };
+			if (auto* camera = RE::PlayerCamera::GetSingleton(); camera && camera->cameraRoot) {
+				const auto& m = camera->cameraRoot->world.rotate;
+				fwd = { m.entry[0][1], m.entry[1][1], m.entry[2][1] };
+			}
+			const float len = std::max(1e-3f, fwd.Length());
+			fwd = fwd / len;
+			RE::Projectile::ProjectileRot angles{ -std::asin(std::clamp(fwd.z, -1.0f, 1.0f)), std::atan2(fwd.x, fwd.y) };
+			const RE::NiPoint3 origin = a_player->GetPosition() + RE::NiPoint3{ 0.0f, 0.0f, 105.0f } + RE::NiPoint3{ fwd.x, fwd.y, 0.0f } * 40.0f;
+			RE::Projectile::LaunchData data(a_player, origin, angles, ammo, bow);
+			data.power = 1.0f;
+			RE::ProjectileHandle handle{};
+			RE::Projectile::Launch(&handle, data);
+			a_player->RemoveItem(ammo, 1, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
+			SKSE::log::info("[combat] shot #{}: {} with {} (pitch {:.2f} yaw {:.2f}){} frame={}", a_s.attack_seq, bow->GetName(), ammo->GetName(), angles.x,
+				angles.z, handle ? "" : " (launch returned no projectile)", a_frame);
+		}
+
 		// Actors the swing reaches: alive, loaded, not the player or a follower, within reach and in front of the body.
 		void Sweep(RE::PlayerCharacter* a_player, const proto::PlayerState& a_s, float a_facing, std::uint64_t a_frame)
 		{
@@ -280,12 +311,16 @@ namespace sxer::combat
 			if (first) {
 				return;  // the swing that was already over when we connected
 			}
+			if (s.atk_kind == static_cast<std::uint32_t>(proto::AttackKind::Shot)) {
+				Shoot(a_player, s, a_frame);
+				return;
+			}
 			// A window opened since the last frame (even if it already closed again: 2-3 ER frames): sweep once now.
 			Sweep(a_player, s, a_facing, a_frame);
 			return;
 		}
 		// Still inside the same window: targets stepping in are hit too (once each).
-		if (s.flags & (1u << static_cast<std::uint32_t>(proto::PlayerFlag::AttackActive))) {
+		if ((s.flags & (1u << static_cast<std::uint32_t>(proto::PlayerFlag::AttackActive))) && s.atk_kind != static_cast<std::uint32_t>(proto::AttackKind::Shot)) {
 			Sweep(a_player, s, a_facing, a_frame);
 		}
 	}
