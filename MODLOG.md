@@ -4,6 +4,17 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: Your Skyrim weapon picks the Elden Ring weapon, protocol v10 (P5 step 2)
+- **Probe:** an ER weapon id written into the right-hand ChrAsm slots (both copies) switches the moveset and attack rating, no equip call
+  (`-ErWeapon` research switch; fake-peer `--stance` / `--weapon`). The per-weapon probe sessions first failed to build (a v10 edit landed
+  mid-probe); redone in one session with live swaps.
+- **Changed:** protocol v10 InputState `er_weapon`; Skyrim `bridge/WeaponMap.{h,cpp}` (kind + material tier → ER id + level,
+  `SkyrimXER.ini [Weapons]`); ER `stance.rs` writes/restores it (slot choice from the save's ids: picking from our own write flipped the
+  slot every frame).
+- **Tested:** run-tests green (weapon cases); fake Skyrim, 7 ER classes + a +21 sword; both games, console-equipped iron dagger, steel
+  sword (+3), iron war axe, mace, greatsword, battleaxe, warhammer, daedric sword (+21): each mapped, distinct moveset (anim groups
+  20/23/30/33/25/32/35), AR 102–390; contact sheets of a sword and a warhammer swing look different. User feel test pending.
+
 ## 2026-10-05: Hit sound for Elden Ring swings
 - **User report:** hits land and look right, but make no sound. `PlayImpactEffect` only spawns the visuals.
 - **Fix:** `Combat.cpp` PlayHitSound plays the weapon's impact sound for the target race's blood impact material (fallback: any of the

@@ -13,9 +13,9 @@
 # All values are little-endian (both games are x64 Windows).
 
 [protocol]
-version = 9
+version = 10
 magic = "SXER"                      # stored as a little-endian u32: bytes 'S' 'X' 'E' 'R'
-region_name = 'Local\SkyrimXER_v9'  # must end in _v<version>
+region_name = 'Local\SkyrimXER_v10'  # must end in _v<version>
 
 [constants]
 HEARTBEAT_TIMEOUT_MS = { type = "u64", value = 2000, doc = "Peer counts as gone when its heartbeat is older than this." }
@@ -208,7 +208,7 @@ fields = [
 
 [[structs]]
 name = "InputState"
-size = 48
+size = 56
 doc = "At OFF_SLOT_INPUT. Written by Skyrim's game thread every frame, read by ER's."
 fields = [
   { name = "seq", type = "u32", doc = "Seqlock counter (odd = being written)." },
@@ -221,6 +221,8 @@ fields = [
   { name = "move_y", type = "f32", doc = "Move stick forward, -1..1." },
   { name = "cam_yaw", type = "f32", doc = "With Locomote: where Skyrim looks, as a yaw in ER's world (Skyrim camera yaw minus the mode's world offset W), radians. ER turns the stick by cam_yaw minus its own camera yaw." },
   { name = "stance", type = "u32", doc = "Stance (Unarmed / OneHanded / TwoHanded)." },
+  { name = "er_weapon", type = "i32", doc = "v10: ER weapon param id (with upgrade level) for the Skyrim weapon in the right hand (bridge/WeaponMap); 0 = ER keeps its own. ER writes it into the right-hand slot it uses." },
+  { name = "_pad1", type = "u32" },
 ]
 
 [[structs]]

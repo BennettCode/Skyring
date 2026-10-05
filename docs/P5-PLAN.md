@@ -15,9 +15,16 @@ movesets, ER's damage. Authority (DESIGN §3): **ER calculates, Skyrim applies.*
   x `fDamageScale` in `SkyrimXER.ini`), poise build-up → stagger, applied through Skyrim's own hit function (SkyCraft's path).
 - **User choice:** ER-like damage (enemies take about as many hits as a comparable ER enemy), one tuning number.
 
+## Step 2: the Skyrim weapon picks the ER weapon (done 2026-10-05)
+- **Probe:** writing an ER weapon id into the right-hand slots of both ChrAsm copies (no equip call) switches ER's moveset and attack
+  rating; no crash over 7 weapon classes (`docs/research/elden-ring-combat.md`).
+- **Protocol v10:** InputState `er_weapon`. Skyrim `bridge/WeaponMap.{h,cpp}`: dagger → Dagger, sword → Longsword, war axe → Hand Axe,
+  mace → Mace, greatsword → Bastard Sword, battleaxe → Greataxe, warhammer (keyword WeapTypeWarhammer) → Large Club; ids in
+  `SkyrimXER.ini [Weapons]`; upgrade level from the Skyrim material (≈3 levels per damage point above iron, cap +25).
+  ER `stance.rs` writes it into the right slot the stance uses (never mid-swing/dodge; slot choice from the save's own ids), and puts the
+  save's ids back when the bridge lets go.
+
 ## Next steps
-2. **Weapon types:** Skyrim weapon type → ER weapon (table in `config/`, equipped like `stance.rs`), so a dagger, sword, axe, mace,
-   greatsword, battleaxe or warhammer swings with ER's matching moveset and attack rating.
 3. **NPC hits on the player go to ER:** ER's HP and defenses decide, Skyrim's HP bar mirrors ER's (`hooks/PlayerHit.cpp` already sees
    every melee hit on the player).
 4. Later: exact AtkParam rows (hook ER's attack-param lookup), status buildup, guard counters, ranged/magic.

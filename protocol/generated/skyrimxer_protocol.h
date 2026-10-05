@@ -7,9 +7,9 @@
 
 namespace sxer::proto
 {
-	inline constexpr std::uint32_t kVersion = 9;
+	inline constexpr std::uint32_t kVersion = 10;
 	inline constexpr std::uint32_t kMagic = 0x52455853;  // "SXER" as little-endian bytes
-	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v9";
+	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v10";
 
 	// Peer counts as gone when its heartbeat is older than this.
 	inline constexpr std::uint64_t kHeartbeatTimeoutMs = 2000;
@@ -229,9 +229,11 @@ namespace sxer::proto
 		float move_y;  // Move stick forward, -1..1.
 		float cam_yaw;  // With Locomote: where Skyrim looks, as a yaw in ER's world (Skyrim camera yaw minus the mode's world offset W), radians. ER turns the stick by cam_yaw minus its own camera yaw.
 		std::uint32_t stance;  // Stance (Unarmed / OneHanded / TwoHanded).
+		std::int32_t er_weapon;  // v10: ER weapon param id (with upgrade level) for the Skyrim weapon in the right hand (bridge/WeaponMap); 0 = ER keeps its own. ER writes it into the right-hand slot it uses.
+		std::uint32_t _pad1;
 	};
 	static_assert(std::is_trivially_copyable_v<InputState> && std::is_standard_layout_v<InputState>);
-	static_assert(sizeof(InputState) == 48);
+	static_assert(sizeof(InputState) == 56);
 	static_assert(alignof(InputState) == 8);
 	static_assert(offsetof(InputState, seq) == 0);
 	static_assert(offsetof(InputState, _pad0) == 4);
@@ -243,6 +245,8 @@ namespace sxer::proto
 	static_assert(offsetof(InputState, move_y) == 36);
 	static_assert(offsetof(InputState, cam_yaw) == 40);
 	static_assert(offsetof(InputState, stance) == 44);
+	static_assert(offsetof(InputState, er_weapon) == 48);
+	static_assert(offsetof(InputState, _pad1) == 52);
 
 	// At OFF_SLOT_PLAYER. Written by ER's game thread every frame, read by Skyrim's.
 	struct PlayerState

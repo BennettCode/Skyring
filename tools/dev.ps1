@@ -17,7 +17,7 @@
   -WaitInWorld N (ER): once the ER player is in the world, let ER run N more seconds,
    then print the ER plugin's log lines whose subsystem matches -Show. Tests then need no "done" message from the user.
   -Restart stops the game(s) about to be launched first (ER is hidden in-world, so it gets Stop-Process; no clean Bye).
-  -ErVisible / -ErSelfTest / -ErInjectGroup / -ErProbe / -ErDump / -ErForceCombat / -ErNoPin / -ErPoseProbe / -ErStance are written to build/er-plugin/skyrimxer_er.cfg on every launch (er-plugin/src/config.rs).
+  -ErVisible / -ErSelfTest / -ErInjectGroup / -ErProbe / -ErDump / -ErForceCombat / -ErNoPin / -ErPoseProbe / -ErStance / -ErWeapon are written to build/er-plugin/skyrimxer_er.cfg on every launch (er-plugin/src/config.rs).
 #>
 [CmdletBinding()]
 param(
@@ -41,6 +41,7 @@ param(
     [switch]$ErPoseProbe,
     [ValidateSet('', 'empty', 'one', 'right2', 'left2', 'fists')]
     [string]$ErStance = '',
+    [int]$ErWeapon = 0,
     [int]$WaitInWorld = 0,
     [switch]$Manual,
     [string]$SkyrimKeys = '',
@@ -84,7 +85,7 @@ if ($Game -in 'both', 'eldenring' -and -not (Get-Process -Name steam -ErrorActio
 }
 
 if ($Game -in 'both', 'eldenring') {
-    $cfg = @('# written by tools/dev.ps1 on every launch', "visible=$([int][bool]$ErVisible)", "selftest=$ErSelfTest", "inject_group=$ErInjectGroup", "probe=$([int][bool]$ErProbe)", "dump=$([int][bool]$ErDump)", "force_combat=$ErForceCombat", "pin=$([int](-not $ErNoPin))", "pose_probe=$([int][bool]$ErPoseProbe)", "stance=$ErStance")
+    $cfg = @('# written by tools/dev.ps1 on every launch', "visible=$([int][bool]$ErVisible)", "selftest=$ErSelfTest", "inject_group=$ErInjectGroup", "probe=$([int][bool]$ErProbe)", "dump=$([int][bool]$ErDump)", "force_combat=$ErForceCombat", "pin=$([int](-not $ErNoPin))", "pose_probe=$([int][bool]$ErPoseProbe)", "stance=$ErStance", "weapon=$ErWeapon")
     Set-Content -Path (Join-Path $paths.BuildDir 'er-plugin\skyrimxer_er.cfg') -Value $cfg -Encoding ascii
 }
 

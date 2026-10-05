@@ -25,6 +25,8 @@ pub struct Config {
     pub pose_probe: bool,
     /// Research: write this weapon stance into ChrAsm once after spawn (stance.rs): empty | one | right2 | left2. Empty = don't write.
     pub stance: String,
+    /// Research (P5 step 2 probe): ER weapon param id written into every right-hand weapon slot once after spawn (stance.rs). 0 = off.
+    pub weapon: i32,
 }
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
@@ -46,6 +48,7 @@ pub fn load(dir: &Path) {
                 "pin" => config.pin = value != "0",
                 "pose_probe" => config.pose_probe = value == "1",
                 "stance" => config.stance = value.to_string(),
+                "weapon" => config.weapon = value.parse().unwrap_or(0),
                 other => crate::error!("core", "skyrimxer_er.cfg: unknown key `{other}`"),
             }
         }

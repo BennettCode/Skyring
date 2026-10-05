@@ -20,6 +20,7 @@
 #include "bridge/PadReport.h"
 #include "bridge/PadScript.h"
 #include "bridge/PlayerWatch.h"
+#include "bridge/WeaponMap.h"
 #include "bridge/Rig.h"
 #include "bridge/Slot.h"
 
@@ -319,6 +320,21 @@ namespace
 		Check(Near(ComputeDamage(twice).damage, 2 * r.damage, 1e-2f), "combat: fDamageScale multiplies");
 	}
 
+	// Skyrim weapon kind + damage → ER weapon id (bridge/WeaponMap.h).
+	void WeaponTests()
+	{
+		using namespace sxer::weapons;
+		Check(UpgradeLevel(Kind::kSword, 7) == 0 && UpgradeLevel(Kind::kSword, 8) == 3 && UpgradeLevel(Kind::kSword, 14) == 21 &&
+				  UpgradeLevel(Kind::kSword, 30) == 25 && UpgradeLevel(Kind::kSword, 3) == 0,
+			"weapons: iron +0, steel +3, daedric sword +21, capped +25, never negative");
+		Check(ErWeapon(Kind::kDagger, 4, kDefaultIds) == 1000000 && ErWeapon(Kind::kGreatsword, 24, kDefaultIds) == 3000000 + 25 &&
+				  ErWeapon(Kind::kNone, 10, kDefaultIds) == 0,
+			"weapons: ids = ER base + level; no weapon = 0");
+		Table t = kDefaultIds;
+		t[static_cast<std::size_t>(Kind::kMace)] = 0;
+		Check(ErWeapon(Kind::kMace, 12, t) == 0, "weapons: a kind mapped to 0 leaves ER's own weapon");
+	}
+
 	void SlotTests(std::uint8_t* a_base)
 	{
 		using namespace sxer;
@@ -392,6 +408,7 @@ namespace
 		PadTests();
 		PadScriptTests();
 		CombatTests();
+		WeaponTests();
 		std::ostringstream lines;
 		auto logger = std::make_shared<spdlog::logger>("selftest", std::make_shared<spdlog::sinks::ostream_sink_mt>(lines));
 		logger->set_pattern("%l %v");

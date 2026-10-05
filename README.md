@@ -79,6 +79,10 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
   defense formula against the enemy's level and armour, scaled to Skyrim health so enemies take about as many hits as a comparable Elden
   Ring enemy. Heavy hits build poise damage that staggers. Skyrim plays the blood, hit reaction, crime and kill like any hit.
   `SkyrimXER.ini` → `[Combat] fDamageScale` tunes it (Skyrim's difficulty setting still multiplies your damage too).
+- **Your Skyrim weapon picks the Elden Ring weapon and moveset:** a dagger swings like an Elden Ring dagger, a sword like a longsword,
+  war axe → hand axe, mace → mace, greatsword → greatsword, battleaxe → greataxe, warhammer → great hammer. Better Skyrim materials
+  become higher Elden Ring upgrade levels (iron +0 up to about +25 for dragonbone), so they hit harder the Elden Ring way.
+  `SkyrimXER.ini [Weapons]` lets you pick other Elden Ring weapons.
 - **Sprint in Skyrim (Left Shift) → the Elden Ring character dodges.** Hold a movement key (W/A/S/D) while you tap Sprint and it **rolls**
   in that direction; tap Sprint alone and it backsteps. Elden Ring's own rules decide what happens.
   While the link is active, Skyrim's own sprint is off. **F10** turns the link off and on (off = plain Skyrim).
@@ -101,9 +105,8 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
 NPCs still see your character facing the way it last faced in Skyrim (only the body you see turns); a jump can briefly flip the body
 to that old facing. Elden Ring's character holds its weapon the way yours does (fists when you're unarmed
 or sheathed, one- or two-handed when you draw a weapon), but it doesn't use the same *kind* of weapon yet. The roll animation copies the main bones (fingers and toes follow their hands and feet); cloth and armour
-helpers follow Skyrim's own pose, and feet can slide a little (no foot placement yet). **Which Skyrim weapon you hold doesn't pick
-the Elden Ring weapon yet:** Elden Ring swings its own equipped weapon (one-handed or two-handed like yours). Enemy hits on you still use
-Skyrim's health and armour.
+helpers follow Skyrim's own pose, and feet can slide a little (no foot placement yet). Enemy hits on you still use Skyrim's health
+and armour. Bows, staves and spells have no Elden Ring counterpart yet.
 While the link is on, Skyrim spells, bows and shield bashes aren't on any button (F10 gives them back), and Skyrim's Wait has no pad
 button (keyboard T works). Arrows and spells still hit you during a roll.
 
@@ -116,7 +119,7 @@ button (keyboard T works). Arrows and spells still hit you during a roll.
 | P2 | Shared memory link: handshake, heartbeats, crash fail-safe | ✅ done |
 | P3 | Dodge in Skyrim → Elden Ring dodges → its stamina and i-frames come back | ✅ done |
 | **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 in progress (8/8 built, final playtest pending: Sprint = dodge, combat stamina, rolls move you, Elden Ring's roll animation plays in Skyrim; walking, running and sprinting are Elden Ring's; Skyrim's stamina bar shows Elden Ring's; roll i-frames make melee hits miss; DualSense with Elden Ring's buttons) |
-| **P5** | **Damage both ways uses Elden Ring's math (poise, stagger)** | 🔄 in progress (your Elden Ring swings hit Skyrim enemies with Elden Ring damage and poise) |
+| **P5** | **Damage both ways uses Elden Ring's math (poise, stagger)** | 🔄 in progress (your Elden Ring swings hit Skyrim enemies with Elden Ring damage and poise; your Skyrim weapon picks the Elden Ring moveset) |
 | P6 | Elden Ring-style HUD | ⏳ |
 | P7 | Runes from kills, leveling, flasks refill at "graces" | ⏳ |
 | P8 | Visual polish and performance | ⏳ |

@@ -57,7 +57,7 @@ Tick boxes as you go. Keep each phase small. If a phase grows, split it.
 **Accept:** the user rolls through an NPC's attack without taking damage, and spamming rolls is limited by stamina.
 
 ## P5: Combat bridge
-- [ ] Weapon mapping table (Skyrim weapon → ER weapon ID) in `config/`
+- [x] Weapon mapping table (Skyrim weapon → ER weapon ID) in `config/SkyrimXER.ini`, upgrade level from the material (2026-10-05)
 - [x] Swallow vanilla attack/block while the bridge is on, and forward them to ER instead (P4 step 8)
 - [x] Player light/heavy attacks: ER hit window + attack rating x motion value → ER-like damage applied to Skyrim actors through
   Skyrim's hit function (2026-10-05, `docs/P5-PLAN.md` step 1)

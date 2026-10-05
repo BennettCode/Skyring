@@ -26,3 +26,12 @@
   Two-handing: strength x1.5 (cap 148). Poise = sa_weapon_damage x sa_weapon_atk_rate.
 - Example (test character, str 55): fists 110000 → phys 29; weapon 10050000 two-handed → phys 88, fire 75. **Not yet checked against
   ER's own status screen.**
+
+## Equipping by id (P5 step 2, 2026-10-05)
+- `ChrAsm.equipment_param_ids[1|3|5]` (right-hand slots) written in **both** copies (PlayerIns.chr_asm and PlayerGameData.equipment.chr_asm)
+  is enough: the next swing uses that weapon's moveset (anim group prefix: dagger 20, straight sword 23, greatsword 25, axe 30,
+  greataxe 32, hammer 33, great hammer 35, colossal sword 42, twinblade 24) and attack.rs's attack rating follows. The hidden model may
+  not change (not needed). No inventory item, gaitem handle or equip call. 7 classes + a +21 upgrade, no crash.
+- Pitfall: picking the stance slot by the *current* ids after writing ours made the slot flip every frame; pick from the save's ids.
+- AR at str 55 / dex 15 (+0 one-handed): Dagger 102, Longsword 156 (+3: 187, +21: 390), Hand Axe 180, Mace 168; two-handed: Bastard
+  Sword 214, Greataxe 236, Large Club 219.

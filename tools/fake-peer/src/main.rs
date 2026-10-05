@@ -1,6 +1,6 @@
 //! fake-peer: plays one side of the link so the other side can be tested without its game.
 //!
-//! `cargo run -p fake-peer -- <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always] [--walk DEG] [--buttons MASK]`
+//! `cargo run -p fake-peer -- <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always] [--walk DEG] [--buttons MASK] [--stance N] [--weapon ID]`
 //! - `--seconds N`: run for N seconds (default: until killed), then exit.
 //! - `--no-bye`: exit without a Bye, like a crash (the other side should log a heartbeat timeout).
 //! - `--region NAME`: use another mapping name (tests use one so they never touch a running game's region).
@@ -36,7 +36,7 @@ const DODGE: u32 = 1 << Button::Dodge as u32;
 const IFRAME: u32 = 1 << PlayerFlag::IFrame as u32;
 
 fn usage() -> ! {
-    eprintln!("usage: fake-peer <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always] [--walk DEG] [--buttons MASK]");
+    eprintln!("usage: fake-peer <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always] [--walk DEG] [--buttons MASK] [--stance N] [--weapon ID]");
     std::process::exit(2);
 }
 
@@ -134,6 +134,10 @@ struct FakeSky {
     walk: Option<f32>,
     /// `--buttons`: InputState.buttons mask pulsed instead of Dodge (v8 ER buttons, e.g. 2 = Attack), sent with BridgeOn.
     buttons: Option<u32>,
+    /// `--stance`: InputState.stance (0 unarmed, 1 one-handed, 2 two-handed).
+    stance: u32,
+    /// `--weapon`: InputState.er_weapon (v10, ER weapon id with level; 0 = ER's own).
+    weapon: i32,
 }
 
 impl FakeSky {
@@ -160,7 +164,7 @@ impl FakeSky {
         }
         let mask = self.buttons.unwrap_or(DODGE);
         let flags = if self.buttons.is_some() { 1 << InputFlag::BridgeOn as u32 } else { 0 };
-        self.writer.write(&InputState { frame, time_ms: now, flags, buttons: if held { mask } else { 0 }, ..Default::default() });
+        self.writer.write(&InputState { frame, time_ms: now, flags, buttons: if held { mask } else { 0 }, stance: self.stance, er_weapon: self.weapon, ..Default::default() });
         self.watch.update(log, self.reader.read(), connected, now);
     }
 }
@@ -326,12 +330,16 @@ fn main() {
     let (mut seconds, mut bye, mut region, mut dodge_every, mut pose_always) = (None, true, REGION_NAME.to_string(), 4.0, false);
     let mut walk = None;
     let mut buttons = None;
+    let mut stance = 0;
+    let mut weapon = 0;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--seconds" => seconds = args.next().and_then(|s| s.parse::<f64>().ok()).or_else(|| usage()),
             "--no-bye" => bye = false,
             "--pose-always" => pose_always = true,
             "--walk" => walk = Some(args.next().and_then(|s| s.parse::<f32>().ok()).unwrap_or_else(|| usage())),
+            "--weapon" => weapon = args.next().and_then(|s| s.parse::<i32>().ok()).unwrap_or_else(|| usage()),
+            "--stance" => stance = args.next().and_then(|s| s.parse::<u32>().ok()).unwrap_or_else(|| usage()),
             "--buttons" => buttons = Some(args.next().and_then(|s| s.parse::<u32>().ok()).unwrap_or_else(|| usage())),
             "--region" => region = args.next().unwrap_or_else(|| usage()),
             "--dodge-every" => dodge_every = args.next().and_then(|s| s.parse::<f64>().ok()).unwrap_or_else(|| usage()),
@@ -385,6 +393,8 @@ fn main() {
                     watch: PlayerWatch::default(),
                     walk,
                     buttons,
+                    stance,
+                    weapon,
                 }),
                 Side::EldenRing => Role::Er(FakeEr {
                     reader: SlotReader::new(r.clone(), OFF_SLOT_INPUT),

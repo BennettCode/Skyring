@@ -14,6 +14,7 @@
 #include "hooks/PlayerUpdate.h"
 #include "hooks/ControllerVelocity.h"
 #include "bridge/Combat.h"
+#include "bridge/WeaponMap.h"
 #include "hooks/AttackSwallow.h"
 #include "hooks/MoveSwallow.h"
 #include "hooks/PlayerHit.h"
@@ -120,6 +121,7 @@ namespace sxer::bridge
 			bool heldInLoco = false;  // this Sprint hold began while ER drove locomotion: it's ER's sprint to the end
 			bool inCombat = false;
 			std::uint32_t stance = ~0u;
+			std::int32_t erWeapon = -1;
 			bool erInCombat = false;
 			input::Move move;
 			std::vector<float> frameMs;
@@ -296,6 +298,7 @@ namespace sxer::bridge
 		hooks::InstallPlayerHit();
 		hooks::InstallAttackSwallow();
 		combat::LoadConfig();
+		weapons::LoadTable();
 		input::Install();
 		SKSE::log::info("[core] hooks installed: PlayerCharacter::Update (vfunc 0xAD; ER pose applier) → InputState/PlayerState slots, SprintHandler::CanProcess "
 		                "(vfunc 0x1, vanilla sprint off while bridged), MovementHandler::CanProcess (vfunc 0x1, keys off during a dodge), bhkCharProxyController::SetLinearVelocityImpl (vfunc 0x7, ER roll velocity), input sink (Sprint → Dodge, movement keys → move stick, F10 toggle)");
@@ -409,6 +412,13 @@ namespace sxer::bridge
 			SKSE::log::info("[combat] stance {} frame={}", kNames[std::min<std::uint32_t>(stance, 2)], frame);
 		}
 		state.stance = stance;
+		// P5 step 2: the Skyrim weapon picks the ER weapon (moveset + attack rating), only while it is drawn.
+		weapons::Kind kind = weapons::Kind::kNone;
+		state.er_weapon = stance != static_cast<std::uint32_t>(proto::Stance::Unarmed) ? weapons::ForPlayer(a_player, &kind) : 0;
+		if (state.er_weapon != f.erWeapon) {
+			f.erWeapon = state.er_weapon;
+			SKSE::log::info("[weapons] Skyrim {} → ER weapon {} frame={}", weapons::Name(kind), state.er_weapon, frame);
+		}
 		f.input->Write(state);
 		SampleCoords(f, a_player, frame, move);
 		f.watch.Update(f.player->Read(), connected, now);

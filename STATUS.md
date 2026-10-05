@@ -13,7 +13,7 @@ every frame and Skyrim follows its virtual position, so ER walls no longer short
 Step 5 done by pose streaming: ER's roll animation plays on the Skyrim player (`docs/POSE-PLAN.md`).
 Step 6 done (2026-10-05): Skyrim's stamina bar shows ER's stamina share (`skse/src/bridge/Stamina.cpp`).
 Step 7 done for melee (2026-10-05): NPC melee hits during ER's roll i-frames are dropped (`skse/src/hooks/PlayerHit.cpp`); arrows/spells → P5.
-**P5 in progress** (`docs/P5-PLAN.md`): step 1 done (2026-10-05): ER swings hit Skyrim NPCs (hit window from ER memory, ER attack rating, ER-like damage, poise stagger; protocol v9).
+**P5 in progress** (`docs/P5-PLAN.md`): step 1 done (2026-10-05): ER swings hit Skyrim NPCs (hit window from ER memory, ER attack rating, ER-like damage, poise stagger; protocol v9). Step 2 done: the Skyrim weapon kind picks the ER weapon/moveset, material → upgrade level (protocol v10).
 Step 8 done (2026-10-05): DualSense with Elden Ring's layout (plugin reads it over HID; protocol v8 forwards R1/R2/L1/L2 to ER; ER ignores the physical pad while bridged).
 LOCO-PLAN (`docs/LOCO-PLAN.md`): stage A (smooth, faithful rolls) and stage B (ER drives walking, running, sprinting and rolling while
 the bridge is on, protocol v7) done. The run/sprint pose was checked bone by bone against ER and fixed (COM yaw, spine conjugation;
@@ -41,9 +41,9 @@ window come back every frame; coordinate conversion measured (`protocol/src/coor
   Continue each run (no warp in P3). The user tests with a DualSense (PS5) over USB in both games.
 
 ## Next 3 steps (P5, `docs/P5-PLAN.md`)
-1. User playtest of P5 step 1 with the pad (bandits/wolves): does the hit count feel ER-like? Tune `fDamageScale`, reach, motion values.
-2. P5 step 2: Skyrim weapon type → ER weapon (moveset + attack rating).
-3. P5 step 3: NPC hits on the player go through ER's HP and defenses. (Also open: P4 accept playtest; ER freezes for seconds at load-in.)
+1. User playtest with the pad: hit sound, hit count, each weapon's moveset (dagger, sword, axe, mace, greatsword, battleaxe, warhammer).
+2. P5 step 3: NPC hits on the player go through ER's HP and defenses.
+3. AR check against ER's own status screen; poise/stance tuning. (Also open: P4 accept playtest; ER freezes for seconds at load-in.)
 
 ## Handoff notes
 **LOCO-PLAN stage B done, agent-tested (2026-10-05).** ER drives walking/running/sprinting/rolling while the bridge is on
