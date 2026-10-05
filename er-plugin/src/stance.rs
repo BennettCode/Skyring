@@ -199,6 +199,8 @@ pub struct StanceSync {
     /// The save's Arrow1/Bolt1 equip (restored when we stop writing ammo) and the ammo we equipped last.
     saved_ammo: Option<[AmmoSlot; 2]>,
     ammo_applied: Option<u32>,
+    /// ER's count of the ammo we equipped, kept there while we use it (each ER shot uses one; Skyrim's arrows are the real resource).
+    ammo_keep: u32,
 }
 
 /// One ammo slot's four equip fields (see `equip_ammo`).
@@ -250,7 +252,7 @@ fn any_owned_ammo(player: &PlayerIns, bolts: bool) -> Option<u32> {
 
 impl StanceSync {
     pub fn new() -> Self {
-        Self { reader: None, last_input: None, spawned_at: None, saved: None, applied: None, override_done: false, last_line: String::new(), saved_right: None, saved_ids: None, weapon_applied: None, missing: 0, saved_ammo: None, ammo_applied: None }
+        Self { reader: None, last_input: None, spawned_at: None, saved: None, applied: None, override_done: false, last_line: String::new(), saved_right: None, saved_ids: None, weapon_applied: None, missing: 0, saved_ammo: None, ammo_applied: None, ammo_keep: 0 }
     }
 
     pub fn run(&mut self) {
@@ -385,7 +387,10 @@ impl StanceSync {
                 write_ammo_slot(player, 7, saved[1]);
             }
             match want_ammo.map(|id| (id, equip_ammo(player, id))) {
-                Some((id, Ok((slot, pos, qty)))) => crate::info!("stance", "frame={frame} ammo: ER {id} equipped in slot {slot} (inventory [{pos}], {qty} owned)"),
+                Some((id, Ok((slot, pos, qty)))) => {
+                    self.ammo_keep = qty.max(1);
+                    crate::info!("stance", "frame={frame} ammo: ER {id} equipped in slot {slot} (inventory [{pos}], {qty} owned, kept at that)");
+                }
                 Some((id, Err(e))) => crate::warn!("stance", "frame={frame} ammo {id}: {e}"),
                 None if self.ammo_applied.is_some() => crate::info!("stance", "frame={frame} ammo: the save's own back"),
                 None => {
@@ -395,6 +400,15 @@ impl StanceSync {
                 }
             }
             self.ammo_applied = want_ammo;
+        }
+        if let Some(id) = self.ammo_applied {
+            // SAFETY: as read_ammo.
+            let pgd = unsafe { player.player_game_data.as_mut() };
+            if let Some(e) = pgd.equipment.equip_inventory_data.items_data.items_mut().find(|e| e.item_id.param_id() == id)
+                && e.quantity < self.ammo_keep
+            {
+                e.quantity = self.ammo_keep;
+            }
         }
     }
 }

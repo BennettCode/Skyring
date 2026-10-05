@@ -37,6 +37,13 @@ pub struct Snapshot {
 ///
 /// # Safety
 /// Main thread only (a task callback): the game mutates this object every frame.
+/// The ER player is on Torrent (mounting or mounted: CSChrRideModule). Never asked for by Skyrim (it happened when ER read the pad in a
+/// Skyrim menu, 2026-10-05; the save then loads mounted); its pose and movement must not reach Skyrim's player.
+pub fn is_riding(player: &PlayerIns) -> bool {
+    let ride = &player.chr_ins.modules.ride;
+    ride.is_mounted || ride.is_mounting
+}
+
 pub unsafe fn main_player() -> Option<&'static mut PlayerIns> {
     unsafe { WorldChrMan::instance_mut() }.ok()?.main_player.as_deref_mut()
 }

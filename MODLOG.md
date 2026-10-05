@@ -4,6 +4,19 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: Elden Ring stays off your pad in Skyrim menus; no more "horse" (Torrent) on the Skyrim body
+- **User report:** "with a sword I go through the map and it's like I'm on a horse; the bow doesn't work properly".
+- **Cause (logs):** ER blanked the physical DualSense only while Skyrim's input was fresh. In Skyrim's inventory (paused, stale input) ER read
+  the pad for 4 s and a menu press summoned Torrent: riding anims 100000/101004/120100, pose pelvis 0.84 m down (riding posture), ER's
+  position (and so Skyrim's) followed the horse through the terrain. The ER save then loaded mounted, so later bow shots were mounted
+  shots (44039700) and every swing looked like riding.
+- **Fixed:** ER blanks the pad whenever Skyrim is connected (`remote.rs`); while ER is on Torrent (`CSChrRideModule.is_mounted/
+  is_mounting`, `game::is_riding`) its pose isn't streamed and its movement isn't passed to Skyrim (`pose_stream.rs`, `park.rs`), with a
+  warning. ER keeps its ammo count while we use it (`stance.rs`; each ER shot used one of its 20 arrows).
+- **Tested:** run-tests green; both games, Skyrim console open 5 s: ER log stays "physical pad blanked"; mounted ER: "on Torrent ...
+  ignored" warnings, Skyrim not moved. **Not solved:** dismounting from code (Event Action key, E, X: no effect; action_requests writes
+  are rebuilt by the engine); the user dismounts once by hand. Ammo top-up and the bow animation recheck are pending (needs ER on foot).
+
 ## 2026-10-05: Bows draw and shoot with Elden Ring's animation, protocol v12
 - **User request:** "Bows also need an animation" (a Skyrim bow made ER swing its own melee weapon, no arrow).
 - **Probe:** ER fires only owned ammo equipped the full way (param id + gaitem handle + inventory index + equip entry; a param id alone

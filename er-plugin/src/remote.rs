@@ -76,11 +76,13 @@ pub struct DodgeFromSkyrim {
     buttons: u32,
     /// The physical pad is being blanked (bridge on, input fresh); logged on change.
     blanking: bool,
+    /// Frames ER has been on Torrent (dismount pulses).
+    riding_frames: u32,
 }
 
 impl DodgeFromSkyrim {
     pub fn new() -> Self {
-        Self { reader: None, last_input: None, fresh: false, held: false, held_frames: 0, since_release: u32::MAX, long_press: false, moving: (0.0, 0.0), raw: (0.0, 0.0), buttons: 0, blanking: false }
+        Self { reader: None, last_input: None, fresh: false, held: false, held_frames: 0, since_release: u32::MAX, long_press: false, moving: (0.0, 0.0), raw: (0.0, 0.0), buttons: 0, blanking: false, riding_frames: 0 }
     }
 
     pub fn run(&mut self) {
@@ -109,8 +111,10 @@ impl DodgeFromSkyrim {
         }
 
         let frame = bridge::FRAMES.load(Ordering::Relaxed);
-        // Skyrim owns the controls while the bridge is on: blank what ER read from the physical pad this frame, then write ours.
-        let blank = is_fresh && input.is_some_and(|i| i.flags & BRIDGE_ON != 0);
+        // Skyrim owns the controls whenever it is connected: blank what ER read from the physical pad this frame, then write ours. Not only
+        // while the input is fresh: Skyrim pauses in menus (its input goes stale) and the player keeps pressing buttons there; ER reading
+        // them summoned Torrent from Skyrim's inventory (2026-10-05). ER alone (no Skyrim) reads its pad as usual.
+        let blank = connected;
         // SAFETY: main thread, inject group (after PadStep).
         let cleared = if blank { unsafe { pad::clear_virtual() } } else { None };
         if let Some((bits, analog)) = cleared {
@@ -126,6 +130,20 @@ impl DodgeFromSkyrim {
                 if blank { "blanked: only Skyrim's input reaches ER" } else { "read by ER again (bridge off or input stale)" },
                 cleared.map_or("no pad yet".into(), |(slots, analog)| format!("{slots} key slots, {analog} analog values"))
             );
+        }
+        // ER on Torrent (never Skyrim's doing since the pad is blanked while connected): its pose and movement are kept from Skyrim
+        // (pose_stream.rs, park.rs). Dismounting from code isn't solved (Event Action didn't; action_requests writes are rebuilt).
+        if connected
+            && let Some(p) = unsafe { game::main_player() }
+            && game::is_riding(p)
+        {
+            self.riding_frames += 1;
+            if self.riding_frames == 1 {
+                crate::warn!("input", "frame={frame} ER is on Torrent: its pose and movement are ignored until it dismounts");
+            }
+        } else if self.riding_frames > 0 {
+            crate::info!("input", "frame={frame} ER off Torrent after {} frames", self.riding_frames);
+            self.riding_frames = 0;
         }
         // Skyrim's combat state → ER's (applied in ChrIns_AILogic by combat::MirrorCombat). Bridge off or stale = ER decides itself.
         let combat = match input {

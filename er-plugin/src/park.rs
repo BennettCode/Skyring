@@ -40,6 +40,8 @@ struct Dodge {
 }
 
 pub struct Park {
+    /// ER is in a riding anim (game::is_foreign_anim): logged once per ride.
+    riding: bool,
     pin: bool,
     /// The spot (pinned) or last frame's position (not pinned).
     anchor: Option<HavokPosition>,
@@ -51,7 +53,7 @@ impl Park {
     pub fn new() -> Self {
         let pin = config::get().pin;
         crate::info!("park", "{}", if pin { "pin on: the character stays on its spot, Skyrim gets its virtual position" } else { "pin OFF (pin=0): the character moves freely" });
-        Self { pin, anchor: None, virt: [0.0; 3], dodge: None }
+        Self { pin, anchor: None, virt: [0.0; 3], dodge: None, riding: false }
     }
 
     pub fn run(&mut self) {
@@ -63,6 +65,7 @@ impl Park {
             return;
         };
         let anim = game::snapshot(player).anim_id;
+        let riding = game::is_riding(player);
         let frame = bridge::FRAMES.load(Ordering::Relaxed);
         let physics = &mut player.chr_ins.modules.physics;
         let pos = physics.position;
@@ -83,7 +86,19 @@ impl Park {
                     self.anchor = Some(pos);
                     self.dodge = None;
                     0.0
+                } else if riding {
+                    // Riding (never asked for): Skyrim must not follow the horse. Take the new place as the spot, virtual position unchanged.
+                    if !self.riding {
+                        self.riding = true;
+                        crate::warn!("park", "frame={frame} ER is on Torrent (anim {anim}): its movement is not passed to Skyrim");
+                    }
+                    self.anchor = Some(pos);
+                    0.0
                 } else {
+                    if self.riding {
+                        self.riding = false;
+                        crate::info!("park", "frame={frame} ER off the horse (anim {anim})");
+                    }
                     self.virt = [self.virt[0] + dx, pos.1, self.virt[2] + dz];
                     if !self.pin {
                         self.anchor = Some(pos);

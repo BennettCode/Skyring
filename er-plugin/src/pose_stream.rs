@@ -271,7 +271,8 @@ impl PoseStream {
             }
             pose.yaw = snap.yaw;
             // Dodges always; everything else while ER drives locomotion (LOCO-PLAN stage B).
-            if self.rig.is_some() && (park::is_dodge_anim(anim) || remote::LOCOMOTE.load(std::sync::atomic::Ordering::Relaxed)) {
+            // Never a riding pose (game::is_riding): Skyrim's player would sit on an invisible horse.
+            if self.rig.is_some() && !game::is_riding(player) && (park::is_dodge_anim(anim) || remote::LOCOMOTE.load(std::sync::atomic::Ordering::Relaxed)) {
                 pose.flags = 1 << PoseFlag::Active as u32;
             }
         }
