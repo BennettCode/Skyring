@@ -4,6 +4,15 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: Your health is your Elden Ring HP, protocol v11 (P5 step 3)
+- **Changed:** protocol v11 (InputState `hurt_total` f64 running share + `respawn_seq`; PlayerFlag `Downed`). Skyrim `bridge/Health.cpp`
+  (adapted from SkyCraft BridgePlayerDamage/HitSink/KillPlayer, MIT): every health change refunded and forwarded as a share of max
+  health, bar = ER's HP share, ER i-frames block any damage, Downed → kill, save load → respawn. ER `er-plugin/src/health.rs`: share →
+  ER HP (held at 1, Downed), sub-HP remainder carried, baseline kept across Skyrim pauses (first version lost damage taken in the console).
+- **Tested:** run-tests green (+ ER unit test); both games: wolf bites 0.5–0.8% → ER 1450 → 1443 → 1431…; console damage 100 (25%) →
+  ER 1088, heal 50 → 1269, bar 300 → 350/400; fatal damage → Skyrim death (the bool essential flag doesn't stop it) → reload → ER refilled
+  to 1450. Not tested: arrows/spells during a roll (i-frame block for non-melee), user feel.
+
 ## 2026-10-05: Your Skyrim weapon picks the Elden Ring weapon, protocol v10 (P5 step 2)
 - **Probe:** an ER weapon id written into the right-hand ChrAsm slots (both copies) switches the moveset and attack rating, no equip call
   (`-ErWeapon` research switch; fake-peer `--stance` / `--weapon`). The per-weapon probe sessions first failed to build (a v10 edit landed

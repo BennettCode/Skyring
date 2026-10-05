@@ -1,5 +1,6 @@
 #include "bridge/AutoLoad.h"
 #include "bridge/Bridge.h"
+#include "bridge/Health.h"
 #include "hooks/XInput.h"
 
 namespace
@@ -33,9 +34,11 @@ namespace
 			break;
 		case SKSE::MessagingInterface::kNewGame:
 			SKSE::log::info("[core] new game started");
+			sxer::health::OnLoad();
 			break;
 		case SKSE::MessagingInterface::kPostLoadGame:
 			SKSE::log::info("[core] save loaded (success={})", static_cast<bool>(a_msg->data));
+			sxer::health::OnLoad();
 			break;
 		default:
 			break;

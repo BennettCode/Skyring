@@ -190,6 +190,14 @@ before use (a missing id makes CommonLib abort the game at load).
   from the shown body's heading. Ids: 37335 DoDamage, 38561 StartCombat, 37334 GetLevel, 37439 GetBoundRadius, 37275 IsGhost,
   400315 ProcessLists, 401262/36215 impact effect.
 
+## The player's health as ER's HP (P5 step 3, 2026-10-05)
+- Per frame: health below the value we last set = damage of any source (hits, arrows, spells, poison, falls, console); above = healing
+  (potions, spells, regen). Refund via the damage modifier (ModActorValue kDamage) and set the bar to ER's share.
+- Skyrim pauses in the console/menus: the link input goes stale for ER, so the running total must survive staleness (reset only on a
+  new connection), or damage taken during the pause is lost (seen: 90 damage lost before the fix).
+- `boolFlags.kEssential` on the player did **not** stop `player.damageactorvalue health 2000` from killing. Skyrim death → automatic
+  reload → `kPostLoadGame` → respawn. KillImpl = vfunc 0x110 (AE), KillImmediate = 37735.
+
 ## Fingers and toes are not nodes (2026-10-05)
 - The player's third-person tree has 51 nodes and no finger or toe nodes. The skinned hands (36 bones), feet (6) and body (24) still skin
   fingers and toes, through `NiSkinInstance::boneWorldTransforms` entries that point **outside the tree**: loose world transforms the

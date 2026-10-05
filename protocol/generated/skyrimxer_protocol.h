@@ -7,9 +7,9 @@
 
 namespace sxer::proto
 {
-	inline constexpr std::uint32_t kVersion = 10;
+	inline constexpr std::uint32_t kVersion = 11;
 	inline constexpr std::uint32_t kMagic = 0x52455853;  // "SXER" as little-endian bytes
-	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v10";
+	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v11";
 
 	// Peer counts as gone when its heartbeat is older than this.
 	inline constexpr std::uint64_t kHeartbeatTimeoutMs = 2000;
@@ -102,6 +102,7 @@ namespace sxer::proto
 		PoiseBroken = 4,
 		InCombat = 5,  // ER's own combat state (CSChrDataModule +0x19a bit 0x40 clear): dodges cost stamina.
 		MoveCancel = 6,  // ER's TAE movement-cancel window (CANCEL_LS_MOVEMENT): movement may end the current animation.
+		Downed = 8,  // v11: a hit would have taken ER's HP to 0 (held at 1 until respawn_seq changes): Skyrim kills the player.
 		AttackActive = 7,  // v9: the swing's hit window is open (CSChrActionFlagModule action_modifiers_flags bit 9 or 10, or +0x1d0 != 0; 2-3 frames mid-sweep, docs/research/elden-ring-combat.md). Skyrim lands the hit once per attack_seq.
 	};
 
@@ -230,10 +231,12 @@ namespace sxer::proto
 		float cam_yaw;  // With Locomote: where Skyrim looks, as a yaw in ER's world (Skyrim camera yaw minus the mode's world offset W), radians. ER turns the stick by cam_yaw minus its own camera yaw.
 		std::uint32_t stance;  // Stance (Unarmed / OneHanded / TwoHanded).
 		std::int32_t er_weapon;  // v10: ER weapon param id (with upgrade level) for the Skyrim weapon in the right hand (bridge/WeaponMap); 0 = ER keeps its own. ER writes it into the right-hand slot it uses.
-		std::uint32_t _pad1;
+		std::uint32_t respawn_seq;  // v11: +1 when Skyrim loads a save or starts a new game: ER refills its HP and clears Downed.
+		double hurt_total;  // v11: running sum of the Skyrim player's health changes as a share of Skyrim max health (+ damage, - healing). ER applies the change since its last read to its own HP (a running total, so a skipped write loses nothing).
+		std::uint64_t _pad2;
 	};
 	static_assert(std::is_trivially_copyable_v<InputState> && std::is_standard_layout_v<InputState>);
-	static_assert(sizeof(InputState) == 56);
+	static_assert(sizeof(InputState) == 72);
 	static_assert(alignof(InputState) == 8);
 	static_assert(offsetof(InputState, seq) == 0);
 	static_assert(offsetof(InputState, _pad0) == 4);
@@ -246,7 +249,9 @@ namespace sxer::proto
 	static_assert(offsetof(InputState, cam_yaw) == 40);
 	static_assert(offsetof(InputState, stance) == 44);
 	static_assert(offsetof(InputState, er_weapon) == 48);
-	static_assert(offsetof(InputState, _pad1) == 52);
+	static_assert(offsetof(InputState, respawn_seq) == 52);
+	static_assert(offsetof(InputState, hurt_total) == 56);
+	static_assert(offsetof(InputState, _pad2) == 64);
 
 	// At OFF_SLOT_PLAYER. Written by ER's game thread every frame, read by Skyrim's.
 	struct PlayerState

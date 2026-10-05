@@ -12,6 +12,7 @@ mod combat;
 mod config;
 mod focus;
 mod game;
+mod health;
 mod log;
 mod pad;
 mod park;
@@ -123,6 +124,9 @@ fn init(module: usize) {
     ));
     let mut stance = stance::StanceSync::new();
     std::mem::forget(task.run_recurring(move |_: &FD4TaskData| stance.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
+    // P5 step 3: Skyrim's hits on the player land on ER's HP.
+    let mut health = health::HealthSync::new();
+    std::mem::forget(task.run_recurring(move |_: &FD4TaskData| health.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
     let mut pose_stream = pose_stream::PoseStream::new();
     std::mem::forget(task.run_recurring(move |_: &FD4TaskData| pose_stream.run(), CSTaskGroupIndex::ChrIns_PostPhysics));
     info!("core", "PoseState publisher in ChrIns_PostPhysics");

@@ -24,7 +24,15 @@ movesets, ER's damage. Authority (DESIGN §3): **ER calculates, Skyrim applies.*
   ER `stance.rs` writes it into the right slot the stance uses (never mid-swing/dodge; slot choice from the save's own ids), and puts the
   save's ids back when the bridge lets go.
 
+## Step 3: enemy hits on you go to your ER HP (done 2026-10-05)
+- User choices: Skyrim's armour decides the amount (same share of health as in Skyrim, applied to ER HP); ER HP 0 = Skyrim death, the
+  hidden ER character held at 1 HP and refilled when Skyrim loads a save.
+- **Protocol v11:** InputState `hurt_total` (f64 running share) + `respawn_seq`; PlayerFlag `Downed`.
+- Skyrim `bridge/Health.cpp` (SkyCraft BridgePlayerDamage/HitSink/KillPlayer pattern): every health change of the player (any source)
+  is refunded and forwarded; the bar shows ER's HP share; ER i-frames block damage of any kind; Downed → KillImpl/KillImmediate.
+  ER `er-plugin/src/health.rs`: applies the share to ER HP (sub-HP remainders carried), keeps the baseline across Skyrim pauses.
+- Found: the bool essential flag doesn't stop a hit bigger than the player's remaining health from killing in Skyrim directly. That
+  outcome matches anyway (the bar equals ER's share, so ER would reach 0 too); the reload refills ER.
+
 ## Next steps
-3. **NPC hits on the player go to ER:** ER's HP and defenses decide, Skyrim's HP bar mirrors ER's (`hooks/PlayerHit.cpp` already sees
-   every melee hit on the player).
 4. Later: exact AtkParam rows (hook ER's attack-param lookup), status buildup, guard counters, ranged/magic.

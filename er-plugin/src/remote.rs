@@ -326,6 +326,9 @@ pub fn publish_state(from_frame_begin: bool) {
         if swing.active {
             state.flags |= flag(PlayerFlag::AttackActive);
         }
+        if crate::health::DOWNED.load(Ordering::Relaxed) {
+            state.flags |= flag(PlayerFlag::Downed);
+        }
         state.attack_seq = swing.seq;
         [state.atk_phys, state.atk_mag, state.atk_fire, state.atk_thun, state.atk_holy] = swing.atk;
         state.atk_poise = swing.poise;

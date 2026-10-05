@@ -14,6 +14,7 @@
 #include "hooks/PlayerUpdate.h"
 #include "hooks/ControllerVelocity.h"
 #include "bridge/Combat.h"
+#include "bridge/Health.h"
 #include "bridge/WeaponMap.h"
 #include "hooks/AttackSwallow.h"
 #include "hooks/MoveSwallow.h"
@@ -299,6 +300,7 @@ namespace sxer::bridge
 		hooks::InstallAttackSwallow();
 		combat::LoadConfig();
 		weapons::LoadTable();
+		health::Install();
 		input::Install();
 		SKSE::log::info("[core] hooks installed: PlayerCharacter::Update (vfunc 0xAD; ER pose applier) → InputState/PlayerState slots, SprintHandler::CanProcess "
 		                "(vfunc 0x1, vanilla sprint off while bridged), MovementHandler::CanProcess (vfunc 0x1, keys off during a dodge), bhkCharProxyController::SetLinearVelocityImpl (vfunc 0x7, ER roll velocity), input sink (Sprint → Dodge, movement keys → move stick, F10 toggle)");
@@ -393,6 +395,8 @@ namespace sxer::bridge
 				SKSE::log::info("[combat] ER combat state: {} (stamina={}) frame={}", er ? "IN COMBAT" : "calm", s->stamina, frame);
 			}
 		}
+		// P5 step 3: ER's HP is the player's health (last frame's PlayerState; the hit goes out in this frame's InputState).
+		health::Update(a_player, on && connected ? last : std::optional<proto::PlayerState>{}, frame);
 		proto::InputState state{};
 		state.frame = frame;
 		state.time_ms = now;
@@ -412,6 +416,8 @@ namespace sxer::bridge
 			SKSE::log::info("[combat] stance {} frame={}", kNames[std::min<std::uint32_t>(stance, 2)], frame);
 		}
 		state.stance = stance;
+		state.hurt_total = health::HurtTotal();
+		state.respawn_seq = health::RespawnSeq();
 		// P5 step 2: the Skyrim weapon picks the ER weapon (moveset + attack rating), only while it is drawn.
 		weapons::Kind kind = weapons::Kind::kNone;
 		state.er_weapon = stance != static_cast<std::uint32_t>(proto::Stance::Unarmed) ? weapons::ForPlayer(a_player, &kind) : 0;

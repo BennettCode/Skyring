@@ -13,9 +13,9 @@
 # All values are little-endian (both games are x64 Windows).
 
 [protocol]
-version = 10
+version = 11
 magic = "SXER"                      # stored as a little-endian u32: bytes 'S' 'X' 'E' 'R'
-region_name = 'Local\SkyrimXER_v10'  # must end in _v<version>
+region_name = 'Local\SkyrimXER_v11'  # must end in _v<version>
 
 [constants]
 HEARTBEAT_TIMEOUT_MS = { type = "u64", value = 2000, doc = "Peer counts as gone when its heartbeat is older than this." }
@@ -103,6 +103,7 @@ values = [
   { name = "PoiseBroken", value = 4 },
   { name = "InCombat", value = 5, doc = "ER's own combat state (CSChrDataModule +0x19a bit 0x40 clear): dodges cost stamina." },
   { name = "MoveCancel", value = 6, doc = "ER's TAE movement-cancel window (CANCEL_LS_MOVEMENT): movement may end the current animation." },
+  { name = "Downed", value = 8, doc = "v11: a hit would have taken ER's HP to 0 (held at 1 until respawn_seq changes): Skyrim kills the player." },
   { name = "AttackActive", value = 7, doc = "v9: the swing's hit window is open (CSChrActionFlagModule action_modifiers_flags bit 9 or 10, or +0x1d0 != 0; 2-3 frames mid-sweep, docs/research/elden-ring-combat.md). Skyrim lands the hit once per attack_seq." },
 ]
 
@@ -208,7 +209,7 @@ fields = [
 
 [[structs]]
 name = "InputState"
-size = 56
+size = 72
 doc = "At OFF_SLOT_INPUT. Written by Skyrim's game thread every frame, read by ER's."
 fields = [
   { name = "seq", type = "u32", doc = "Seqlock counter (odd = being written)." },
@@ -222,7 +223,9 @@ fields = [
   { name = "cam_yaw", type = "f32", doc = "With Locomote: where Skyrim looks, as a yaw in ER's world (Skyrim camera yaw minus the mode's world offset W), radians. ER turns the stick by cam_yaw minus its own camera yaw." },
   { name = "stance", type = "u32", doc = "Stance (Unarmed / OneHanded / TwoHanded)." },
   { name = "er_weapon", type = "i32", doc = "v10: ER weapon param id (with upgrade level) for the Skyrim weapon in the right hand (bridge/WeaponMap); 0 = ER keeps its own. ER writes it into the right-hand slot it uses." },
-  { name = "_pad1", type = "u32" },
+  { name = "respawn_seq", type = "u32", doc = "v11: +1 when Skyrim loads a save or starts a new game: ER refills its HP and clears Downed." },
+  { name = "hurt_total", type = "f64", doc = "v11: running sum of the Skyrim player's health changes as a share of Skyrim max health (+ damage, - healing). ER applies the change since its last read to its own HP (a running total, so a skipped write loses nothing)." },
+  { name = "_pad2", type = "u64" },
 ]
 
 [[structs]]
