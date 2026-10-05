@@ -4,6 +4,15 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: ER locomotion probe (LOCO-PLAN stage B1)
+- **Changed:** `game::camera_yaw()` (ER camera view matrix → yaw in the player's convention). `actions::LocoTest`, a scripted
+  stick/Dodge self-test (`dev.ps1 -ErSelfTest walk|sprint`) that logs speed, yaw, camera yaw, anim and stamina.
+- **Tested** (ER only, hidden, pinned): stick 0.6 = walk 1.5 m/s, 1.0 = run 3.93 m/s, below ~0.3 nothing. Stick right/back = camera
+  +90°/+180° (sign confirmed). Dodge held while running = sprint 5.95 m/s (−10 stamina/s, combat forced); tap = roll back into the
+  run. The hidden camera never turns by itself. Real position stayed on the spot. Notes: `docs/research/elden-ring-input.md`.
+- **Plan correction:** Skyrim ↔ ER facing uses a world offset fixed when the mode starts, not a per-frame camera offset (that
+  would spin the body with the mouse). Next: B2 (protocol v7, ER input in the mode).
+
 ## 2026-10-05: smooth roll movement (LOCO-PLAN stage A done)
 - **Problem:** the player stalled on 22–27 of ~60 roll frames. `Actor::ApplyCurrent` refuses a new current on alternate frames.
 - **Probe** (plan mode, one key script, 5 dodges per mover; numbers in `docs/research/skyrim-hooks.md`):

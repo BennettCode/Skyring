@@ -89,7 +89,11 @@ fn init(module: usize) {
     std::mem::forget(task.run_recurring(|_: &FD4TaskData| window::spoof_focus(), CSTaskGroupIndex::WorldChrMan_Prepare));
 
     let (group, group_name) = actions::inject_group();
-    if actions::selftest_enabled() {
+    if actions::locotest_enabled() {
+        let mut test = actions::LocoTest::new();
+        std::mem::forget(task.run_recurring(move |_: &FD4TaskData| test.run(), group));
+        info!("loco-test", "SELFTEST {}: locomotion script in {group_name} (Skyrim input ignored)", config::get().selftest);
+    } else if actions::selftest_enabled() {
         let mut injector = actions::Injector::new();
         std::mem::forget(task.run_recurring(move |_: &FD4TaskData| injector.run(), group));
         info!("action", "SELFTEST dodge: injector in {group_name} (Skyrim input ignored)");

@@ -149,6 +149,146 @@ impl Injector {
     }
 }
 
+/// LOCO-PLAN stage B probe (`selftest=walk` / `selftest=sprint`): a fixed script of held stick values (and Dodge holds) on the virtual
+/// pad, no Skyrim involved. Every SAMPLE_EVERY frames it logs the speed of the virtual position (park.rs keeps the character pinned),
+/// the player's yaw, the camera's yaw and the anim id; each step ends with a `[loco-test] step` summary (mean speed of its second half).
+pub fn locotest_enabled() -> bool {
+    matches!(crate::config::get().selftest.as_str(), "walk" | "sprint")
+}
+
+/// (x right, y forward, Dodge: 0 = off, 1 = tap (press frame + LOCO_TAP_FRAMES), 2 = held, frames, name)
+type LocoStep = (f32, f32, u8, u32, &'static str);
+const LOCO_WALK: [LocoStep; 8] = [
+    (0.0, 0.0, 0, 60, "idle"),
+    (0.0, 0.3, 0, 150, "fwd 0.3"),
+    (0.0, 0.6, 0, 150, "fwd 0.6"),
+    (0.0, 1.0, 0, 150, "fwd 1.0"),
+    (0.0, 0.0, 0, 60, "stop"),
+    (1.0, 0.0, 0, 150, "right 1.0"),
+    (0.0, -1.0, 0, 150, "back 1.0"),
+    (0.0, 0.0, 0, 60, "stop"),
+];
+const LOCO_SPRINT: [LocoStep; 6] = [
+    (0.0, 0.0, 0, 60, "idle"),
+    (0.0, 1.0, 0, 90, "run"),
+    (0.0, 1.0, 1, 90, "run + dodge tap"),
+    (0.0, 1.0, 2, 240, "run + dodge held"),
+    (0.0, 1.0, 0, 60, "run after"),
+    (0.0, 0.0, 0, 90, "stop"),
+];
+const LOCO_TAP_FRAMES: u32 = 6;
+const LOCO_WAIT_FRAMES: u64 = 180;
+const SAMPLE_EVERY: u32 = 10;
+
+pub struct LocoTest {
+    in_world: u64,
+    step: usize,
+    step_frame: u32,
+    last_pos: Option<[f32; 3]>,
+    /// Second-half distance (m) and frames of the current step, for the summary.
+    dist: f32,
+    dist_frames: u32,
+    anims: Vec<i32>,
+    done: bool,
+}
+
+impl LocoTest {
+    pub fn new() -> Self {
+        Self { in_world: 0, step: 0, step_frame: 0, last_pos: None, dist: 0.0, dist_frames: 0, anims: Vec::new(), done: false }
+    }
+
+    fn script() -> &'static [LocoStep] {
+        if crate::config::get().selftest == "sprint" { &LOCO_SPRINT } else { &LOCO_WALK }
+    }
+
+    pub fn run(&mut self) {
+        // SAFETY: task callbacks run on the game's main thread.
+        let Some(player) = (unsafe { game::main_player() }) else {
+            self.in_world = 0;
+            return;
+        };
+        self.in_world += 1;
+        if self.in_world < LOCO_WAIT_FRAMES || self.done {
+            return;
+        }
+        let frame = crate::bridge::FRAMES.load(Ordering::Relaxed);
+        let script = Self::script();
+        let (x, y, dodge, frames, name) = script[self.step];
+        if self.step_frame == 0 {
+            let s = game::snapshot(player);
+            crate::info!("loco-test", "frame={frame} step {} \"{name}\": stick x={x} y={y} dodge={dodge} for {frames} frames; stamina={} anim={}", self.step, s.stamina, s.anim_id);
+            self.dist = 0.0;
+            self.dist_frames = 0;
+            self.anims.clear();
+        }
+        // SAFETY (pad calls): main thread, in the inject group (after PadStep, before the characters read input).
+        unsafe { pad::set_move(x, y) };
+        let (held, tapped) = match dodge {
+            1 => (self.step_frame <= LOCO_TAP_FRAMES, self.step_frame == 0),
+            2 => (true, self.step_frame == 0),
+            _ => (false, false),
+        };
+        unsafe {
+            pad::set_digital(UserInputKey::Backstep, held);
+            pad::set_digital(UserInputKey::BackstepTapped, tapped);
+        }
+        let s = game::snapshot(player);
+        if self.anims.last() != Some(&s.anim_id) {
+            self.anims.push(s.anim_id);
+        }
+        // Virtual position = last ChrIns_PostPhysics (park.rs): one frame behind, fine for speeds.
+        let pos = crate::park::virtual_pos();
+        if let (Some(p), Some(l)) = (pos, self.last_pos) {
+            let d = (p[0] - l[0]).hypot(p[2] - l[2]);
+            if d < 1.5 && self.step_frame >= frames / 2 {
+                self.dist += d;
+                self.dist_frames += 1;
+            }
+        }
+        if self.step_frame % SAMPLE_EVERY == 0 {
+            // SAFETY: main thread.
+            let cam = unsafe { game::camera_yaw() };
+            let rel = cam.map(|c| (s.yaw - c + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI);
+            let speed = match (pos, self.last_pos) {
+                (Some(p), Some(l)) => (p[0] - l[0]).hypot(p[2] - l[2]) * 60.0,
+                _ => 0.0,
+            };
+            crate::info!(
+                "loco-test",
+                "frame={frame} step {} +{} speed={speed:.2} m/s yaw={:.3} cam={} yaw-cam={} anim={} stamina={} real=({:.2},{:.2}) virt={}",
+                self.step,
+                self.step_frame,
+                s.yaw,
+                cam.map_or("none".into(), |c| format!("{c:.3}")),
+                rel.map_or("none".into(), |r| format!("{:.0}deg", r.to_degrees())),
+                s.anim_id,
+                s.stamina,
+                s.pos[0],
+                s.pos[2],
+                pos.map_or("none".into(), |p| format!("({:.2},{:.2})", p[0], p[2]))
+            );
+        }
+        self.last_pos = pos;
+        self.step_frame += 1;
+        if self.step_frame >= frames {
+            let mean = if self.dist_frames > 0 { self.dist / self.dist_frames as f32 * 60.0 } else { 0.0 };
+            crate::info!("loco-test", "frame={frame} step {} \"{name}\" done: mean speed (2nd half) {mean:.2} m/s, anims {:?}, stamina={}", self.step, self.anims, s.stamina);
+            self.step += 1;
+            self.step_frame = 0;
+            if self.step >= script.len() {
+                self.done = true;
+                // SAFETY: main thread. Release everything.
+                unsafe {
+                    pad::set_move(0.0, 0.0);
+                    pad::set_digital(UserInputKey::Backstep, false);
+                    pad::set_digital(UserInputKey::BackstepTapped, false);
+                }
+                crate::info!("loco-test", "frame={frame} script done");
+            }
+        }
+    }
+}
+
 /// Runs in ChrIns_PostPhysics (after behavior): logs what the injected press did, and which probed words changed.
 pub struct Watcher {
     last: Option<game::Snapshot>,

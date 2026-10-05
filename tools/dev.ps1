@@ -28,7 +28,7 @@ param(
     [int]$WaitSeconds = 180,
     [switch]$Restart,
     [switch]$ErVisible,
-    [ValidateSet('', 'dodge', 'roll')]
+    [ValidateSet('', 'dodge', 'roll', 'walk', 'sprint')]
     [string]$ErSelfTest = '',
     [ValidateSet('', 'wprep', 'padstep', 'ailogic', 'prebehavior')]
     [string]$ErInjectGroup = '',

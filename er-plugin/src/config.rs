@@ -8,7 +8,8 @@ use std::sync::OnceLock;
 pub struct Config {
     /// Keep ER's window visible when in the world (debugging).
     pub visible: bool,
-    /// `dodge` = press Backstep every few seconds with no Skyrim involved (P3 step 2); `roll` = the same plus a move direction (step 5).
+    /// `dodge` = press Backstep every few seconds with no Skyrim involved (P3 step 2); `roll` = the same plus a move direction (step 5);
+    /// `walk` / `sprint` = the locomotion scripts (actions::LocoTest, LOCO-PLAN stage B probe).
     pub selftest: String,
     /// Task group the action injection runs in: wprep (WorldChrMan_Prepare, default), padstep, ailogic, prebehavior.
     pub inject_group: String,

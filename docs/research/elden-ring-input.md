@@ -123,3 +123,19 @@ Open hypotheses (next session):
   - OneHanded or EmptyHanded with slot 1: 2027010 (the sword is still in hand).
   - OneHanded with slots L3/R3 (Unarmed): **27010**, the plain set.
 - `er-plugin/src/stance.rs` (StanceSync) follows InputState.stance and puts the save's stance back when the bridge lets go.
+
+## Locomotion probe (LOCO-PLAN stage B1, 2026-10-05)
+ER only, hidden window, character pinned (park.rs), `tools/dev.ps1 -ErSelfTest walk|sprint` (`actions::LocoTest`: a fixed script of
+virtual stick values and Dodge holds, logged every 10 frames as `[loco-test]`).
+- **Camera yaw:** `CSCamera.pers_cam_1.matrix` row 2 = forward; `yaw = atan2(-f.x, -f.z)` is in the player's yaw convention
+  (`game::camera_yaw`). At spawn, player yaw = camera yaw (−1.756). Stick right → player yaw = camera + 90°, back → camera + 180°:
+  the stick is camera-relative and right = +angle, like the player's yaw. The hidden camera **does not turn** while the character walks
+  or runs (no auto-follow), so the stick-to-world mapping only changes when we turn it.
+- **Turning:** the character faces the stick direction within 10 frames (ER's own turn, no extra smoothing needed).
+- **Speeds** (flat ground, stick magnitude): 0.3 = nothing (dead zone); 0.6 = walk, anim 20010, ~1.5 m/s; 1.0 = run, anim 20110,
+  3.93 m/s steady. Stop anim 22100. Same speed in every direction (forward, right, back).
+- **Sprint:** stick + Dodge held → run, then sprint (anim 20210) after ~30 frames, 5.2–6.7 m/s per 10-frame sample (mean 5.95),
+  stamina −10/s with combat forced; no dash at the start while already running. Release → back to run, stamina regenerates.
+- **Roll from a run:** Dodge tap (press frame + 6 frames) while running → roll 27110 (−12 stamina in combat), then back to the run
+  (20110) by itself, with the stick still held.
+- **Pin:** the real position stayed on the spot the whole time (1.67, 3.49); the virtual position carried all the distance.

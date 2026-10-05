@@ -1,6 +1,6 @@
 //! Read-only views of the ER main player (field notes: docs/research/elden-ring-state.md). Main thread only (task callbacks).
 
-use eldenring::cs::{PlayerIns, WorldChrMan};
+use eldenring::cs::{CSCamera, PlayerIns, WorldChrMan};
 use fromsoftware_shared::FromStatic;
 
 /// One frame's worth of the player state Skyrim cares about.
@@ -39,6 +39,21 @@ pub struct Snapshot {
 /// Main thread only (a task callback): the game mutates this object every frame.
 pub unsafe fn main_player() -> Option<&'static mut PlayerIns> {
     unsafe { WorldChrMan::instance_mut() }.ok()?.main_player.as_deref_mut()
+}
+
+/// ER's camera yaw in the player's yaw convention (forward = (−sin y, −cos y) in XZ), from the active camera's view matrix (row 2 =
+/// forward, eldenring-rs `cs/camera.rs`). `None` before the camera exists or while it looks straight up/down. The move stick is
+/// relative to this yaw (LOCO-PLAN stage B). Sign measured by the `walk` self-test (docs/research/elden-ring-input.md "Locomotion probe").
+///
+/// # Safety
+/// Main thread only (a task callback).
+pub unsafe fn camera_yaw() -> Option<f32> {
+    let camera = unsafe { CSCamera::instance() }.ok()?;
+    let f = &camera.pers_cam_1.matrix.2;
+    if !(f.0.is_finite() && f.2.is_finite()) || f.0.hypot(f.2) < 1e-3 {
+        return None;
+    }
+    Some(f32::atan2(-f.0, -f.2))
 }
 
 pub fn snapshot(player: &PlayerIns) -> Snapshot {
