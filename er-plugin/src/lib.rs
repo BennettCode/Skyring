@@ -204,7 +204,9 @@ impl FrameTask {
         if elapsed >= STATE_LOG_INTERVAL {
             let fps = (frames - self.frames_at_last_log) as f64 / elapsed.as_secs_f64();
             let state = player.map_or_else(|| "no player".to_string(), |p| game::snapshot(p).line());
-            info!("state", "frame={frames} fps={fps:.1} {state}");
+            // SAFETY: main thread (task callback).
+            let pitch = unsafe { game::camera_pitch_deg() }.map_or("none".to_string(), |p| format!("{p:.0}"));
+            info!("state", "frame={frames} fps={fps:.1} {state} cam_pitch={pitch}");
             self.last_log = Instant::now();
             self.frames_at_last_log = frames;
         }

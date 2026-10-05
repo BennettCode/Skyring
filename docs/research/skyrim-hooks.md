@@ -198,6 +198,16 @@ before use (a missing id makes CommonLib abort the game at load).
 - `boolFlags.kEssential` on the player did **not** stop `player.damageactorvalue health 2000` from killing. Skyrim death → automatic
   reload → `kPostLoadGame` → respawn. KillImpl = vfunc 0x110 (AE), KillImmediate = 37735.
 
+## Skinned weapons (bows) and the Carry step (2026-10-05)
+- A drawn bow hangs under `SHIELD` < `NPC L Hand`: `Weapon (formid)` with a skinned `BowMesh` and its own bones (Bow_MidBone,
+  Bow_UpBone1/2, Bow_StringBone...). They follow the posed hand through `UpdateDownwardPass`.
+- Bug: Carry (moves loose finger/toe transforms with the nearest posed bone) skipped "tree" transforms from a set built at rig time,
+  before the bow was equipped, so the bow's bones were moved a second time with the nearest bone of Skyrim's *animation* and the bow
+  hung at the hip. Fix: the tree set is rebuilt every frame. Before/after side-view screenshots match ER's full draw (left arm out,
+  bow upright, right hand at the face).
+- Measured on the way (not the cause): ER's streamed arms at full draw are near horizontal (left upper arm -4 deg) in
+  ChrIns_PostPhysics, WorldChrMan_PostPhysics and Draw_Pre alike; ER's camera pitch is 0 while bridged.
+
 ## Fingers and toes are not nodes (2026-10-05)
 - The player's third-person tree has 51 nodes and no finger or toe nodes. The skinned hands (36 bones), feet (6) and body (24) still skin
   fingers and toes, through `NiSkinInstance::boneWorldTransforms` entries that point **outside the tree**: loose world transforms the

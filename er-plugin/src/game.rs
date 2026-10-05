@@ -63,6 +63,16 @@ pub unsafe fn camera_yaw() -> Option<f32> {
     Some(f32::atan2(-f.0, -f.2))
 }
 
+/// ER's camera pitch in degrees (+ = looking up), same matrix as `camera_yaw` (forward = −row 2). The bow aims where this camera looks.
+///
+/// # Safety
+/// Main thread only (a task callback).
+pub unsafe fn camera_pitch_deg() -> Option<f32> {
+    let camera = unsafe { CSCamera::instance() }.ok()?;
+    let f = &camera.pers_cam_1.matrix.2;
+    f.1.is_finite().then(|| (-f.1).clamp(-1.0, 1.0).asin().to_degrees())
+}
+
 pub fn snapshot(player: &PlayerIns) -> Snapshot {
     let m = &player.chr_ins.modules;
     let flags = m.action_flag.action_modifiers_flags;

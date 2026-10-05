@@ -141,6 +141,7 @@ namespace sxer::pose
 		struct State
 		{
 			Rig rig;
+			std::unordered_set<const RE::NiTransform*> treeNow;  // Carry: the tree's world transforms this frame (reused buffer)
 			std::uint64_t retryAt = 0;  // Resolve failed: try again at this frame (geometry may still be attaching)
 			float weight = 0;
 			bool active = false;
@@ -366,6 +367,26 @@ namespace sxer::pose
 			for (std::size_t k = 0; k < kBones; ++k) {
 				change[k] = r.nodes[k]->world * a_before[k].Invert();
 			}
+			// Tree nodes now, not at rig time: equipping a weapon adds nodes, and a skinned weapon (bows: Bow_MidBone, Bow_UpBone...
+			// under the hand's Weapon node) skins with them. Treated as loose, they were moved a second time with the nearest bone of
+			// Skyrim's animation and the bow hung at the hip (2026-10-05). They already follow the hand through the tree.
+			auto& tree = g.treeNow;
+			tree.clear();
+			{
+				std::vector<RE::NiAVObject*> stack{ a_root };
+				while (!stack.empty()) {
+					auto* n = stack.back();
+					stack.pop_back();
+					tree.insert(&n->world);
+					if (auto* node = n->AsNode()) {
+						for (auto& c : node->GetChildren()) {
+							if (c) {
+								stack.push_back(c.get());
+							}
+						}
+					}
+				}
+			}
 			std::array<const RE::NiTransform*, 256> seen{};
 			std::size_t nSeen = 0;
 			RE::BSVisit::TraverseScenegraphGeometries(a_root, [&](RE::BSGeometry* a_geom) {
@@ -376,7 +397,7 @@ namespace sxer::pose
 				}
 				for (std::uint32_t i = 0; i < data->bones; ++i) {
 					const auto* t = skin->boneWorldTransforms[i];
-					if (!t || r.treeWorlds.contains(t) || std::find(seen.begin(), seen.begin() + nSeen, t) != seen.begin() + nSeen) {
+					if (!t || tree.contains(t) || std::find(seen.begin(), seen.begin() + nSeen, t) != seen.begin() + nSeen) {
 						continue;
 					}
 					if (nSeen < seen.size()) {

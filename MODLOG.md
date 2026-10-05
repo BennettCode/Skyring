@@ -4,6 +4,16 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: Animation recheck: the bow sits in the hand; ER ammo never runs out
+- **User:** "the bow doesn't work properly" (wrong or odd animation). Side-view screenshots (virtual right stick to orbit): the body
+  matched ER's full draw, but the bow hung at the right hip.
+- **Cause:** `Pose.cpp` Carry treated the bow's own skinned bones as loose transforms (its tree set was built before the bow was equipped)
+  and moved them a second time with the nearest bone of Skyrim's animation. **Fix:** the tree set is rebuilt every frame.
+- **Ruled out by measurement:** ER aiming up (camera pitch 0 at full draw) and a late aim pass (arm elevation the same in three task
+  groups). ER's ammo is kept at its count while we use it: 26 bridged shots, no empty quiver.
+- **Tested:** run-tests green; bow side view after the fix = ER's pose (bow upright in the left hand, right hand at the face); sword
+  contact sheet (walk, light, heavy): sword in hand, body on the ground. ER was dismounted by the user (it had loaded on Torrent).
+
 ## 2026-10-05: Elden Ring stays off your pad in Skyrim menus; no more "horse" (Torrent) on the Skyrim body
 - **User report:** "with a sword I go through the map and it's like I'm on a horse; the bow doesn't work properly".
 - **Cause (logs):** ER blanked the physical DualSense only while Skyrim's input was fresh. In Skyrim's inventory (paused, stale input) ER read
