@@ -164,6 +164,19 @@ before use (a missing id makes CommonLib abort the game at load).
 - Not covered: projectiles and spells (they don't go through 38627). Find their apply path in P5.
 - SkyCraft hooks the same call: never run both plugins at once.
 
+## Gamepad: XInput import and the DualSense (P4 step 8, 2026-10-05)
+- `SkyrimSE.exe` imports `XINPUT1_3.dll` **by ordinal** (no `XInputGetState` name string in the exe); CommonLib's `SKSE::PatchIAT`
+  matches names only and skips it. Walking the import table and replacing the thunk whose value equals
+  `GetProcAddress(xinput1_3, "XInputGetState")` works (1 entry). Skyrim polls it every frame, users 0-3.
+- Skyrim's default gamepad user events (logged): A Activate, B Tween Menu / Cancel, X Ready Weapon, Y Jump, LB Sprint, RB Shout,
+  L3 Sneak, R3 Toggle POV, Start Journal, Back Wait, LT/RT Left/Right Attack, d-pad up Favorites, left/right Hotkey1/2. Journal tabs =
+  `TabSwitch` on LT/RT (controlmap Journal context). No pad event opens the map: `UIMessageQueue::AddMessage(MapMenu, kShow)` (ids 400445, 13631) does.
+- **Steam Input re-exposes the DualSense as an XInput pad even with an SKSE launch** (logged "another XInput pad answers as user 0").
+  It has no touchpad (Steam mapped it to Start → Journal) and sends slow analog triggers; as Skyrim's source it broke the touchpad and
+  the Journal tabs. The plugin's HID copy must win; other pads are hidden while it's open.
+- A button held while a menu opens/closes must be ignored until released, or it arrives in the other layout as a different button.
+- Menu mode = any open menu with PausesGame / UsesCursor / UsesMenuContext (MenuOpenCloseEvent + `UI::menuMap` seed at kDataLoaded).
+
 ## Fingers and toes are not nodes (2026-10-05)
 - The player's third-person tree has 51 nodes and no finger or toe nodes. The skinned hands (36 bones), feet (6) and body (24) still skin
   fingers and toes, through `NiSkinInstance::boneWorldTransforms` entries that point **outside the tree**: loose world transforms the

@@ -16,6 +16,8 @@
 
 #include "bridge/Coords.h"
 #include "bridge/Link.h"
+#include "bridge/PadReport.h"
+#include "bridge/PadScript.h"
 #include "bridge/PlayerWatch.h"
 #include "bridge/Rig.h"
 #include "bridge/Slot.h"
@@ -206,6 +208,89 @@ namespace
 		Check(nearV(Rotate(RotationArc(x, negX), x), negX), "rig: RotationArc antiparallel along an axis");
 	}
 
+	// DualSense report parser and button layouts (bridge/PadReport.h): USB, Bluetooth extended and simple; menu/gameplay/ER mappings.
+	void PadTests()
+	{
+		using namespace sxer::pad;
+		std::uint8_t usb[64]{ 0x01, 128, 128, 128, 128, 0, 0, 0, 0x08 };
+		auto s = ParseReport(usb, sizeof(usb), false);
+		Check(s && s->buttons == 0 && s->lx == 128 && s->ly == -129 && s->l2 == 0, "pad: USB neutral");
+		usb[1] = 0, usb[2] = 0, usb[3] = 255, usb[4] = 255, usb[5] = 200, usb[6] = 255;
+		usb[8] = 0x40 | 0x20 | 0x02, usb[9] = 0x01 | 0x20 | 0x80, usb[10] = 0x02;  // Circle Cross hat-right, L1 Options R3, touchpad
+		s = ParseReport(usb, sizeof(usb), false);
+		Check(s && s->lx == -32768 && s->ly == 32767 && s->rx == 32767 && s->ry == -32768, "pad: USB stick extremes, Y up = +");
+		Check(s && s->l2 == 200 && s->r2 == 255, "pad: USB triggers");
+		Check(s && s->buttons == (kCircle | kCross | kRight | kL1 | kOptions | kR3 | kTouchpad), "pad: USB buttons");
+		bool hats = true;
+		const std::uint32_t want[9] = { kUp, kUp | kRight, kRight, kDown | kRight, kDown, kDown | kLeft, kLeft, kUp | kLeft, 0 };
+		for (std::uint8_t h = 0; h < 9; ++h) {
+			usb[8] = h, usb[9] = 0, usb[10] = 0;
+			hats = hats && ParseReport(usb, sizeof(usb), false)->buttons == want[h];
+		}
+		Check(hats, "pad: USB hat, all 8 directions + released");
+		std::uint8_t bt[78]{ 0x31, 0x00, 0, 255, 128, 128, 7, 9, 0, 0x10 | 0x08, 0x02 | 0x04 | 0x10 | 0x40, 0x01 };
+		s = ParseReport(bt, sizeof(bt), true);
+		Check(s && s->lx == -32768 && s->ly == -32768 && s->l2 == 7 && s->r2 == 9 && s->buttons == (kSquare | kR1 | kL2 | kCreate | kL3 | kPS),
+			"pad: Bluetooth extended (+1 offset)");
+		std::uint8_t simple[10]{ 0x01, 128, 128, 128, 128, 0x80 | 0x08, 0x02, 0x02, 50, 60 };
+		s = ParseReport(simple, sizeof(simple), true);
+		Check(s && s->buttons == (kTriangle | kR1 | kTouchpad) && s->l2 == 50 && s->r2 == 60, "pad: Bluetooth simple");
+		const std::uint8_t output[4]{ 0x02, 0, 0, 0 };
+		Check(!ParseReport(output, sizeof(output), false) && !ParseReport(nullptr, 0, false) && !ParseReport(bt, sizeof(bt), false),
+			"pad: other reports (and a Bluetooth report on USB) ignored");
+
+		const auto ds = [](std::uint32_t a_buttons) { DsState d; d.buttons = a_buttons; d.l2 = 255; d.r2 = 255; d.lx = 100; d.ry = -100; return d; };
+		// Menus: plain Xbox positions, triggers and sticks through.
+		const auto menu = ToXInputMenu(ds(kCross | kCircle | kSquare | kTriangle | kL1 | kR1 | kOptions | kCreate | kUp));
+		Check(menu.buttons == (kA | kB | kX | kY | kLeftShoulder | kRightShoulder | kStart | kBack | kDpadUp) && menu.leftTrigger == 255 &&
+				  menu.thumbLX == 100 && menu.thumbRY == -100,
+			"pad: menu layout = plain Xbox positions");
+		DsState l1;
+		l1.buttons = kL1;
+		const auto tabs = ToXInputMenu(l1, true), noTabs = ToXInputMenu(l1);
+		Check(tabs.leftTrigger == 255 && tabs.buttons == kLeftShoulder && noTabs.leftTrigger == 0, "pad: Journal open, L1 also pulls LT (tab switch)");
+		DsState half;
+		half.l2 = 20;
+		half.r2 = 100;
+		half.buttons = kTouchpad;
+		const auto halfX = ToXInputMenu(half);
+		Check(halfX.leftTrigger == 0 && halfX.rightTrigger == 255 && halfX.buttons == 0, "pad: menu triggers all-or-nothing (> 30), touchpad does nothing");
+		// Gameplay: the user's layout (Skyrim events: A Activate, B Tween, X Ready Weapon, Y Jump, LB Sprint, RB Shout, Start Journal).
+		const auto one = [&](std::uint32_t a_ds) { return ToXInputGameplay(ds(a_ds)).buttons; };
+		Check(one(kCross) == kY && one(kTriangle) == kA && one(kSquare) == kX && one(kCircle) == kLeftShoulder && one(kOptions) == kB &&
+				  one(kTouchpad) == 0 && one(kCreate) == kStart && one(kL3) == kLeftThumb && one(kR3) == kRightThumb,
+			"pad: gameplay face/menu buttons (touchpad = map, handled outside XInput)");
+		Check(one(kUp) == kRightShoulder && one(kDown) == kDpadUp && one(kLeft) == kDpadLeft && one(kRight) == kDpadRight,
+			"pad: gameplay d-pad (up = Shout, down = Favorites)");
+		const auto erOnly = ToXInputGameplay(ds(kR1 | kR2 | kL1 | kL2));
+		Check(erOnly.buttons == 0 && erOnly.leftTrigger == 0 && erOnly.rightTrigger == 0 && erOnly.thumbLX == 100,
+			"pad: gameplay hides R1/R2/L1/L2 from Skyrim, sticks through");
+		Check(ToErButtons(ds(kR1)) == kErAttack && ToErButtons(ds(kR2)) == kErStrongAttack && ToErButtons(ds(kL1)) == kErGuard &&
+				  ToErButtons(ds(kL2)) == kErSkill && ToErButtons(ds(kCross | kCircle | kTriangle | kSquare)) == 0,
+			"pad: ER buttons from R1/R2/L1/L2 only");
+		PadState xbox;
+		xbox.buttons = kA | kB | kRightShoulder | kStart;
+		xbox.rightTrigger = 200;
+		xbox.leftTrigger = 20;
+		const auto fromX = FromXInput(xbox);
+		Check(fromX.buttons == (kCross | kCircle | kR1 | kOptions | kR2), "pad: Xbox pad mapped to DualSense positions (trigger > 30 = pressed)");
+	}
+
+	// Dev virtual pad scripts (bridge/PadScript.h).
+	void PadScriptTests()
+	{
+		using namespace sxer::pad;
+		using namespace sxer::pad::script;
+		const auto e = Parse("tap Touchpad; wait 500; down R2; wait 200; up r2; stick L 1 -1; wait 100");
+		Check(e && At(*e, 0).buttons == kTouchpad && At(*e, 99).buttons == kTouchpad && At(*e, 100).buttons == 0, "padscript: tap holds 100 ms");
+		Check(e && At(*e, 600).buttons == kR2 && At(*e, 600).r2 == 255 && At(*e, 799).buttons == kR2, "padscript: down R2 pulls the trigger");
+		Check(e && At(*e, 800).buttons == 0 && At(*e, 800).r2 == 0 && At(*e, 800).lx == 32767 && At(*e, 800).ly == -32767, "padscript: up + stick");
+		Check(e && LengthMs(*e) == 900 && At(*e, 900) == DsState{}, "padscript: ends released");
+		std::string error;
+		Check(!Parse("tap Nope", &error) && error == "bad step: tap Nope" && !Parse("stick L 2 0") && !Parse("wait x"), "padscript: bad steps rejected");
+		Check(Parse("  # comment ; tap cross 50 ;") && At(*Parse("tap cross 50"), 10).buttons == kCross, "padscript: comments, blanks, case");
+	}
+
 	void SlotTests(std::uint8_t* a_base)
 	{
 		using namespace sxer;
@@ -276,6 +361,8 @@ namespace
 	{
 		CoordsTests();
 		RigTests();
+		PadTests();
+		PadScriptTests();
 		std::ostringstream lines;
 		auto logger = std::make_shared<spdlog::logger>("selftest", std::make_shared<spdlog::sinks::ostream_sink_mt>(lines));
 		logger->set_pattern("%l %v");

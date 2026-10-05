@@ -1,5 +1,7 @@
 #include "bridge/Input.h"
 
+#include "skyrimxer_protocol.h"
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -20,6 +22,10 @@ namespace sxer::input
 		std::array<std::atomic<bool>, 8> g_seenDevice{};
 		// Held movement keys: forward, back, strafe left, strafe right.
 		std::array<std::atomic<bool>, 4> g_move{};
+		// Mouse/keyboard Right Attack/Block (ER Attack) and Left Attack/Block (ER Guard) held (P4 step 8; the pad's go through hooks/XInput).
+		std::atomic<bool> g_mouseAttack{ false }, g_mouseGuard{ false };
+		// Left stick (user event "Move", -1..1, Skyrim's dead zone already applied): x right, y forward.
+		std::atomic<float> g_stickX{ 0 }, g_stickY{ 0 };
 		// Keyboard keys held right now, by DirectInput scan code (debug keys, e.g. F7/F8 for the pose proof).
 		std::array<std::atomic<bool>, 256> g_key{};
 		// User events already logged once (main thread only), so the log shows which key/button maps to which event.
@@ -69,6 +75,14 @@ namespace sxer::input
 							g_seenEvents.push_back(std::move(name));
 						}
 					}
+					if (events && e->GetEventType() == RE::INPUT_EVENT_TYPE::kThumbstick) {
+						const auto* stick = static_cast<const RE::ThumbstickEvent*>(e);
+						if (stick->QUserEvent() == events->move) {
+							g_stickX.store(stick->xValue, std::memory_order_relaxed);
+							g_stickY.store(stick->yValue, std::memory_order_relaxed);
+						}
+						continue;
+					}
 					if (!events || e->GetEventType() != RE::INPUT_EVENT_TYPE::kButton) {
 						continue;
 					}
@@ -83,6 +97,17 @@ namespace sxer::input
 					if (name == events->sprint) {
 						g_sprint.store(button->IsPressed(), std::memory_order_relaxed);
 						g_sprintDevice.store(static_cast<int>(e->GetDevice()), std::memory_order_relaxed);
+					}
+					// Menu tab switches, so a "tabs don't change" report can be checked against what Skyrim received (bounded).
+					if (static int tabs = 0; button->IsDown() && name == "TabSwitch"sv && tabs++ < 50) {
+						SKSE::log::info("[input] TabSwitch from {} code={:#x} value={:.2f}", DeviceName(static_cast<int>(e->GetDevice())), button->GetIDCode(), button->Value());
+					}
+					if (e->GetDevice() != RE::INPUT_DEVICE::kGamepad) {
+						if (name == events->rightAttack) {
+							g_mouseAttack.store(button->IsPressed(), std::memory_order_relaxed);
+						} else if (name == events->leftAttack) {
+							g_mouseGuard.store(button->IsPressed(), std::memory_order_relaxed);
+						}
 					}
 					const RE::BSFixedString* moves[] = { &events->forward, &events->back, &events->strafeLeft, &events->strafeRight };
 					for (std::size_t i = 0; i < g_move.size(); ++i) {
@@ -119,9 +144,17 @@ namespace sxer::input
 
 	const char* SprintDevice() { return DeviceName(g_sprintDevice.load(std::memory_order_relaxed)); }
 
+	std::uint32_t MouseErButtons()
+	{
+		constexpr auto bit = [](proto::Button a_b) { return 1u << static_cast<std::uint32_t>(a_b); };
+		return (g_mouseAttack.load(std::memory_order_relaxed) ? bit(proto::Button::Attack) : 0) |
+		       (g_mouseGuard.load(std::memory_order_relaxed) ? bit(proto::Button::Guard) : 0);
+	}
+
 	Move MoveAxes()
 	{
 		const auto held = [](std::size_t i) { return g_move[i].load(std::memory_order_relaxed) ? 1.0f : 0.0f; };
-		return { held(3) - held(2), held(0) - held(1) };
+		// Keys and stick add up; Locomotion::Stick scales anything longer than 1 back to 1.
+		return { held(3) - held(2) + g_stickX.load(std::memory_order_relaxed), held(0) - held(1) + g_stickY.load(std::memory_order_relaxed) };
 	}
 }

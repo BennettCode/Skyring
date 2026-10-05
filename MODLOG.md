@@ -4,6 +4,24 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: DualSense with Elden Ring's buttons, protocol v8 (P4 step 8)
+- **Changed (Skyrim):** `bridge/Gamepad.cpp` reads the DualSense over HID (USB/Bluetooth); `bridge/PadReport.h` parses reports and holds
+  the layouts; `hooks/XInput.cpp` answers Skyrim's `XInputGetState` (IAT, ordinal import) with the gameplay layout (Elden Ring's buttons,
+  Skyrim's extras on Cross/Triangle/Square/d-pad/Options/Create) or plain Xbox positions in menus; touchpad opens the map
+  (`UIMessageQueue`); L1/R1 also switch Journal tabs; menu triggers all-or-nothing; buttons held across a layout switch are ignored until
+  released. `hooks/AttackSwallow.cpp` keeps vanilla mouse attacks off; `Input.cpp` reads the left stick (analog) and mouse attack/guard;
+  `Bridge.cpp` forwards ER buttons and draws a sheathed weapon first.
+- **Protocol v8:** `Button` += Attack, StrongAttack, Guard, Skill. **ER:** `remote.rs` writes them to ER's virtual keys and, while bridged,
+  releases every action key and analog value ER read from the physical pad (`pad::clear_virtual`). A first bulk clear of the bitset
+  wrote past it (its `integer_count` looks like bytes, not words); replaced the same session by per-key release.
+- **Dev tools:** virtual pad (`bridge/PadScript.*`, `tools/pad-input.ps1`, `dev.ps1 -SkyrimPad`), `fake-peer --buttons`.
+- **Tested:** fake-peer → ER played Attack 42030000, StrongAttack 42030500/505 (charge), Guard 42034000, Skill 712040000. User pad tests:
+  stick walk/run, Circle roll/sprint, R1 swings; their report "touchpad opens the pause menu, tabs don't switch" traced to Steam Input's
+  second XInput copy of the pad being Skyrim's source. After the fix: virtual pad + screenshots (map, Journal tabs R1/R2/L1, Tween), then
+  the user's pad (map twice, 15 tab switches, Tween). `tests/run-tests.ps1` green (pad parser/layout/script cases).
+- **Not done:** ER attacks deal no damage (P5); Skyrim weapon type isn't mapped to an ER weapon yet; keyboard heavy attack/weapon art;
+  rumble; Bluetooth untested. Open bug: link deadlock after a long ER stall.
+
 ## 2026-10-05: Roll i-frames cancel NPC melee hits (P4 step 7)
 - **Changed:** new `skse/src/hooks/PlayerHit.{h,cpp}`: the `call 38586` (apply hit to victim) at melee handler 38627+0x4A8 is replaced
   after a byte check (adapted from SkyCraft `Combat.cpp`, MIT). On the player while ER's i-frames are on, the hit is dropped whole;

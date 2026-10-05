@@ -51,7 +51,7 @@ Tick boxes as you go. Keep each phase small. If a phase grows, split it.
   (`docs/LOCO-PLAN.md` stage B, 2026-10-05; agent-tested, user feel test pending)
 - [x] Skyrim's stamina bar mirrors ER's stamina. Out of stamina = no roll (2026-10-05)
 - [x] NPC melee hits during ER i-frames are cancelled (2026-10-05; arrows/spells: P5)
-- [ ] **Controller support (last):** PS5 DualSense in Skyrim. Skyrim only reads XInput, so it needs Steam Input, which doesn't apply when SKSE
+- [x] **Controller support:** PS5 DualSense in Skyrim with Elden Ring's buttons, read by the plugin itself (2026-10-05). Was: Skyrim only reads XInput, so it needs Steam Input, which doesn't apply when SKSE
   starts outside Steam (a plain Steam launch option fails: the loader rejects Steam's extra argument). Options: a `cmd /c start` launch
   option, a Non-Steam-game shortcut, or reading the pad in the plugin itself. Also check that the hidden ER doesn't read the same pad (double input)
 **Accept:** the user rolls through an NPC's attack without taking damage, and spamming rolls is limited by stamina.

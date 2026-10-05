@@ -198,3 +198,53 @@ fn bit(data: &DLVirtualInputData, index: usize) -> char {
         None => '-',
     }
 }
+
+/// Every in-game action key a pad button can press (eldenring-rs `UserInputKey`, digital ones).
+const ACTION_KEYS: [UserInputKey; 21] = [
+    UserInputKey::MovementControl,
+    UserInputKey::Attack,
+    UserInputKey::StrongAttack,
+    UserInputKey::Guard,
+    UserInputKey::Skill,
+    UserInputKey::EventAction,
+    UserInputKey::Backstep,
+    UserInputKey::BackstepTapped,
+    UserInputKey::Jump,
+    UserInputKey::UseItem,
+    UserInputKey::SwitchSpell,
+    UserInputKey::SwitchRightHandArmament,
+    UserInputKey::SwitchleftHandArmament,
+    UserInputKey::SwitchItem,
+    UserInputKey::ResetCamera,
+    UserInputKey::Crouch,
+    UserInputKey::SwitchSpell2,
+    UserInputKey::SwitchItem2,
+    UserInputKey::ResetCameraTapped,
+    UserInputKey::EventActionPouch,
+    UserInputKey::Map,
+];
+
+/// Releases, for this frame, every action key and every analog value (sticks, camera) of the in-game pad. PadStep copies the physical
+/// devices in each frame, so while Skyrim drives ER this runs first and only our own writes after it count: the DualSense (which ER
+/// reads itself through libScePad, P4 step 8) can't attack, roll or turn ER's camera behind Skyrim's back. Digital keys go through
+/// the key-assign lookup (`set_digital`), never a bulk write of the bitset: its `integer_count` may be bytes, not words (the bulk
+/// clear first tried reported 3968 bits for 813 analog values). The analog vector has a real length. Returns (key slots, analog
+/// values) released; None = no pad yet.
+///
+/// # Safety
+/// Main thread only (task callback), after PadStep.
+pub unsafe fn clear_virtual() -> Option<(usize, usize)> {
+    let mut slots = 0;
+    for key in ACTION_KEYS {
+        slots += unsafe { set_digital(key, false) };
+    }
+    let pads = unsafe { FD4PadManager::instance_mut() }.ok()?;
+    let pad = pads.get_in_game_pad_mut()?;
+    let device = unsafe { pad.pad_device.as_mut().virtual_multi_device.as_mut() };
+    let mut analog = 0;
+    for v in device.virtual_input_data.analog_key_info.vector.iter_mut() {
+        *v = 0.0;
+        analog += 1;
+    }
+    Some((slots, analog))
+}

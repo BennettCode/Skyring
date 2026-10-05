@@ -13,6 +13,7 @@ every frame and Skyrim follows its virtual position, so ER walls no longer short
 Step 5 done by pose streaming: ER's roll animation plays on the Skyrim player (`docs/POSE-PLAN.md`).
 Step 6 done (2026-10-05): Skyrim's stamina bar shows ER's stamina share (`skse/src/bridge/Stamina.cpp`).
 Step 7 done for melee (2026-10-05): NPC melee hits during ER's roll i-frames are dropped (`skse/src/hooks/PlayerHit.cpp`); arrows/spells → P5.
+Step 8 done (2026-10-05): DualSense with Elden Ring's layout (plugin reads it over HID; protocol v8 forwards R1/R2/L1/L2 to ER; ER ignores the physical pad while bridged).
 LOCO-PLAN (`docs/LOCO-PLAN.md`): stage A (smooth, faithful rolls) and stage B (ER drives walking, running, sprinting and rolling while
 the bridge is on, protocol v7) done. The run/sprint pose was checked bone by bone against ER and fixed (COM yaw, spine conjugation;
 hip/chest/lean within 4° of ER), and the user's feel test raised no issue (2026-10-05).
@@ -39,9 +40,10 @@ window come back every frame; coordinate conversion measured (`protocol/src/coor
   Continue each run (no warp in P3). The user tests with a DualSense (PS5) over USB in both games.
 
 ## Next 3 steps (P4, `docs/P4-PLAN.md`)
-1. User roll-through test of step 7 (P4 accept).
-2. Step 8: DualSense in Skyrim (own mini-plan).
-3. Optional pose polish: foot planting (see `docs/research/skyrim-hooks.md` "Polish later").
+1. Fix the link deadlock after a long ER stall (Skyrim reads it as "ER restarted" with the same attach#; both sides then wait).
+2. P5 plan (`docs/P5-PLAN.md`): ER swings damage Skyrim NPCs (ER attack window + damage → SkyCraft's HitData path), then Skyrim weapon
+   type → ER weapon, then NPC hits through ER HP.
+3. P4 accept playtest: roll through an NPC's swings with the pad.
 
 ## Handoff notes
 **LOCO-PLAN stage B done, agent-tested (2026-10-05).** ER drives walking/running/sprinting/rolling while the bridge is on

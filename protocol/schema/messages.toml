@@ -13,9 +13,9 @@
 # All values are little-endian (both games are x64 Windows).
 
 [protocol]
-version = 7
+version = 8
 magic = "SXER"                      # stored as a little-endian u32: bytes 'S' 'X' 'E' 'R'
-region_name = 'Local\SkyrimXER_v7'  # must end in _v<version>
+region_name = 'Local\SkyrimXER_v8'  # must end in _v<version>
 
 [constants]
 HEARTBEAT_TIMEOUT_MS = { type = "u64", value = 2000, doc = "Peer counts as gone when its heartbeat is older than this." }
@@ -65,6 +65,10 @@ repr = "u32"
 doc = "InputState.buttons. Values are BIT INDICES: mask = 1 << value."
 values = [
   { name = "Dodge", value = 0, doc = "Skyrim's Sprint user event, held state forwarded raw (ER: tap = roll/backstep, hold = dash)." },
+  { name = "Attack", value = 1, doc = "v8: ER Attack (pad R1, mouse left), held state raw. ER's own gating decides the move." },
+  { name = "StrongAttack", value = 2, doc = "v8: ER StrongAttack (pad R2; hold = charge), held state raw." },
+  { name = "Guard", value = 3, doc = "v8: ER Guard (pad L1, mouse right), held state raw." },
+  { name = "Skill", value = 4, doc = "v8: ER Skill / weapon art (pad L2), held state raw." },
 ]
 
 [[enums]]

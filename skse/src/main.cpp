@@ -1,5 +1,6 @@
 #include "bridge/AutoLoad.h"
 #include "bridge/Bridge.h"
+#include "hooks/XInput.h"
 
 namespace
 {
@@ -28,6 +29,7 @@ namespace
 			SKSE::log::info("[core] kDataLoaded: game data ready (main menu)");
 			sxer::bridge::Start();
 			sxer::autoload::Install();
+			sxer::hooks::InstallXInputMenuWatch();
 			break;
 		case SKSE::MessagingInterface::kNewGame:
 			SKSE::log::info("[core] new game started");
@@ -52,6 +54,9 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
 	const auto* plugin = SKSE::PluginDeclaration::GetSingleton();
 	SKSE::log::info("[core] {} v{} loaded, runtime {}", plugin->GetName(), plugin->GetVersion().string("."sv),
 		REL::Module::get().version().string("."sv));
+
+	// DualSense → XInput (P4 step 8): early, so the main menu already has the pad.
+	sxer::hooks::InstallXInput();
 
 	if (!SKSE::GetMessagingInterface()->RegisterListener(OnMessage)) {
 		SKSE::log::critical("[core] failed to register SKSE message listener");

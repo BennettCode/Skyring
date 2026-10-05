@@ -13,9 +13,11 @@
 #include "bridge/Timeline.h"
 #include "hooks/PlayerUpdate.h"
 #include "hooks/ControllerVelocity.h"
+#include "hooks/AttackSwallow.h"
 #include "hooks/MoveSwallow.h"
 #include "hooks/PlayerHit.h"
 #include "hooks/SprintSwallow.h"
+#include "hooks/XInput.h"
 
 #include <algorithm>
 #include <atomic>
@@ -38,6 +40,7 @@ namespace sxer::bridge
 		std::atomic<std::uint64_t> g_frames{ 0 };
 		// See SwallowSprint().
 		std::atomic<bool> g_swallowSprint{ false };
+		std::atomic<bool> g_swallowAttack{ false };
 		// See TakeSprintKick().
 		std::atomic<bool> g_sprintKick{ false };
 
@@ -111,6 +114,8 @@ namespace sxer::bridge
 			bool swallow = false;
 			bool held = false;
 			std::uint32_t heldFrames = 0;
+			std::uint32_t erButtons = 0;  // ER attack/guard/skill bits forwarded last frame
+			bool drawAsked = false;        // an ER attack press asked Skyrim to draw the weapon
 			bool heldInLoco = false;  // this Sprint hold began while ER drove locomotion: it's ER's sprint to the end
 			bool inCombat = false;
 			std::uint32_t stance = ~0u;
@@ -127,6 +132,34 @@ namespace sxer::bridge
 			RE::NiPoint3 coordsLast;
 			std::uint32_t coordsLines = 0;
 		} g_frame;
+
+		// ER Attack/StrongAttack/Guard/Skill (P4 step 8): the pad's R1/R2/L1/L2 (hooks/XInput) and the mouse's attack buttons, held state raw.
+		// A press with the weapon sheathed first draws it (ER would otherwise swing with fists); the buttons go to ER once it's drawn.
+		std::uint32_t ErButtons(FrameState& a_f, RE::PlayerCharacter* a_player, bool a_enabled, std::uint64_t a_frame)
+		{
+			const std::uint32_t pressed = a_enabled ? (hooks::PadErButtons() | input::MouseErButtons()) : 0;
+			std::uint32_t want = pressed;
+			if (!pressed) {
+				a_f.drawAsked = false;  // one draw request per press (the weapon state changes a frame late)
+			}
+			if (want && a_player) {
+				const auto weapon = a_player->AsActorState()->GetWeaponState();
+				if (weapon != RE::WEAPON_STATE::kDrawn) {
+					if (weapon == RE::WEAPON_STATE::kSheathed && !a_f.drawAsked) {
+						a_f.drawAsked = true;
+						a_player->DrawWeaponMagicHands(true);
+						SKSE::log::info("[input] ER button {:#x} with the weapon sheathed: drawing it first frame={}", want, a_frame);
+					}
+					want = 0;
+				}
+			}
+			if (want != a_f.erButtons) {
+				SKSE::log::info("[input] ER buttons {:#x} -> {:#x} (pad {:#x}, mouse {:#x}) frame={}", a_f.erButtons, want, hooks::PadErButtons(),
+					input::MouseErButtons(), a_frame);
+				a_f.erButtons = want;
+			}
+			return want;
+		}
 
 		// Coordinate test (docs/research/coordinates.md): position (Z-up, game units) and heading (data.angle.z, radians) every
 		// kCoordsEvery frames while the player moved more than 1 unit since the last sample or a movement key is held. Bounded.
@@ -260,12 +293,15 @@ namespace sxer::bridge
 		hooks::InstallMoveSwallow();
 		hooks::InstallControllerVelocity();
 		hooks::InstallPlayerHit();
+		hooks::InstallAttackSwallow();
 		input::Install();
 		SKSE::log::info("[core] hooks installed: PlayerCharacter::Update (vfunc 0xAD; ER pose applier) → InputState/PlayerState slots, SprintHandler::CanProcess "
 		                "(vfunc 0x1, vanilla sprint off while bridged), MovementHandler::CanProcess (vfunc 0x1, keys off during a dodge), bhkCharProxyController::SetLinearVelocityImpl (vfunc 0x7, ER roll velocity), input sink (Sprint → Dodge, movement keys → move stick, F10 toggle)");
 	}
 
 	bool SwallowSprint() { return g_swallowSprint.load(std::memory_order_relaxed); }
+
+	bool SwallowAttack() { return g_swallowAttack.load(std::memory_order_relaxed); }
 
 	bool TakeSprintKick() { return g_sprintKick.exchange(false, std::memory_order_relaxed); }
 
@@ -312,7 +348,9 @@ namespace sxer::bridge
 		// (Locomotion's state is last frame's: it's decided after the timeline below; one frame late is fine for input.)
 		const auto& last = f.watch.Last();
 		const bool sprintHold = held && f.heldFrames > kSprintAfterFrames && !locomotion::Running() && !f.heldInLoco;
-		const bool swallow = on && connected && last && (last->flags & kInWorld) && !sprintHold;
+		const bool erInWorld = on && connected && last && (last->flags & kInWorld);
+		g_swallowAttack.store(erInWorld, std::memory_order_relaxed);
+		const bool swallow = erInWorld && !sprintHold;
 		if (swallow != f.swallow) {
 			f.swallow = swallow;
 			g_swallowSprint.store(swallow, std::memory_order_relaxed);
@@ -320,10 +358,22 @@ namespace sxer::bridge
 			SKSE::log::info("[input] vanilla Sprint {} frame={}", swallow ? "swallowed (Sprint = ER dodge only)" :
 			                                                        sprintHold ? "let through (Sprint held: Skyrim sprints)" : "restored", frame);
 		}
+		// Touchpad = map, like in ER (P4 step 8). Skyrim has no pad button for it, so the Map menu is asked for directly.
+		// Address Library: UIMessageQueue singleton AE 400445, AddMessage AE 13631 (CommonLib), checked with tools/addrlib-check.ps1.
+		if (hooks::TakeMapRequest()) {
+			if (auto* queue = RE::UIMessageQueue::GetSingleton()) {
+				queue->AddMessage(RE::MapMenu::MENU_NAME, RE::UI_MESSAGE_TYPE::kShow, nullptr);
+				SKSE::log::info("[pad] touchpad: opening the map frame={}", frame);
+			}
+		}
 		const auto move = on ? input::MoveAxes() : input::Move{};
 		if (move != f.move) {
+			// The analog stick changes a little every frame: log only 0.25 steps (and every key change, which are whole steps).
+			const auto step = [](float v) { return static_cast<int>(std::lround(v * 4)); };
+			if (step(move.x) != step(f.move.x) || step(move.y) != step(f.move.y) || (move.x == 0 && move.y == 0)) {
+				SKSE::log::info("[input] move x={:.2f} y={:.2f} frame={}", move.x, move.y, frame);
+			}
 			f.move = move;
-			SKSE::log::info("[input] move x={} y={} frame={}", move.x, move.y, frame);
 		}
 		// Skyrim's combat state → ER's (P4 step 3): ER dodges cost stamina only while the Skyrim player fights.
 		const bool inCombat = a_player && a_player->IsInCombat();
@@ -343,6 +393,7 @@ namespace sxer::bridge
 		state.time_ms = now;
 		// Suspended locomotion (swimming, mounted, in the air...) = vanilla Skyrim: Sprint is Skyrim's, nothing goes to ER.
 		state.buttons = held && !locomotion::Suspended() ? kDodge : 0;
+		state.buttons |= ErButtons(f, a_player, erInWorld && !locomotion::Suspended(), frame);
 		const bool locoIn = on && locomotion::Running();
 		state.flags = on ? (kBridgeOn | (inCombat ? kInCombat : 0) | (locoIn ? kLocomote : 0)) : 0;
 		const auto stick = locoIn ? locomotion::Stick(move) : move;

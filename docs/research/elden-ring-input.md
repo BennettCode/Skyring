@@ -124,6 +124,17 @@ Open hypotheses (next session):
   - OneHanded with slots L3/R3 (Unarmed): **27010**, the plain set.
 - `er-plugin/src/stance.rs` (StanceSync) follows InputState.stance and puts the save's stance back when the bridge lets go.
 
+## The physical pad and ER buttons from Skyrim (P4 step 8, 2026-10-05)
+- **ER reads the DualSense itself** while hidden and focus-spoofed: its `PadDevice` (user 0) showed the sticks moving with Skyrim focused,
+  and R1 on the pad played ER attack anims (20030000...) with nothing injected. So the pad pressed both games.
+- Fix: while bridged, after PadStep (`WorldChrMan_Prepare`, before our writes), every action `UserInputKey` is released through the
+  key-assign lookup (`pad::set_digital(key, false)`: 21 slots) and every value of the virtual device's analog vector is zeroed (813
+  values, camera included). Then Skyrim's inputs are written.
+- **Don't bulk-clear `DynamicBitset`:** for 813 analog values its `integer_count` was 124. eldenring-rs treats it as u32 words (3968
+  bits), but its own comment ("bit_count // 32 * 4") reads as bytes; a `fill(0)` over 124 words would write past the allocation.
+- Held virtual keys from Skyrim (fake-peer `--buttons`, character idle, two-handed stance): Attack → 42030000, StrongAttack (250 ms) →
+  42030500 → 42030505 (charge), Guard → 42034000, Skill → 712040000.
+
 ## Locomotion probe (LOCO-PLAN stage B1, 2026-10-05)
 ER only, hidden window, character pinned (park.rs), `tools/dev.ps1 -ErSelfTest walk|sprint` (`actions::LocoTest`: a fixed script of
 virtual stick values and Dodge holds, logged every 10 frames as `[loco-test]`).

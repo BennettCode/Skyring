@@ -7,9 +7,9 @@
 
 namespace sxer::proto
 {
-	inline constexpr std::uint32_t kVersion = 7;
+	inline constexpr std::uint32_t kVersion = 8;
 	inline constexpr std::uint32_t kMagic = 0x52455853;  // "SXER" as little-endian bytes
-	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v7";
+	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v8";
 
 	// Peer counts as gone when its heartbeat is older than this.
 	inline constexpr std::uint64_t kHeartbeatTimeoutMs = 2000;
@@ -70,6 +70,10 @@ namespace sxer::proto
 	enum class Button : std::uint32_t
 	{
 		Dodge = 0,  // Skyrim's Sprint user event, held state forwarded raw (ER: tap = roll/backstep, hold = dash).
+		Attack = 1,  // v8: ER Attack (pad R1, mouse left), held state raw. ER's own gating decides the move.
+		StrongAttack = 2,  // v8: ER StrongAttack (pad R2; hold = charge), held state raw.
+		Guard = 3,  // v8: ER Guard (pad L1, mouse right), held state raw.
+		Skill = 4,  // v8: ER Skill / weapon art (pad L2), held state raw.
 	};
 
 	// InputState.flags. Values are BIT INDICES: mask = 1 << value.

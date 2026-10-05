@@ -6,7 +6,7 @@ stamina, dodge rolls with i-frames, poise, light/heavy/charged attacks, weapon a
 ![status](https://img.shields.io/badge/status-pre--alpha-orange)
 ![phase](https://img.shields.io/badge/phase-P4%20of%208-blue)
 ![platform](https://img.shields.io/badge/platform-Windows%20x64-lightgrey)
-![input](https://img.shields.io/badge/input-keyboard%20%26%20mouse%20(controller%20planned)-yellow)
+![input](https://img.shields.io/badge/input-DualSense%20%2B%20keyboard%20%26%20mouse-green)
 ![offline](https://img.shields.io/badge/Elden%20Ring-offline%20only-red)
 ![license](https://img.shields.io/badge/license-GPL--3.0--or--later-green)
 
@@ -67,6 +67,13 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
   **Caps Lock** (Skyrim's walk toggle) walks. Jumping, swimming, sneaking, riding, sitting and getting knocked down are plain Skyrim, and
   your character goes back to Elden Ring's movement as soon as they end. Attacking, blocking, casting and drawing a weapon also use
   Skyrim's own animations for now (Left Shift still rolls then).
+- **PS5 DualSense with Elden Ring's buttons** (USB or Bluetooth, read by the mod itself, no Steam Input or DS4Windows needed). While the
+  link is on: **R1** attack, **R2** heavy attack (hold to charge), **L1** guard, **L2** weapon art: these are Elden Ring's moves, played on
+  your Skyrim character. **Circle** tap = roll, hold = sprint. Skyrim keeps what Elden Ring has no use for: **Cross** jump, **Triangle**
+  talk/loot/open, **Square** draw/sheathe, **L3** sneak, **R3** camera view, **Options** Tween menu, **Touchpad** map, **Create** Journal
+  (pause menu), **d-pad up** shout, **d-pad down** favorites, **d-pad left/right** hotkeys. In menus the pad works like an Xbox pad
+  (Circle = back, L1/R1 or L2/R2 switch Journal tabs). On the mouse: left click = Elden Ring attack, right click = guard.
+  A press with your weapon sheathed draws it first. An Xbox controller gets the same layout.
 - **Sprint in Skyrim (Left Shift) → the Elden Ring character dodges.** Hold a movement key (W/A/S/D) while you tap Sprint and it **rolls**
   in that direction; tap Sprint alone and it backsteps. Elden Ring's own rules decide what happens.
   While the link is active, Skyrim's own sprint is off. **F10** turns the link off and on (off = plain Skyrim).
@@ -89,8 +96,10 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
 NPCs still see your character facing the way it last faced in Skyrim (only the body you see turns); a jump can briefly flip the body
 to that old facing. Elden Ring's character holds its weapon the way yours does (fists when you're unarmed
 or sheathed, one- or two-handed when you draw a weapon), but it doesn't use the same *kind* of weapon yet. The roll animation copies the main bones (fingers and toes follow their hands and feet); cloth and armour
-helpers follow Skyrim's own pose, and feet can slide a little (no foot placement yet). **Controller support isn't added yet:**
-Skyrim is keyboard-and-mouse only for now (details below).
+helpers follow Skyrim's own pose, and feet can slide a little (no foot placement yet). **Your Elden Ring attacks don't hurt
+anyone yet** (they play, but deal no damage: that's P5), and it doesn't matter yet which Skyrim weapon you hold: Elden Ring uses its own.
+While the link is on, Skyrim spells, bows and shield bashes aren't on any button (F10 gives them back), and Skyrim's Wait has no pad
+button (keyboard T works). Arrows and spells still hit you during a roll.
 
 ## Progress
 
@@ -100,7 +109,7 @@ Skyrim is keyboard-and-mouse only for now (details below).
 | P1 | Both plugins load and log | ✅ done |
 | P2 | Shared memory link: handshake, heartbeats, crash fail-safe | ✅ done |
 | P3 | Dodge in Skyrim → Elden Ring dodges → its stamina and i-frames come back | ✅ done |
-| **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 in progress (7/8: Sprint = dodge, combat stamina, rolls move you, Elden Ring's roll animation plays in Skyrim; walking, running and sprinting are Elden Ring's; Skyrim's stamina bar shows Elden Ring's; roll i-frames make melee hits miss) |
+| **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 in progress (8/8 built, final playtest pending: Sprint = dodge, combat stamina, rolls move you, Elden Ring's roll animation plays in Skyrim; walking, running and sprinting are Elden Ring's; Skyrim's stamina bar shows Elden Ring's; roll i-frames make melee hits miss; DualSense with Elden Ring's buttons) |
 | P5 | Damage both ways uses Elden Ring's math (poise, stagger) | ⏳ |
 | P6 | Elden Ring-style HUD | ⏳ |
 | P7 | Runes from kills, leveling, flasks refill at "graces" | ⏳ |
@@ -115,7 +124,7 @@ All development and testing happens on this exact setup. Other versions aren't s
 
 | | Version |
 |---|---|
-| **Input** | **Keyboard and mouse** in both games for now. Skyrim: Sprint (Left Shift) = dodge, F10 = link on/off. |
+| **Input** | **PS5 DualSense over USB** (Elden Ring's layout, see above) or **keyboard and mouse**. Skyrim keyboard: Sprint (Left Shift) = dodge, F10 = link on/off. |
 | Skyrim Special/Anniversary Edition (Steam) | `SkyrimSE.exe` **1.7.104.0** |
 | SKSE64 | **2.3.1** |
 | Address Library for SKSE Plugins | **v13** (All in One) |
@@ -123,9 +132,9 @@ All development and testing happens on this exact setup. Other versions aren't s
 | me3 (Elden Ring mod loader) | **0.13.0** |
 | OS | Windows 11 x64 |
 
-**Controller support: planned, not added yet.** The goal is a PS5 DualSense (wired). Elden Ring supports it natively, but Skyrim only
-understands Xbox-style (XInput) controllers and gets a PlayStation pad only through Steam Input. Steam Input doesn't apply when SKSE starts
-Skyrim outside Steam, which is how this project launches it. Solving that is part of P4.
+**Controller:** Skyrim only understands Xbox-style (XInput) controllers, and Steam Input doesn't apply when SKSE starts Skyrim outside
+Steam. So the mod reads the DualSense itself and hands Skyrim an Xbox pad with the layout above. While the link is on, Skyrim is the
+only game that listens to the pad: Elden Ring gets just the moves Skyrim sends it. Tested wired (USB); Bluetooth is supported but untested.
 
 You need your own legal copies of both games. This repository contains **no game files**.
 

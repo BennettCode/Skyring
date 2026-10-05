@@ -28,6 +28,8 @@ add_commonlibsse_plugin(
 
 target_include_directories(SkyrimXER PRIVATE include src ${CMAKE_CURRENT_SOURCE_DIR}/../protocol/generated)
 target_precompile_headers(SkyrimXER PRIVATE include/PCH.h)
+# hid + setupapi: the DualSense reader (src/bridge/Gamepad.cpp).
+target_link_libraries(SkyrimXER PRIVATE hid setupapi)
 target_compile_definitions(SkyrimXER PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
 if(MSVC)
 	target_compile_options(SkyrimXER PRIVATE /W4 /permissive- /Zc:preprocessor /utf-8 /MP)

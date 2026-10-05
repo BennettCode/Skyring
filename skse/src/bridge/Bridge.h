@@ -14,4 +14,7 @@ namespace sxer::bridge
 	// One-shot (cleared when read): Sprint has just been held long enough to be Skyrim's sprint. The sprint handler only starts on a
 	// fresh press, so hooks/SprintSwallow.cpp presents the next held Sprint event as one.
 	bool TakeSprintKick();
+	// True while Skyrim's own attack/block must stay off (same condition as SwallowSprint without the sprint hold): the attack
+	// buttons are ER's. Read by hooks/AttackSwallow.cpp (main thread).
+	bool SwallowAttack();
 }

@@ -60,8 +60,11 @@ if ($Game -in 'both', 'skyrim') {
         $newest = Get-ChildItem -LiteralPath $paths.SkyrimSaves -Filter *.ess -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
         if ($AutoLoad -and -not $newest) { Write-Warning "no Skyrim saves in $($paths.SkyrimSaves); load one by hand" }
         if ($AutoLoad -and $newest) { $env:SKYRIMXER_AUTOLOAD = $newest.BaseName } else { Remove-Item Env:SKYRIMXER_AUTOLOAD -ErrorAction SilentlyContinue }
+        # Dev virtual pad (bridge/PadScript.cpp): tools/pad-input.ps1 writes this file, the plugin plays it. Dev launches only.
+        if ($AutoLoad) { $env:SKYRIMXER_PADSCRIPT = Join-Path (Split-Path $PSScriptRoot -Parent) 'local\padscript.txt' }
         Start-Process -FilePath $paths.SkseLoader -WorkingDirectory $paths.SkyrimDir
         Remove-Item Env:SKYRIMXER_AUTOLOAD -ErrorAction SilentlyContinue
+        Remove-Item Env:SKYRIMXER_PADSCRIPT -ErrorAction SilentlyContinue
         if ($AutoLoad -and $newest) { Write-Host "Skyrim will load the newest save by itself ($($newest.Name))" -ForegroundColor Green }
         Write-Host 'Skyrim launching through skse64_loader.exe (no Steam Input: keyboard/mouse only)' -ForegroundColor Green
     }

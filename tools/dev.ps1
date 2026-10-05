@@ -13,6 +13,7 @@
   Loading in is automatic (tools/game-input.psm1): ER gets the confirm key at the title screen until its player spawns; Skyrim loads its
    most recent save by itself (launch.ps1 -AutoLoad) and gets the focus at the end (it pauses unfocused). -Manual = the user does both.
   -SkyrimKeys "<script>": once Skyrim is in the world, run a key script on it (game-input.ps1 syntax) and print Skyrim's log lines.
+  -SkyrimPad "<script>": the same with the dev virtual pad (tools/pad-input.ps1 syntax: tap Touchpad; wait 1500; down R2; ...).
   -WaitInWorld N (ER): once the ER player is in the world, let ER run N more seconds,
    then print the ER plugin's log lines whose subsystem matches -Show. Tests then need no "done" message from the user.
   -Restart stops the game(s) about to be launched first (ER is hidden in-world, so it gets Stop-Process; no clean Bye).
@@ -43,6 +44,7 @@ param(
     [int]$WaitInWorld = 0,
     [switch]$Manual,
     [string]$SkyrimKeys = '',
+    [string]$SkyrimPad = '',
     [string]$Show = 'action|state|window|probe|error|warning'
 )
 
@@ -151,6 +153,16 @@ if (-not $Manual -and $Game -in 'both', 'skyrim' -and $pending.Count -eq 0) {
     if (-not $skyInWorld) { Write-Host 'Skyrim did not load a save within 120 s (see [autoload] lines in SkyrimXER.log)' -ForegroundColor Yellow }
     if (Set-GameFocus skyrim) { Write-Host '  Skyrim in world and focused' -ForegroundColor Green }
     else { Write-Host '  could not bring Skyrim to the front: click its window once (it pauses unfocused)' -ForegroundColor Yellow }
+}
+
+if ($SkyrimPad -and $skyInWorld) {
+    Step 'Skyrim: virtual pad script'
+    Start-Sleep -Seconds 3  # the world fades in after the load message
+    $padFrom = Get-Date
+    & (Join-Path $PSScriptRoot 'pad-input.ps1') -Script $SkyrimPad -Wait
+    Step 'Skyrim log lines during the pad script'
+    Get-Content -LiteralPath $skyLog | Where-Object { $_ -match '\[(input|pad|padscript)\]' } |
+        Where-Object { [datetime]::Parse(($_ -split ' ')[0]).ToLocalTime() -ge $padFrom.AddSeconds(-1) } | Select-Object -Last 60
 }
 
 if ($SkyrimKeys -and $skyInWorld) {

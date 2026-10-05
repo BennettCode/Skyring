@@ -1,10 +1,11 @@
 //! fake-peer: plays one side of the link so the other side can be tested without its game.
 //!
-//! `cargo run -p fake-peer -- <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always] [--walk DEG]`
+//! `cargo run -p fake-peer -- <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always] [--walk DEG] [--buttons MASK]`
 //! - `--seconds N`: run for N seconds (default: until killed), then exit.
 //! - `--no-bye`: exit without a Bye, like a crash (the other side should log a heartbeat timeout).
 //! - `--region NAME`: use another mapping name (tests use one so they never touch a running game's region).
 //! - `--dodge-every S` (skyrim): hold Dodge for 250 ms, first 1 s after connecting, then every S seconds (default 4).
+//! - `--buttons MASK` (skyrim): pulse this InputState.buttons mask (with BridgeOn) instead of Dodge, e.g. 2 = ER Attack (v8).
 //! - `--walk DEG` (skyrim): instead of Dodge pulses, Locomote mode (LOCO-PLAN stage B): hold the stick forward 3 s, stand 1 s,
 //!   with `cam_yaw` = DEG degrees, +90 each cycle. A real ER should turn its character to that yaw (logged every 0.5 s).
 //! - `--pose-always` (er): PoseState stays Active (to watch the swing in Skyrim without dodging).
@@ -35,7 +36,7 @@ const DODGE: u32 = 1 << Button::Dodge as u32;
 const IFRAME: u32 = 1 << PlayerFlag::IFrame as u32;
 
 fn usage() -> ! {
-    eprintln!("usage: fake-peer <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always] [--walk DEG]");
+    eprintln!("usage: fake-peer <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always] [--walk DEG] [--buttons MASK]");
     std::process::exit(2);
 }
 
@@ -131,6 +132,8 @@ struct FakeSky {
     watch: PlayerWatch,
     /// `--walk`: first cam_yaw (degrees); None = Dodge pulses.
     walk: Option<f32>,
+    /// `--buttons`: InputState.buttons mask pulsed instead of Dodge (v8 ER buttons, e.g. 2 = Attack), sent with BridgeOn.
+    buttons: Option<u32>,
 }
 
 impl FakeSky {
@@ -153,9 +156,11 @@ impl FakeSky {
         };
         if held != self.held {
             self.held = held;
-            log.info("input", &format!("Dodge {} frame={frame}", if held { "down" } else { "up" }));
+            log.info("input", &format!("{} {} frame={frame}", self.buttons.map_or("Dodge".into(), |m| format!("buttons {m:#x}")), if held { "down" } else { "up" }));
         }
-        self.writer.write(&InputState { frame, time_ms: now, buttons: if held { DODGE } else { 0 }, ..Default::default() });
+        let mask = self.buttons.unwrap_or(DODGE);
+        let flags = if self.buttons.is_some() { 1 << InputFlag::BridgeOn as u32 } else { 0 };
+        self.writer.write(&InputState { frame, time_ms: now, flags, buttons: if held { mask } else { 0 }, ..Default::default() });
         self.watch.update(log, self.reader.read(), connected, now);
     }
 }
@@ -320,12 +325,14 @@ fn main() {
     };
     let (mut seconds, mut bye, mut region, mut dodge_every, mut pose_always) = (None, true, REGION_NAME.to_string(), 4.0, false);
     let mut walk = None;
+    let mut buttons = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--seconds" => seconds = args.next().and_then(|s| s.parse::<f64>().ok()).or_else(|| usage()),
             "--no-bye" => bye = false,
             "--pose-always" => pose_always = true,
             "--walk" => walk = Some(args.next().and_then(|s| s.parse::<f32>().ok()).unwrap_or_else(|| usage())),
+            "--buttons" => buttons = Some(args.next().and_then(|s| s.parse::<u32>().ok()).unwrap_or_else(|| usage())),
             "--region" => region = args.next().unwrap_or_else(|| usage()),
             "--dodge-every" => dodge_every = args.next().and_then(|s| s.parse::<f64>().ok()).unwrap_or_else(|| usage()),
             _ => usage(),
@@ -377,6 +384,7 @@ fn main() {
                     reader: SlotReader::new(r, OFF_SLOT_PLAYER),
                     watch: PlayerWatch::default(),
                     walk,
+                    buttons,
                 }),
                 Side::EldenRing => Role::Er(FakeEr {
                     reader: SlotReader::new(r.clone(), OFF_SLOT_INPUT),

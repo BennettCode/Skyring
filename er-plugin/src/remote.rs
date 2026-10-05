@@ -21,6 +21,13 @@ use skyrimxer_protocol::slot::{SlotReader, SlotWriter, fresh};
 use crate::{actions, bridge, combat, game, pad};
 
 const DODGE: u32 = 1 << Button::Dodge as u32;
+/// v8 (P4 step 8): Skyrim's ER buttons → ER's own keys, held state forwarded raw every frame (ER's gating picks the move).
+const ER_KEYS: [(Button, UserInputKey, &str); 4] = [
+    (Button::Attack, UserInputKey::Attack, "Attack"),
+    (Button::StrongAttack, UserInputKey::StrongAttack, "StrongAttack"),
+    (Button::Guard, UserInputKey::Guard, "Guard"),
+    (Button::Skill, UserInputKey::Skill, "Skill"),
+];
 const IN_COMBAT: u32 = 1 << InputFlag::InCombat as u32;
 const BRIDGE_ON: u32 = 1 << InputFlag::BridgeOn as u32;
 const LOCOMOTE_FLAG: u32 = 1 << InputFlag::Locomote as u32;
@@ -65,11 +72,15 @@ pub struct DodgeFromSkyrim {
     moving: (f32, f32),
     /// Skyrim's keys behind `moving` (before the Locomote turn), for change-only log lines.
     raw: (f32, f32),
+    /// ER buttons (Attack/StrongAttack/Guard/Skill bits) held last frame, for change-only log lines.
+    buttons: u32,
+    /// The physical pad is being blanked (bridge on, input fresh); logged on change.
+    blanking: bool,
 }
 
 impl DodgeFromSkyrim {
     pub fn new() -> Self {
-        Self { reader: None, last_input: None, fresh: false, held: false, held_frames: 0, since_release: u32::MAX, long_press: false, moving: (0.0, 0.0), raw: (0.0, 0.0) }
+        Self { reader: None, last_input: None, fresh: false, held: false, held_frames: 0, since_release: u32::MAX, long_press: false, moving: (0.0, 0.0), raw: (0.0, 0.0), buttons: 0, blanking: false }
     }
 
     pub fn run(&mut self) {
@@ -98,6 +109,24 @@ impl DodgeFromSkyrim {
         }
 
         let frame = bridge::FRAMES.load(Ordering::Relaxed);
+        // Skyrim owns the controls while the bridge is on: blank what ER read from the physical pad this frame, then write ours.
+        let blank = is_fresh && input.is_some_and(|i| i.flags & BRIDGE_ON != 0);
+        // SAFETY: main thread, inject group (after PadStep).
+        let cleared = if blank { unsafe { pad::clear_virtual() } } else { None };
+        if let Some((bits, analog)) = cleared {
+            if !BLANK_LOGGED.swap(true, Ordering::Relaxed) {
+                crate::info!("input", "frame={frame} physical pad blanking works: {bits} key slots + {analog} analog values released per frame");
+            }
+        }
+        if blank != self.blanking {
+            self.blanking = blank;
+            crate::info!(
+                "input",
+                "frame={frame} physical pad {} ({})",
+                if blank { "blanked: only Skyrim's input reaches ER" } else { "read by ER again (bridge off or input stale)" },
+                cleared.map_or("no pad yet".into(), |(slots, analog)| format!("{slots} key slots, {analog} analog values"))
+            );
+        }
         // Skyrim's combat state → ER's (applied in ChrIns_AILogic by combat::MirrorCombat). Bridge off or stale = ER decides itself.
         let combat = match input {
             Some(i) if is_fresh && i.flags & BRIDGE_ON != 0 => Some(i.flags & IN_COMBAT != 0),
@@ -161,7 +190,26 @@ impl DodgeFromSkyrim {
             // SAFETY: main thread. PadStep re-copies the device data each frame, so a held stick is written every frame.
             unsafe { pad::set_move(moving.0, moving.1) };
         }
-        DRIVING.store(held || moving != (0.0, 0.0), Ordering::Relaxed);
+        let buttons = match input {
+            Some(i) if is_fresh && player.is_some() => i.buttons & ER_KEYS.iter().fold(0, |m, (b, _, _)| m | 1 << *b as u32),
+            _ => 0,
+        };
+        if buttons != self.buttons {
+            let names: Vec<&str> = ER_KEYS.iter().filter(|(b, _, _)| buttons & (1 << *b as u32) != 0).map(|(_, _, n)| *n).collect();
+            // SAFETY: main thread.
+            let anim = player.as_deref().map(|p| game::snapshot(p).anim_id).unwrap_or(-1);
+            crate::info!("input", "frame={frame} ER buttons {:#x} -> {buttons:#x} [{}] (anim {anim})", self.buttons, names.join(" "));
+        }
+        for (b, key, _) in ER_KEYS {
+            let down = buttons & (1 << b as u32) != 0;
+            // Held keys every frame (PadStep re-copies the devices); a release once (the blanking also clears it while bridged).
+            if down || self.buttons & (1 << b as u32) != 0 {
+                // SAFETY: main thread.
+                unsafe { pad::set_digital(key, down) };
+            }
+        }
+        self.buttons = buttons;
+        DRIVING.store(held || moving != (0.0, 0.0) || buttons != 0, Ordering::Relaxed);
         // SAFETY (all pad calls): main thread.
         if held && !self.held {
             let (i, s) = (input.unwrap(), game::snapshot(player.unwrap()));
@@ -199,6 +247,9 @@ impl DodgeFromSkyrim {
         self.held = held;
     }
 }
+
+/// The first successful blanking was logged.
+static BLANK_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Move stick held for Skyrim right now (x bits << 32 | y bits), for the `[coords]` lines.
 static MOVE: AtomicU64 = AtomicU64::new(0);

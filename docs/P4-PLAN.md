@@ -114,7 +114,17 @@ First: copy this plan to `docs/P4-PLAN.md`, ROADMAP P4/P5 edits (swallow list, v
 - **Test = P4 accept:** a hostile NPC (spawned via console on the test save) attacks; the user rolls through swings. Log: hits during
   i-frames skipped, others land; stamina spam limited.
 
-### 8. DualSense in Skyrim (last; own mini-plan when reached)
+### 8. DualSense in Skyrim: done 2026-10-05 (user pad test passed)
+- **Result:** the plugin reads the DualSense over HID (`bridge/Gamepad.cpp`, parser + layouts `bridge/PadReport.h`) and answers Skyrim's
+  `XInputGetState` import (`hooks/XInput.cpp`; Skyrim imports XInput by ordinal, so the IAT is walked by hand). User layout = Elden
+  Ring's buttons (README). R1/R2/L1/L2 → protocol v8 `Button` Attack/StrongAttack/Guard/Skill → ER virtual keys (`remote.rs`).
+  ER read the physical pad itself (libScePad; R1 played ER attacks): while bridged, `pad::clear_virtual` releases every action key and
+  analog value after PadStep, then ours are written. Mouse attacks → ER, vanilla attack/block off (`hooks/AttackSwallow.cpp`).
+- **Found on the way:** Steam Input exposes a second copy of the DualSense as an XInput pad (no touchpad, slow triggers). It made the
+  touchpad open the Journal and the Journal tabs ignore the triggers. Our HID pad now always wins; other pads are hidden while it's open.
+- **Agent pad tests:** `tools/pad-input.ps1` / `dev.ps1 -SkyrimPad` (dev virtual pad, `bridge/PadScript.*`): map, Journal tabs, Tween
+  verified by screenshot before the user's test.
+- Original options (kept for reference):
 - Options: `cmd /c start` launch option, non-Steam shortcut, or reading the pad in the plugin. Also stop the hidden ER reading the same pad.
 
 ## Files (main)
