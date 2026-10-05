@@ -72,6 +72,8 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
 - **Elden Ring's state comes back to Skyrim every frame:** stamina (a dodge costs stamina in combat), HP, animation.
   Skyrim shows a short on-screen message after each dodge, e.g. `ER dodge: anim 27110 | stamina 136->124 | i-frames yes`.
 - **Rolls cost stamina only while your Skyrim character is in combat**, like in Elden Ring (exploring, they're free).
+- **Skyrim's stamina bar is Elden Ring's stamina.** It drains when you roll or sprint in combat and refills at Elden Ring's pace;
+  when it's empty, Elden Ring decides you can't roll. F10 (link off) gives Skyrim its own stamina back.
 - **Your Skyrim character moves with the roll,** smoothly every frame: the same distance and speed as Elden Ring's roll, in the direction you're looking + holding,
   stopped by Skyrim's walls (Elden Ring's walls don't matter: the hidden character never leaves its spot). Spamming chains rolls. **Tap** Sprint to dodge, **hold** it to sprint.
 - **Your Skyrim character plays Elden Ring's real roll animation.** Elden Ring plays the roll on its hidden character, and its skeleton
@@ -95,7 +97,7 @@ Skyrim is keyboard-and-mouse only for now (details below). The i-frames are know
 | P1 | Both plugins load and log | ✅ done |
 | P2 | Shared memory link: handshake, heartbeats, crash fail-safe | ✅ done |
 | P3 | Dodge in Skyrim → Elden Ring dodges → its stamina and i-frames come back | ✅ done |
-| **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 in progress (5/7: Sprint = dodge, combat stamina, rolls move you, Elden Ring's roll animation plays in Skyrim; walking, running and sprinting are Elden Ring's) |
+| **P4** | **Rolls, i-frames, stamina and sprint drive the Skyrim player; controller support** | 🔄 in progress (6/7: Sprint = dodge, combat stamina, rolls move you, Elden Ring's roll animation plays in Skyrim; walking, running and sprinting are Elden Ring's; Skyrim's stamina bar shows Elden Ring's) |
 | P5 | Damage both ways uses Elden Ring's math (poise, stagger) | ⏳ |
 | P6 | Elden Ring-style HUD | ⏳ |
 | P7 | Runes from kills, leveling, flasks refill at "graces" | ⏳ |
@@ -176,7 +178,7 @@ Run scripts with `powershell -ExecutionPolicy Bypass -File <script>`. More in [`
 ## Credits
 
 Built on SKSE, CommonLibSSE-NG, Address Library, me3 and eldenring-rs. Design and code patterns are borrowed (with thanks) from
-other game-merge projects (SkyCraft's frame interpolation is adapted in `skse/src/bridge/Timeline.cpp`, MIT): [SkyCraft](https://github.com/chasmlol/SkyCraft), [FalloutCraft](https://github.com/zeyvu/FalloutCraft),
+other game-merge projects (SkyCraft's frame interpolation is adapted in `skse/src/bridge/Timeline.cpp`, FalloutCraft's bar mirror in `skse/src/bridge/Stamina.cpp`, both MIT): [SkyCraft](https://github.com/chasmlol/SkyCraft), [FalloutCraft](https://github.com/zeyvu/FalloutCraft),
 [Killcraft](https://github.com/goonsn/Killcraft), [2010-rust-rewrite-mashup](https://github.com/chasmlol/2010-rust-rewrite-mashup)
 and the ideas of [GTA San AnSkateas](https://github.com/ryglizzy/GTA-San-AnSkateas).
 Full list and licenses: [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).

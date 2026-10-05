@@ -11,6 +11,7 @@ Step 4 done: the Skyrim player follows ER's rolls (ER's velocity put into Skyrim
 chains, tap = dodge / hold = sprint, movement back at ER's move-cancel window). Step 4b: the hidden ER character is pinned to its spot
 every frame and Skyrim follows its virtual position, so ER walls no longer shorten rolls (`er-plugin/src/park.rs`).
 Step 5 done by pose streaming: ER's roll animation plays on the Skyrim player (`docs/POSE-PLAN.md`).
+Step 6 done (2026-10-05): Skyrim's stamina bar shows ER's stamina share (`skse/src/bridge/Stamina.cpp`).
 LOCO-PLAN (`docs/LOCO-PLAN.md`): stage A (smooth, faithful rolls) and stage B (ER drives walking, running, sprinting and rolling while
 the bridge is on, protocol v7) done. The run/sprint pose was checked bone by bone against ER and fixed (COM yaw, spine conjugation;
 hip/chest/lean within 4° of ER), and the user's feel test raised no issue (2026-10-05).
@@ -38,8 +39,8 @@ window come back every frame; coordinate conversion measured (`protocol/src/coor
 
 ## Next 3 steps (P4, `docs/P4-PLAN.md`)
 1. Optional pose polish: foot planting, hand/foot bones (see `docs/research/skyrim-hooks.md` "Polish later").
-2. Step 6: Skyrim's stamina bar mirrors ER's.
-3. Step 7: NPC hits during ER i-frames are cancelled.
+2. Step 7: NPC hits during ER i-frames are cancelled (the P4 accept test).
+3. Step 8: DualSense in Skyrim (own mini-plan).
 
 ## Handoff notes
 **LOCO-PLAN stage B done, agent-tested (2026-10-05).** ER drives walking/running/sprinting/rolling while the bridge is on

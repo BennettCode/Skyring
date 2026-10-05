@@ -4,6 +4,16 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: Skyrim's stamina bar shows Elden Ring's stamina (P4 step 6)
+- **Changed:** new `skse/src/bridge/Stamina.{h,cpp}`, called every frame from `bridge::OnFrame`. While the link is on and ER is in the
+  world, the player's Stamina = Skyrim max × ER stamina/max, set through the damage modifier (`ModActorValue` vfunc, read back to check it took). Max uses
+  `GetActorValueMax` (AE id 38469, verified with `addrlib-check`). Link off / stale / dead → untouched, so Skyrim's own stamina returns.
+  Pattern adapted from FalloutCraft `fo_combat.cpp:151-188` (MIT; NOTICES row, `licenses/FalloutCraft.txt`, README credit).
+- **Tested** (both games, `-ErForceCombat on`, key scripts): 6 rolls + a 4 s sprint, then 16 chained rolls. ER 136 → 8 matched Skyrim
+  400 → 24 at every logged step, then refilled to full together. No "didn't take" warning. The HUD bar was visible and shrinking
+  (screenshot). F10 off → `mirror off`, on → `mirror on`.
+- **Not tested:** the exact 0 case (ER stopped at 8: it refused or spaced the last rolls by its own rules).
+
 ## 2026-10-05: Run and sprint pose matches ER (body direction, lean, chest sway)
 - **User report:** in the run and sprint, the body direction and lean looked off (weapon sheathed and drawn); then the sprint still looked off.
 - **Probe:** a new `[body]` line on both sides (`er-plugin/src/body.rs`, `Pose.cpp` MeasureBody), every 120 moving frames. It gives the

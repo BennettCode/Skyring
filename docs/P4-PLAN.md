@@ -95,7 +95,9 @@ First: copy this plan to `docs/P4-PLAN.md`, ROADMAP P4/P5 edits (swallow list, v
   in a fresh chat; it would animate every ER action (P5 attacks too), so it may become its own phase.
   **Plan: `docs/POSE-PLAN.md`** (user chose pose streaming, 2026-10-04).
 
-### 6. Stamina bar mirrors ER (Skyrim)
+### 6. Stamina bar mirrors ER (Skyrim): done 2026-10-05
+- **Result:** `skse/src/bridge/Stamina.cpp` (FalloutCraft fraction mirror). Forced combat (`-ErForceCombat on`): rolls + sprint drained
+  ER 136 → 8 and Skyrim 400 → 24 (same share every frame, the damage modifier always took), refill tracked to full, F10 off/on switches the mirror.
 - Every frame with fresh PlayerState: Skyrim Stamina current = Skyrim max × ER stamina/max (damage-modifier delta via
   `ActorValueOwner::RestoreActorValue/DamageActorValue`), logged on change. Stale/bridge off → stop touching it.
 - "Out of stamina = no roll" is ER's own gating. **Test:** in Skyrim combat, spam Sprint+W: bar drains, ER refuses rolls at 0

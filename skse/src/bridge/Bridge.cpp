@@ -9,6 +9,7 @@
 #include "bridge/PlayerWatch.h"
 #include "bridge/Pose.h"
 #include "bridge/Slot.h"
+#include "bridge/Stamina.h"
 #include "bridge/Timeline.h"
 #include "hooks/PlayerUpdate.h"
 #include "hooks/ControllerVelocity.h"
@@ -379,6 +380,8 @@ namespace sxer::bridge
 			movement::Update(a_player, on ? view.player : fresh, move, on, pressed, a_delta, frame);
 		}
 		locomotion::Update(a_player, on ? view.player : std::nullopt, move, on && connected, a_delta, frame);
+		// ER owns stamina: Skyrim's bar shows ER's share (P4 step 6).
+		stamina::Update(a_player, on && connected ? view.player : std::nullopt, frame);
 		const bool loco = locomotion::Running();
 		// Steering out of a roll hands the body back to Skyrim at ER's move-cancel window (the pose would otherwise keep playing the recovery).
 		// Outside locomotion only dodges are shown (ER may still flag a few frames Active after Locomote went off).

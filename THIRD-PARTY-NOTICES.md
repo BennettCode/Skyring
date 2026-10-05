@@ -8,7 +8,7 @@ If code is copied, also keep the original license text in `licenses/<project>.tx
 | Project | Used for | License | Link |
 |---|---|---|---|
 | SkyCraft (chasmlol) | Reference architecture: shared-memory protocol, seqlock slot pattern, PlayerCharacter::Update hook + input sink pattern, authority split, frame lockstep, CMake/CommonLib setup, fake-peer testing; **code adapted:** the stamped-history interpolation with an adaptive render delay (`Game.cpp:662-760` → `skse/src/bridge/Timeline.cpp`, license in `licenses/SkyCraft.txt`) | MIT | https://github.com/chasmlol/SkyCraft |
-| FalloutCraft (zeyvu) | Reference port of the SkyCraft design | MIT | https://github.com/zeyvu/FalloutCraft |
+| FalloutCraft (zeyvu) | Reference port of the SkyCraft design; **code adapted:** the host-bar fraction mirror through the damage modifier (`FO4_ModFiles/fo_combat.cpp:151-188` → `skse/src/bridge/Stamina.cpp`, license in `licenses/FalloutCraft.txt`) | MIT | https://github.com/zeyvu/FalloutCraft |
 | GTA San AnSkateas (ryglizzy) | Reference: plugin + Rust FFI engine bridge (study only; no LICENSE file, so **don't copy code**) | none found | https://github.com/ryglizzy/GTA-San-AnSkateas |
 | Killcraft (goonsn) | Reference: host-side patterns (tick interpolation, damage forwarding, input hand-back, overlay) | MIT | https://github.com/goonsn/Killcraft |
 | 2010-rust-rewrite-mashup (vladtrc, chasmlol) | Reference: skeleton pose retargeting (`render_anim/src/skate/rig.rs`) and AI agent workflow; its bind-delta retarget idea is re-implemented (no code copied) in `protocol/src/rig.rs` (`docs/POSE-PLAN.md`) | Apache-2.0 (its `skate/` and `third_party/` folders: no license stated, study only) | https://github.com/chasmlol/2010-rust-rewrite-mashup |
