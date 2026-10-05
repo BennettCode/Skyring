@@ -12,6 +12,9 @@
 
 namespace sxer
 {
+	// While the peer is alive but no handshake happened, re-send the Hello this often (link.rs HELLO_RETRY_MS).
+	constexpr std::uint64_t kHelloRetryMs = 2000;
+
 	namespace
 	{
 		using namespace proto;
@@ -430,7 +433,11 @@ namespace sxer
 		const bool live = state == SideState::Starting || state == SideState::Ready || state == SideState::Running;
 		const bool alive = live && beat != 0 && age <= kHeartbeatTimeoutMs;
 
-		if (alive && (!peerAlive_ || attach != peerAttach_)) {
+		const bool restarted = attach != peerAttach_;
+		if (alive && !restarted && !peerAlive_ && status_ == PeerStatus::Connected) {
+			// Back after a timeout and already reconnected (its Hello arrived meanwhile): nothing to redo (link.rs, same rule).
+			Say(Level::Info, std::format("{} pid={} beats again (attach#{}); still connected", peer, pid, attach));
+		} else if (alive && (!peerAlive_ || restarted)) {
 			if (status_ == PeerStatus::Connected) {
 				Say(Level::Warn, std::format("LOST: {} restarted (attach#{} → #{}); reconnecting", peer, peerAttach_, attach));
 				status_ = PeerStatus::Lost;
@@ -439,8 +446,8 @@ namespace sxer
 				SetState(SideState::Ready);  // also clears Faulted: a new peer gets a fresh try
 			}
 			peerAttach_ = attach;
-			peerSeenAtMs_ = a_nowMs;
-			helloMissingWarned_ = false;
+			helloSentAtMs_ = a_nowMs;
+			helloRetries_ = 0;
 			const bool sent = SendHello();
 			Say(Level::Info, std::format("{} detected pid={} attach#{} state={}; Hello sent {}", peer, pid, attach, StateName(rawState),
 								 sent ? std::format("Ok({})", tx_.seq) : std::string("Err(Full)")));
@@ -451,9 +458,16 @@ namespace sxer
 			Say(Level::Warn, std::format("LOST: {} pid={}: {}; going idle (fail-safe)", peer, pid, reason));
 			status_ = PeerStatus::Lost;
 			SetState(SideState::Ready);
-		} else if (alive && status_ != PeerStatus::Connected && !helloMissingWarned_ && a_nowMs - peerSeenAtMs_ > 5000) {
-			helloMissingWarned_ = true;
-			Say(Level::Warn, std::format("{} has been alive for 5 s but sent no Hello (state={})", peer, StateName(rawState)));
+		} else if (alive && status_ != PeerStatus::Connected && state_ != SideState::Faulted && a_nowMs - helloSentAtMs_ >= kHelloRetryMs) {
+			// No handshake yet although the peer is alive: a Hello can be eaten by a side that connects on it without replying
+			// (2026-10-05 deadlock after a 36 s ER stall), so keep re-sending until it answers (link.rs, same rule).
+			helloSentAtMs_ = a_nowMs;
+			++helloRetries_;
+			const bool sent = SendHello();
+			if (helloRetries_ == 1 || helloRetries_ % 10 == 0) {
+				Say(Level::Warn, std::format("{} is alive but no handshake yet (state={}); Hello re-sent {} (retry {})", peer, StateName(rawState),
+									 sent ? std::format("Ok({})", tx_.seq) : std::string("Err(Full)"), helloRetries_));
+			}
 		}
 		peerAlive_ = alive;
 	}

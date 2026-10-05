@@ -402,8 +402,20 @@ namespace
 			}
 			Check(sky.Connected() && er.Connected(), "ER resumes → reconnected");
 			Check(!has("seq gap"), "no seq gaps");
+
+			// 2026-10-05 field bug replay (link.rs stall_reconnect_never_deadlocks): ER loses Skyrim, queues a Hello, stalls; Skyrim
+			// times ER out and connects on that Hello in the same tick. The same ER beating again must not count as a restart.
+			er.Tick(12000, 0);
+			sky.Tick(12010, 0);
+			er.Tick(12020, 0);
+			sky.Tick(15000, 0);
+			for (std::uint64_t t = 15050; t <= 20000; t += 50) {
+				both(t);
+			}
+			Check(sky.Connected() && er.Connected(), "stall replay: both reconnected (no deadlock)");
+			Check(!has("restarted (attach#1"), "stall replay: the same ER is not a restart");
 		}  // ER link destroyed: Bye + handle closed
-		sky.Tick(9150, 0);
+		sky.Tick(20050, 0);
 		Check(sky.Status() == PeerStatus::Lost && has("said Bye (reason=Quit)"), "ER Bye → Skyrim goes idle");
 		SlotTests(sky.Shared().base.load());
 

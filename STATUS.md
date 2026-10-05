@@ -40,10 +40,10 @@ window come back every frame; coordinate conversion measured (`protocol/src/coor
   Continue each run (no warp in P3). The user tests with a DualSense (PS5) over USB in both games.
 
 ## Next 3 steps (P4, `docs/P4-PLAN.md`)
-1. Fix the link deadlock after a long ER stall (Skyrim reads it as "ER restarted" with the same attach#; both sides then wait).
-2. P5 plan (`docs/P5-PLAN.md`): ER swings damage Skyrim NPCs (ER attack window + damage → SkyCraft's HitData path), then Skyrim weapon
+1. P5 plan (`docs/P5-PLAN.md`): ER swings damage Skyrim NPCs (ER attack window + damage → SkyCraft's HitData path), then Skyrim weapon
    type → ER weapon, then NPC hits through ER HP.
-3. P4 accept playtest: roll through an NPC's swings with the pad.
+2. P4 accept playtest: roll through an NPC's swings with the pad.
+3. Find why ER freezes for seconds during load-in (the link now survives it).
 
 ## Handoff notes
 **LOCO-PLAN stage B done, agent-tested (2026-10-05).** ER drives walking/running/sprinting/rolling while the bridge is on

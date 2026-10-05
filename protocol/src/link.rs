@@ -4,6 +4,9 @@
 //! Per tick: attach (retry every 1 s) → refresh own heartbeat → read events → check the peer → maybe send a Heartbeat event.
 //! - Peer alive = its state is Starting/Ready/Running and its heartbeat is at most `HEARTBEAT_TIMEOUT_MS` old.
 //! - When a new peer appears (alive again, or its attach count changed), send it a Hello. Its Hello back = connected.
+//!   The same peer (same attach count) beating again after a timeout is not a restart: a connection made meanwhile is kept.
+//!   While the peer is alive and no handshake has happened, the Hello is re-sent every `HELLO_RETRY_MS` (a Hello can be eaten by
+//!   a side that connects on it without replying; 2026-10-05 deadlock after a 36 s ER stall).
 //! - Connected peer stops beating, faults, or says Bye → lost → this side goes idle (the fail-safe) and waits again.
 
 use std::mem::offset_of;
@@ -117,6 +120,9 @@ impl LinkShared {
     }
 }
 
+/// While the peer is alive but no handshake happened, re-send the Hello this often.
+pub const HELLO_RETRY_MS: u64 = 2000;
+
 pub struct Link {
     side: Side,
     region_name: String,
@@ -132,8 +138,9 @@ pub struct Link {
     peer_alive: bool,
     peer_attach: u32,
     peer_seq: u32,
-    peer_seen_at_ms: u64,
-    hello_missing_warned: bool,
+    /// When we last sent the peer a Hello (retry clock).
+    hello_sent_at_ms: u64,
+    hello_retries: u32,
     next_beat_event_ms: u64,
 }
 
@@ -163,8 +170,8 @@ impl Link {
             peer_alive: false,
             peer_attach: 0,
             peer_seq: 0,
-            peer_seen_at_ms: 0,
-            hello_missing_warned: false,
+            hello_sent_at_ms: 0,
+            hello_retries: 0,
             next_beat_event_ms: 0,
         }
     }
@@ -407,7 +414,11 @@ impl Link {
             && beat != 0
             && age <= HEARTBEAT_TIMEOUT_MS;
 
-        if alive && (!self.peer_alive || attach != self.peer_attach) {
+        let restarted = attach != self.peer_attach;
+        if alive && !restarted && !self.peer_alive && self.status == PeerStatus::Connected {
+            // Back after a timeout and already reconnected (its Hello arrived meanwhile): nothing to redo.
+            self.say(Level::Info, &format!("{peer} pid={pid} beats again (attach#{attach}); still connected"));
+        } else if alive && (!self.peer_alive || restarted) {
             if self.status == PeerStatus::Connected {
                 self.say(Level::Warn, &format!("LOST: {peer} restarted (attach#{} → #{attach}); reconnecting", self.peer_attach));
                 self.status = PeerStatus::Lost;
@@ -416,8 +427,8 @@ impl Link {
                 self.set_state(a, SideState::Ready); // also clears Faulted: a new peer gets a fresh try
             }
             self.peer_attach = attach;
-            self.peer_seen_at_ms = now_ms;
-            self.hello_missing_warned = false;
+            self.hello_sent_at_ms = now_ms;
+            self.hello_retries = 0;
             let sent = self.send_hello(a);
             self.say(Level::Info, &format!("{peer} detected pid={pid} attach#{attach} state={state:?}; Hello sent {sent:?}"));
         } else if !alive && self.peer_alive && self.status == PeerStatus::Connected {
@@ -429,9 +440,20 @@ impl Link {
             self.say(Level::Warn, &format!("LOST: {peer} pid={pid}: {reason}; going idle (fail-safe)"));
             self.status = PeerStatus::Lost;
             self.set_state(a, SideState::Ready);
-        } else if alive && self.status != PeerStatus::Connected && !self.hello_missing_warned && now_ms - self.peer_seen_at_ms > 5000 {
-            self.hello_missing_warned = true;
-            self.say(Level::Warn, &format!("{peer} has been alive for 5 s but sent no Hello (state={state:?})"));
+        } else if alive
+            && self.status != PeerStatus::Connected
+            && self.state != SideState::Faulted
+            && now_ms.saturating_sub(self.hello_sent_at_ms) >= HELLO_RETRY_MS
+        {
+            self.hello_sent_at_ms = now_ms;
+            self.hello_retries += 1;
+            let sent = self.send_hello(a);
+            if self.hello_retries == 1 || self.hello_retries % 10 == 0 {
+                self.say(
+                    Level::Warn,
+                    &format!("{peer} is alive but no handshake yet (state={state:?}); Hello re-sent {sent:?} (retry {})", self.hello_retries),
+                );
+            }
         }
         self.peer_alive = alive;
     }
@@ -529,6 +551,47 @@ mod tests {
         assert!(sky.connected() && er.connected(), "sky: {sky_log:?}
 er: {er_log:?}");
         assert!(!has(&sky_log, "seq gap") && !has(&er_log, "seq gap"));
+    }
+
+    /// 2026-10-05 field bug: ER stalled 36 s. Skyrim timed it out and took its queued Hello in the same tick, then read the same ER
+    /// beating again as a restart, dropped the fresh connection and sent a Hello that ER (not connected yet) took without replying:
+    /// Skyrim waited forever. This replays that order with the test clock.
+    #[test]
+    fn stall_reconnect_never_deadlocks() {
+        let region = name("stall");
+        let (mut sky, sky_log) = link(Side::Skyrim, &region);
+        let (mut er, er_log) = link(Side::EldenRing, &region);
+        for t in [1000, 1050, 1100] {
+            tick_both(&mut sky, &mut er, t);
+        }
+        assert!(sky.connected() && er.connected());
+        er.tick(4000, 0); // ER resumes first: Skyrim's beat (1100) looks stale → ER loses Skyrim
+        sky.tick(4010, 0); // Skyrim is fine and still connected
+        er.tick(4020, 0); // ER sees Skyrim again → Hello queued; then ER stalls
+        sky.tick(7000, 0); // Skyrim: ER timed out, and the queued Hello connects it in the same tick
+        for t in (7050..=12000).step_by(50) {
+            tick_both(&mut sky, &mut er, t);
+        }
+        assert!(sky.connected() && er.connected(), "sky: {sky_log:?}\ner: {er_log:?}");
+        assert!(!has(&sky_log, "restarted (attach#1 → #1)"), "the same ER is not a restart: {sky_log:?}");
+    }
+
+    /// A Hello that nobody answers (eaten by a side that connected on it) is re-sent until the handshake completes.
+    #[test]
+    fn hello_is_retried_until_answered() {
+        let region = name("retry");
+        let (mut sky, sky_log) = link(Side::Skyrim, &region);
+        let (mut er, er_log) = link(Side::EldenRing, &region);
+        for t in [1000, 1050, 1100] {
+            tick_both(&mut sky, &mut er, t);
+        }
+        // Skyrim alone forgets the connection (as after a false restart), with no Hello in flight.
+        sky.status = PeerStatus::Lost;
+        for t in (1150..=5000).step_by(50) {
+            tick_both(&mut sky, &mut er, t);
+        }
+        assert!(sky.connected() && er.connected(), "sky: {sky_log:?}\ner: {er_log:?}");
+        assert!(has(&sky_log, "Hello re-sent") && has(&er_log, "Hello again"));
     }
 
     #[test]

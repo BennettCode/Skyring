@@ -4,6 +4,18 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: Link no longer deadlocks after an Elden Ring stall
+- **Bug:** ER froze 36 s while loading. Skyrim timed it out and, in the same tick, connected on ER's queued Hello. On the next tick it read
+  the same ER (same attach#) beating again as a restart, dropped the connection and sent a Hello, which ER (not connected yet) took
+  without replying. Skyrim then waited forever (`connected=false` until both games restarted).
+- **Fix (both sides, `protocol/src/link.rs` + `skse/src/bridge/Link.cpp`):** the same attach# coming back is not a restart (an existing
+  connection is kept, logged "beats again; still connected"); while the peer is alive and no handshake happened, the Hello is re-sent
+  every 2 s (`HELLO_RETRY_MS`), so a swallowed Hello heals itself.
+- **Tested:** new Rust tests `stall_reconnect_never_deadlocks` (replays the field order; failed on the old code) and
+  `hello_is_retried_until_answered`; the same replay in the C++ selftest; `tests/run-tests.ps1` green. Live: ER suspended for 10 s
+  (NtSuspendProcess) → reconnected one tick after resume; during load-in both new paths fired ("beats again", "Hello re-sent" → CONNECTED).
+- **Seen, not fixed:** ER itself freezes for 2–12 s at times during load-in (its own log goes silent); the link now rides through it.
+
 ## 2026-10-05: DualSense with Elden Ring's buttons, protocol v8 (P4 step 8)
 - **Changed (Skyrim):** `bridge/Gamepad.cpp` reads the DualSense over HID (USB/Bluetooth); `bridge/PadReport.h` parses reports and holds
   the layouts; `hooks/XInput.cpp` answers Skyrim's `XInputGetState` (IAT, ordinal import) with the gameplay layout (Elden Ring's buttons,

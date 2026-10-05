@@ -74,6 +74,8 @@ languages, `version` + region name bump for any layout change.
   attach (retry 1 s) → write own heartbeat → check peer → read events → maybe send a Heartbeat event.
   - Peer **alive** = state Starting/Ready/Running and heartbeat ≤ 2 s old. A **new peer** (became alive, or its attach count changed) gets a Hello.
     Its Hello back = **CONNECTED**. A Hello received while connected means the peer lost us, so we answer it.
+    The same attach# beating again after a timeout is not a restart (a connection made meanwhile is kept). While the peer is alive
+    and unconnected, the Hello is re-sent every 2 s (`HELLO_RETRY_MS`): a Hello taken without a reply can't deadlock (2026-10-05).
   - **LOST** (fail-safe → idle, keep waiting): heartbeat timeout, peer state ShuttingDown/Faulted, or Bye.
   - Bye is best effort at process exit (DLL detach, never blocks or logs there). A crash is covered by the timeout.
 - Why a thread, not the frame task: the heartbeat must keep going through loading screens and ER's unfocused pauses. Whether ER's game loop

@@ -121,8 +121,8 @@ namespace sxer
 		bool peerAlive_ = false;
 		std::uint32_t peerAttach_ = 0;
 		std::uint32_t peerSeq_ = 0;
-		std::uint64_t peerSeenAtMs_ = 0;
-		bool helloMissingWarned_ = false;
+		std::uint64_t helloSentAtMs_ = 0;  // when we last sent the peer a Hello (retry clock)
+		std::uint32_t helloRetries_ = 0;
 		std::uint64_t nextBeatEventMs_ = 0;
 	};
 }
