@@ -1,6 +1,6 @@
 # STATUS
 
-_Last updated: 2026-10-05_
+_Last updated: 2026-10-06_
 
 ## Current phase
 **P4: in progress** (plan: `docs/P4-PLAN.md`). Step 1 done (2026-10-04): while the bridge is on, Skyrim's vanilla sprint is off (Sprint =
@@ -13,7 +13,7 @@ every frame and Skyrim follows its virtual position, so ER walls no longer short
 Step 5 done by pose streaming: ER's roll animation plays on the Skyrim player (`docs/POSE-PLAN.md`).
 Step 6 done (2026-10-05): Skyrim's stamina bar shows ER's stamina share (`skse/src/bridge/Stamina.cpp`).
 Step 7 done for melee (2026-10-05): NPC melee hits during ER's roll i-frames are dropped (`skse/src/hooks/PlayerHit.cpp`); arrows/spells → P5.
-**P5 in progress** (`docs/P5-PLAN.md`): step 1 done (2026-10-05): ER swings hit Skyrim NPCs (hit window from ER memory, ER attack rating, ER-like damage, poise stagger; protocol v9). Step 2 done: the Skyrim weapon kind picks the ER weapon/moveset, material → upgrade level (protocol v10). Step 3 done: the player's health is ER's HP (protocol v11). Bows: ER draw/shot animation, Skyrim arrow on release (protocol v12).
+**P5 in progress** (`docs/P5-PLAN.md`): step 1 done (2026-10-05): ER swings hit Skyrim NPCs (hit window from ER memory, ER attack rating, ER-like damage, poise stagger; protocol v9). Step 2 done: the Skyrim weapon kind picks the ER weapon/moveset, material → upgrade level (protocol v10). Step 3 done: the player's health is ER's HP (protocol v11). Bows: ER draw/shot animation, Skyrim arrow on release (protocol v12). Grip (v13): weapons point along ER's weapon bone, bows ride in the right hand except while drawing, hands fitted by thumb + middle finger.
 Step 8 done (2026-10-05): DualSense with Elden Ring's layout (plugin reads it over HID; protocol v8 forwards R1/R2/L1/L2 to ER; ER ignores the physical pad while bridged).
 LOCO-PLAN (`docs/LOCO-PLAN.md`): stage A (smooth, faithful rolls) and stage B (ER drives walking, running, sprinting and rolling while
 the bridge is on, protocol v7) done. The run/sprint pose was checked bone by bone against ER and fixed (COM yaw, spine conjugation;

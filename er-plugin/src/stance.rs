@@ -18,9 +18,8 @@
 use std::sync::atomic::Ordering;
 
 use eldenring::cs::{ChrAsm, ChrAsmArmStyle, ChrAsmEquipmentSlots, PlayerIns};
-use skyrimxer_protocol::now_ms;
 use skyrimxer_protocol::proto::{InputFlag, InputState, OFF_SLOT_INPUT, Stance};
-use skyrimxer_protocol::slot::{SlotReader, fresh};
+use skyrimxer_protocol::slot::SlotReader;
 
 use crate::{bridge, config, game, park};
 
@@ -318,7 +317,9 @@ impl StanceSync {
         // A torn read keeps the last good copy (remote.rs does the same).
         self.last_input = self.reader.as_ref().and_then(|r| r.read()).or(self.last_input);
         let connected = bridge::shared().is_some_and(|s| s.connected());
-        let input = self.last_input.filter(|i| connected && fresh(i.time_ms, now_ms()) && i.flags & BRIDGE_ON != 0);
+        // Stale input while connected = Skyrim is paused in a menu: keep its stance/weapon/ammo (putting ER's own back and re-equipping
+        // after every menu made the next bow shot fail, 2026-10-05). ER's own come back on F10 off or when Skyrim goes away.
+        let input = self.last_input.filter(|i| connected && i.flags & BRIDGE_ON != 0);
         let anim = game::snapshot(player).anim_id;
         if park::is_dodge_anim(anim) || crate::attack::kind_of(anim) != skyrimxer_protocol::proto::AttackKind::None {
             return; // never switch mid-dodge or mid-swing

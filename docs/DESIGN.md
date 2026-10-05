@@ -50,10 +50,11 @@ languages, `version` + region name bump for any layout change.
                               BridgeOn), move_x/y, cam_yaw
 0x00300 PlayerState  er→sky   seqlock slot (96 B; + time_us, cam_yaw): flags (PlayerFlag bits), frame, time_ms, hp/fp/stamina + maxes,
                               anim_id, block_id, poise(+max), pos[3], yaw
-0x00400 PoseState    er→sky   seqlock slot (440 B): flags (PoseFlag Active), frame, time_ms, time_us, bone_count, yaw,
-                              pelvis_offset[3], rot[4 × 24] (PoseBone order; model-space delta from bind, Skyrim basis)
-0x00800 PoseBind     er→sky   seqlock slot (304 B), written once per ER skeleton: ER bind segment direction per bone
-                              (Skyrim basis) → Skyrim's limb fits
+0x00400 PoseState    er→sky   seqlock slot (464 B): flags (PoseFlag Active, BowLeft), frame, time_ms, time_us, bone_count, yaw,
+                              pelvis_offset[3], rot[4 × 24] (PoseBone order; model-space delta from bind, Skyrim basis),
+                              blade[3 × 2] (v13: L/R_Weapon +Y, Skyrim basis → Skyrim aims WEAPON, carries the bow)
+0x00800 PoseBind     er→sky   seqlock slot (328 B), written once per ER skeleton: ER bind segment direction per bone
+                              (Skyrim basis) → Skyrim's limb fits; thumb[3 × 2] (v13: hand → thumb base, fixes the hand roll)
 0x01000 ring data    sky→er   64 KiB
 0x11000 ring data    er→sky   64 KiB
 ```

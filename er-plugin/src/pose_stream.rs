@@ -75,6 +75,10 @@ struct Rig {
     basis: Basis,
     /// PoseBind directions (Skyrim basis, unit; zero = none).
     dirs: [Vec3; N],
+    /// PoseBind thumbs: left, right hand → Finger0 (Skyrim basis, unit; zero = none).
+    thumbs: [Vec3; 2],
+    /// L_Weapon, R_Weapon (PoseState.blade).
+    weapons: [Option<usize>; 2],
 }
 
 impl Rig {
@@ -175,7 +179,21 @@ impl Rig {
             .filter_map(|name| Some(format!("{name}={}", fmt(basis.vec(sub(at(name).ok()?, feet))))))
             .collect();
         crate::info!("pose", "left arm twist chain bind (Skyrim basis, m from mid-feet): {}", twist.join(" "));
-        Ok(Self { skeleton: skel, bones: n, index, bind, pelvis_bind, basis, dirs: seg })
+        // Thumb bases: with the hand → Finger2 segment they fix the hand's roll on Skyrim's side (a segment alone leaves it free: the
+        // sword pointed back along the forearm, 2026-10-05).
+        let mut thumbs = [[0.0f32; 3]; 2];
+        for (t, (hand, thumb)) in [("L_Hand", "L_Finger0"), ("R_Hand", "R_Finger0")].iter().enumerate() {
+            if let (Ok(a), Ok(b)) = (at(hand), at(thumb)) {
+                let d = basis.vec(sub(b, a));
+                let l = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+                if l > 1e-6 {
+                    thumbs[t] = [d[0] / l, d[1] / l, d[2] / l];
+                }
+            }
+        }
+        crate::info!("pose", "bind thumbs (Skyrim basis, unit): L_Hand->L_Finger0={} R_Hand->R_Finger0={}", fmt(thumbs[0]), fmt(thumbs[1]));
+        let weapons = [find("L_Weapon"), find("R_Weapon")];
+        Ok(Self { skeleton: skel, bones: n, index, bind, pelvis_bind, basis, dirs: seg, thumbs, weapons })
     }
 
     /// This frame's pose from the model-pose array, and the mapped bones' model positions in Skyrim's basis (metres, for `[body]`).
@@ -184,7 +202,7 @@ impl Rig {
         if n != self.bones {
             return Err("model pose size changed");
         }
-        let last = self.index.iter().max().copied().unwrap_or(0) + 1;
+        let last = self.index.iter().chain(self.weapons.iter().flatten()).max().copied().unwrap_or(0) + 1;
         let f = f32s(&read_bytes(ptr, last * QS).ok_or("model pose unreadable")?);
         let mut pose = PoseState { bone_count: POSE_BONE_COUNT, ..Default::default() };
         let mut at = [[0.0f32; 3]; N];
@@ -199,9 +217,17 @@ impl Rig {
         if pose.pelvis_offset.iter().any(|v| !v.is_finite()) {
             return Err("pelvis offset not finite");
         }
+        // Blade directions: ER's weapon bones hold the blade along +Y (screenshots 2026-10-06); Skyrim aims its WEAPON node with them.
+        for (side, w) in self.weapons.iter().enumerate() {
+            if let Some(i) = *w {
+                let q = rig::normalize(quat(&f[i * 12..i * 12 + 12])).ok_or("weapon bone rotation not finite")?;
+                pose.blade[side * 3..side * 3 + 3].copy_from_slice(&self.basis.vec(rig::rotate(q, [0.0, 1.0, 0.0])));
+            }
+        }
         Ok((pose, at))
     }
 }
+
 
 /// Per Active stretch, for the `[pose] Active off` line.
 #[derive(Default)]
@@ -275,6 +301,11 @@ impl PoseStream {
             if self.rig.is_some() && !game::is_riding(player) && (park::is_dodge_anim(anim) || remote::LOCOMOTE.load(std::sync::atomic::Ordering::Relaxed)) {
                 pose.flags = 1 << PoseFlag::Active as u32;
             }
+            // Bows sit in ER's left hand only to draw, hold and release (x36010 / x36020 / x36000); otherwise the right hand carries
+            // them (contact sheet 2026-10-06). Skyrim moves its bow to match.
+            if anim >= 0 && anim % 100_000 / 1_000 == 36 {
+                pose.flags |= 1 << PoseFlag::BowLeft as u32;
+            }
         }
         // No player / no pose: flags 0 (Skyrim plays its own animation), still written so it isn't stale.
         if let (Some(rig), Some(w)) = (self.rig.as_ref(), self.bind_writer.as_mut())
@@ -283,6 +314,9 @@ impl PoseStream {
             let mut bind = PoseBind { bone_count: POSE_BONE_COUNT, frame, ..Default::default() };
             for (k, d) in rig.dirs.iter().enumerate() {
                 bind.dir[k * 3..k * 3 + 3].copy_from_slice(d);
+            }
+            for (t, d) in rig.thumbs.iter().enumerate() {
+                bind.thumb[t * 3..t * 3 + 3].copy_from_slice(d);
             }
             w.write(&bind);
             self.bind_written = rig.skeleton;

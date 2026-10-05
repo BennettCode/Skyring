@@ -7,9 +7,9 @@
 
 namespace sxer::proto
 {
-	inline constexpr std::uint32_t kVersion = 12;
+	inline constexpr std::uint32_t kVersion = 13;
 	inline constexpr std::uint32_t kMagic = 0x52455853;  // "SXER" as little-endian bytes
-	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v12";
+	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v13";
 
 	// Peer counts as gone when its heartbeat is older than this.
 	inline constexpr std::uint64_t kHeartbeatTimeoutMs = 2000;
@@ -121,6 +121,7 @@ namespace sxer::proto
 	enum class PoseFlag : std::uint32_t
 	{
 		Active = 0,  // ER is playing an action Skyrim should show (dodge first). Off = Skyrim plays its own animation (blend out).
+		BowLeft = 1,  // v13: ER holds its bow in the left hand (draw / hold / release anims x36xxx). Off = a bow is carried in the right hand.
 	};
 
 	// Index into PoseState.rot (4 floats each). Parents come before children. Unlisted Skyrim bones ride on their parents.
@@ -331,9 +332,10 @@ namespace sxer::proto
 		float pelvis_offset[3];  // Pelvis offset from its bind position, Skyrim model basis (x right, y forward, z up), metres.
 		std::uint32_t _pad0;
 		float rot[96];  // Per PoseBone: model-space delta from bind (q_model * q_bind_model^-1), Skyrim model basis, x y z w.
+		float blade[6];  // Left, right: ER weapon bone's blade direction (L_Weapon / R_Weapon +Y), Skyrim model basis, unit; (0,0,0) = none.
 	};
 	static_assert(std::is_trivially_copyable_v<PoseState> && std::is_standard_layout_v<PoseState>);
-	static_assert(sizeof(PoseState) == 440);
+	static_assert(sizeof(PoseState) == 464);
 	static_assert(alignof(PoseState) == 8);
 	static_assert(offsetof(PoseState, seq) == 0);
 	static_assert(offsetof(PoseState, flags) == 4);
@@ -345,6 +347,7 @@ namespace sxer::proto
 	static_assert(offsetof(PoseState, pelvis_offset) == 40);
 	static_assert(offsetof(PoseState, _pad0) == 52);
 	static_assert(offsetof(PoseState, rot) == 56);
+	static_assert(offsetof(PoseState, blade) == 440);
 
 	// At OFF_SLOT_POSE_BIND. Written by ER once per skeleton (when it resolves), read by Skyrim to fit its bind pose to ER's.
 	struct PoseBind
@@ -353,14 +356,16 @@ namespace sxer::proto
 		std::uint32_t bone_count;  // POSE_BONE_COUNT of the writer.
 		std::uint64_t frame;  // ER frame when the skeleton resolved (changes = a new skeleton: refit).
 		float dir[72];  // Per PoseBone: unit bind segment direction (bone to its child), Skyrim model basis; (0,0,0) = none (use the parent's fit).
+		float thumb[6];  // Left, right: unit bind direction hand to thumb base (Finger0), Skyrim model basis; with the hand's dir it fixes the hand's roll. (0,0,0) = unknown.
 	};
 	static_assert(std::is_trivially_copyable_v<PoseBind> && std::is_standard_layout_v<PoseBind>);
-	static_assert(sizeof(PoseBind) == 304);
+	static_assert(sizeof(PoseBind) == 328);
 	static_assert(alignof(PoseBind) == 8);
 	static_assert(offsetof(PoseBind, seq) == 0);
 	static_assert(offsetof(PoseBind, bone_count) == 4);
 	static_assert(offsetof(PoseBind, frame) == 8);
 	static_assert(offsetof(PoseBind, dir) == 16);
+	static_assert(offsetof(PoseBind, thumb) == 304);
 
 	// Sent on attach and whenever a new peer appears. The receiver checks protocol_version.
 	struct Hello

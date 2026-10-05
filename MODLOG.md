@@ -4,6 +4,21 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-06: Swords point the Elden Ring way; bows ride in the right hand; shots survive menus (protocol v13)
+- **User:** "a normal Skyrim sword looks like a dagger in the animation; running with the bow is weird; I can't shoot arrows."
+- **Measured:** ER's `R_Weapon` sits at a fixed angle in the hand (constant hand-local axes through idle, walk, most of a swing) with
+  the blade on its +Y; Skyrim's `WEAPON` node (held at its bind local) pointed the sword up where ER's points forward/down. ER carries a
+  bow sideways in the **right** hand and moves it to the left only for draw/hold/release (x36010/x36020/x36000); Skyrim kept it in the left.
+  Bow shots failed after menus: stale input made ER put its own weapon/ammo back, and the first R1 after re-equipping hit an empty quiver.
+- **Changed:** protocol v13: PoseState `blade` (L/R_Weapon +Y) + PoseFlag `BowLeft`, PoseBind `thumb`. Skyrim `Pose.cpp`: AimWeapon
+  turns `WEAPON` so the weapon mesh's blade (bound centre) follows ER's; CarryBow moves `SHIELD` (the bow) to the right hand's grip,
+  upper limb along ER's, except while BowLeft; hands fit two landmarks (middle finger + thumb, from the Havok skeleton: a 9 deg roll fix,
+  not the cause). ER `stance.rs`: stale input while connected keeps the mapped weapon/ammo (Skyrim paused in a menu).
+- **Tested:** run-tests green (FrameFit test added). Contact sheets, both games: steel sword idle/walk/R1 point forward and swing like
+  ER's sheets (before: blade up); hunting bow idle/run in the right hand, draw in the left, back to the right after the shot, arrow
+  launched. Earlier session: 4/4 shots including one right after the Tween menu. Not tested: daggers/two-handers sheet by sheet,
+  crossbows, shields and left-hand weapons (unchanged).
+
 ## 2026-10-05: Animation recheck: the bow sits in the hand; ER ammo never runs out
 - **User:** "the bow doesn't work properly" (wrong or odd animation). Side-view screenshots (virtual right stick to orbit): the body
   matched ER's full draw, but the bow hung at the right hip.

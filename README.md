@@ -83,9 +83,12 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
   war axe → hand axe, mace → mace, greatsword → greatsword, battleaxe → greataxe, warhammer → great hammer. Better Skyrim materials
   become higher Elden Ring upgrade levels (iron +0 up to about +25 for dragonbone), so they hit harder the Elden Ring way.
   `SkyrimXER.ini [Weapons]` lets you pick other Elden Ring weapons.
-- **Bows shoot like Elden Ring:** with a Skyrim bow, hold **R1** to draw (Elden Ring's longbow draw and hold, on your character) and let
-  go to shoot: a real Skyrim arrow flies where the camera aims, using your equipped bow and arrows (Skyrim's damage for now).
-  Crossbows map to Elden Ring's light crossbow (not tested yet).
+- **Bows shoot like Elden Ring:** with a Skyrim bow, **hold R1** to draw (Elden Ring's longbow draw and hold, on your character) and
+  **let go to shoot**: a real Skyrim arrow flies where the camera aims, using your equipped bow and arrows (Skyrim's damage for now).
+  R2, L1 and L2 don't shoot with a bow (they're Elden Ring's other bow moves). Like in Elden Ring, the bow rides in your right hand
+  while you walk and run and goes to the left hand to draw. Crossbows map to Elden Ring's light crossbow (not tested yet).
+- **Weapons sit in your hand the Elden Ring way:** your right-hand weapon points where Elden Ring's does in every pose instead of
+  Skyrim's own grip angle (checked with a sword; other weapons use the same rule).
 - **Your health is your Elden Ring HP.** Every hit, arrow, spell, fall or potion changes your Elden Ring HP by the same share it would
   change your Skyrim health, and Skyrim's health bar shows your Elden Ring HP. Rolling through an attack (its i-frames) blocks
   damage of any kind. When your Elden Ring HP runs out you die in Skyrim, and loading a save refills it.
@@ -107,13 +110,12 @@ Details: [`docs/DESIGN.md`](docs/DESIGN.md).
   outside that window land as usual.
 - Fail-safe: if either game closes, crashes or pauses, the other one notices within a moment and stops acting on stale input.
 
-**Not working yet:** fighting is still vanilla (P5). Footstep sounds may be missing while Elden Ring moves you, and Skyrim's
+**Not working yet:** Footstep sounds may be missing while Elden Ring moves you, and Skyrim's
 NPCs still see your character facing the way it last faced in Skyrim (only the body you see turns); a jump can briefly flip the body
-to that old facing. Elden Ring's character holds its weapon the way yours does (fists when you're unarmed
-or sheathed, one- or two-handed when you draw a weapon), but it doesn't use the same *kind* of weapon yet. The roll animation copies the main bones (fingers and toes follow their hands and feet); cloth and armour
+to that old facing. Shields and left-hand weapons keep Skyrim's grip. The animation copies the main bones (fingers and toes follow their hands and feet); cloth and armour
 helpers follow Skyrim's own pose, and feet can slide a little (no foot placement yet). How much an enemy hit hurts still comes from
 Skyrim (your Skyrim armour and perks); Elden Ring armour doesn't count yet. Staves and spells have no Elden Ring counterpart yet.
-While the link is on, Skyrim spells, bows and shield bashes aren't on any button (F10 gives them back), and Skyrim's Wait has no pad
+While the link is on, Skyrim spells and shield bashes aren't on any button (F10 gives them back), and Skyrim's Wait has no pad
 button (keyboard T works). 
 
 ## Progress

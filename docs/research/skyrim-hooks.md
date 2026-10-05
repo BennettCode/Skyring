@@ -218,3 +218,13 @@ before use (a missing id makes CommonLib abort the game at load).
 - **Fix** (`Pose.cpp` Carry): after posing, each such transform is moved rigidly with its nearest posed bone (posed world × animation
   world⁻¹). The pointers are read from the live skin instances every frame. Verified on a contact sheet: hands and feet follow
   through the whole tumble.
+
+## Hands, weapon and bow attach nodes (2026-10-06)
+- Finger bones are **not** in `NiSkinInstance::bones` (null entries) nor in the tree, so their bind isn't reachable by name there. The
+  Havok animation skeleton has them: `Actor::GetAnimationGraphManager` → `graphs[0]->characterInstance.setup->animationSkeleton`
+  (`hkaSkeleton`: bones[].name, parentIndices, referencePose). `NPC R Finger00 [RF00]` (thumb) and `NPC R Finger20 [RF20]` (middle) are
+  children of `NPC R Hand [RHnd]`: their reference translation is the hand-local offset. Bind directions (root space): R thumb
+  (-0.09,0.91,-0.41), R middle (0.29,0.49,-0.82); left mirrored.
+- `WEAPON` (right hand) and `SHIELD` (left hand; bows hang here) are skinned helpers, so the pose holds them at their bind local each
+  frame. A sword's mesh bound centre sits along `WEAPON` **+Y** (blade axis, ~40 units out). A bow's upper limb (Bow_MidBone → Bow_UpBone2)
+  is SHIELD-local (-0.10, 1.00, 0).

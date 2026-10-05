@@ -13,9 +13,9 @@
 # All values are little-endian (both games are x64 Windows).
 
 [protocol]
-version = 12
+version = 13
 magic = "SXER"                      # stored as a little-endian u32: bytes 'S' 'X' 'E' 'R'
-region_name = 'Local\SkyrimXER_v12'  # must end in _v<version>
+region_name = 'Local\SkyrimXER_v13'  # must end in _v<version>
 
 [constants]
 HEARTBEAT_TIMEOUT_MS = { type = "u64", value = 2000, doc = "Peer counts as gone when its heartbeat is older than this." }
@@ -126,6 +126,7 @@ repr = "u32"
 doc = "PoseState.flags. Values are BIT INDICES: mask = 1 << value."
 values = [
   { name = "Active", value = 0, doc = "ER is playing an action Skyrim should show (dodge first). Off = Skyrim plays its own animation (blend out)." },
+  { name = "BowLeft", value = 1, doc = "v13: ER holds its bow in the left hand (draw / hold / release anims x36xxx). Off = a bow is carried in the right hand." },
 ]
 
 [[enums]]
@@ -266,7 +267,7 @@ fields = [
 
 [[structs]]
 name = "PoseState"
-size = 440
+size = 464
 doc = "At OFF_SLOT_POSE. Written by ER's game thread every frame, read by Skyrim's."
 fields = [
   { name = "seq", type = "u32", doc = "Seqlock counter (odd = being written)." },
@@ -279,17 +280,19 @@ fields = [
   { name = "pelvis_offset", type = "f32[3]", doc = "Pelvis offset from its bind position, Skyrim model basis (x right, y forward, z up), metres." },
   { name = "_pad0", type = "u32" },
   { name = "rot", type = "f32[96]", doc = "Per PoseBone: model-space delta from bind (q_model * q_bind_model^-1), Skyrim model basis, x y z w." },
+  { name = "blade", type = "f32[6]", doc = "Left, right: ER weapon bone's blade direction (L_Weapon / R_Weapon +Y), Skyrim model basis, unit; (0,0,0) = none." },
 ]
 
 [[structs]]
 name = "PoseBind"
-size = 304
+size = 328
 doc = "At OFF_SLOT_POSE_BIND. Written by ER once per skeleton (when it resolves), read by Skyrim to fit its bind pose to ER's."
 fields = [
   { name = "seq", type = "u32", doc = "Seqlock counter (odd = being written)." },
   { name = "bone_count", type = "u32", doc = "POSE_BONE_COUNT of the writer." },
   { name = "frame", type = "u64", doc = "ER frame when the skeleton resolved (changes = a new skeleton: refit)." },
   { name = "dir", type = "f32[72]", doc = "Per PoseBone: unit bind segment direction (bone to its child), Skyrim model basis; (0,0,0) = none (use the parent's fit)." },
+  { name = "thumb", type = "f32[6]", doc = "Left, right: unit bind direction hand to thumb base (Finger0), Skyrim model basis; with the hand's dir it fixes the hand's roll. (0,0,0) = unknown." },
 ]
 
 [region]

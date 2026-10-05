@@ -3,7 +3,7 @@
 // Pose retarget math: C++ mirror of protocol/src/rig.rs (same names in this file's style, same tests in skse/tests/link_test.cpp).
 // - Quaternions are {x, y, z, w}, Hamilton product, rotating column vectors (v' = q v q*), as Havok and NetImmerse do.
 // - A bone's delta is q_model * q_bind_model^-1 (rig.rs); the ER side already converts it to Skyrim's model basis, so no Basis here.
-// - Slerp and RotationArc are only needed on this side (blending, and aligning Skyrim's bind segments to ER's).
+// - Slerp, RotationArc and FrameFit are only needed on this side (blending, and aligning Skyrim's bind segments to ER's).
 // RE-free on purpose: skyrimxer_link_test tests it without the game.
 
 #include <algorithm>
@@ -137,5 +137,37 @@ namespace sxer::rig
 		}
 		const Vec3 c{ a_from[1] * a_to[2] - a_from[2] * a_to[1], a_from[2] * a_to[0] - a_from[0] * a_to[2], a_from[0] * a_to[1] - a_from[1] * a_to[0] };
 		return Normalize(Quat{ c[0], c[1], c[2], 1 + d }).value_or(kIdentity);
+	}
+
+	// Rotation taking the frame of (a_fromMain, a_fromSide) onto that of (a_toMain, a_toSide): the main directions match exactly, the
+	// side directions as closely as they can (their parts across the main direction match). Unlike RotationArc it fixes the roll
+	// about the main direction. nullopt when a side direction is (nearly) parallel to its main one.
+	inline std::optional<Quat> FrameFit(Vec3 a_fromMain, Vec3 a_fromSide, Vec3 a_toMain, Vec3 a_toSide)
+	{
+		const auto frame = [](Vec3 a_main, Vec3 a_side) -> std::optional<Mat3> {
+			const auto e1 = Unit(a_main);
+			if (!e1) {
+				return std::nullopt;
+			}
+			const float d = Dot(a_side, *e1);
+			const auto e2 = Unit({ a_side[0] - d * (*e1)[0], a_side[1] - d * (*e1)[1], a_side[2] - d * (*e1)[2] });
+			if (!e2 || std::fabs(d) > 0.98f * std::sqrt(Dot(a_side, a_side))) {
+				return std::nullopt;
+			}
+			const Vec3 e3{ (*e1)[1] * (*e2)[2] - (*e1)[2] * (*e2)[1], (*e1)[2] * (*e2)[0] - (*e1)[0] * (*e2)[2], (*e1)[0] * (*e2)[1] - (*e1)[1] * (*e2)[0] };
+			return Mat3{ { { (*e1)[0], (*e2)[0], e3[0] }, { (*e1)[1], (*e2)[1], e3[1] }, { (*e1)[2], (*e2)[2], e3[2] } } };  // columns e1 e2 e3
+		};
+		const auto f = frame(a_fromMain, a_fromSide);
+		const auto t = frame(a_toMain, a_toSide);
+		if (!f || !t) {
+			return std::nullopt;
+		}
+		Mat3 m{};  // t · fᵀ
+		for (int i = 0; i < 3; ++i) {
+			for (int j = 0; j < 3; ++j) {
+				m[i][j] = (*t)[i][0] * (*f)[j][0] + (*t)[i][1] * (*f)[j][1] + (*t)[i][2] * (*f)[j][2];
+			}
+		}
+		return FromMat(m);
 	}
 }

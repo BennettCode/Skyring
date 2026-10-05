@@ -81,3 +81,11 @@ Measured with the `[body]` line (`er-plugin/src/body.rs`) during run, sprint, st
 
 So the physics yaw is the right facing. The matrix stores the model axes in its **rows** (the yaw read from `physics_model_matrix` rows
 matches the physics yaw; the columns don't). ER's own lean, from pelvis to neck: walk 7°, run 16–18°, sprint 35° forward.
+
+## Weapon bones and bows (2026-10-06)
+- `R_Weapon` / `L_Weapon` are separate bones near the hands (~9 cm out). In the hand's own frame they stay **constant** through idle,
+  walk and most of a swing (R: hand-local x (0.92,-0.29,0.25) y (0.28,0.96,0.07)); some attack frames turn them (23030000).
+- The blade runs along the weapon bone's **+Y** (screenshots: longsword idle points forward, R_Weapon +Y = (0.32,0.93,-0.17) Skyrim basis).
+- Bows: carried in the **right** hand, sideways (idle 14000000: R +Y = (-0.83,-0.55,0.07)); moved into the left hand only for x36010 draw,
+  x36020 hold, x36000 release (L +Y = (0,0,-1) at full draw, so +Y is the bow's lower limb). Contact sheet of a full shot.
+- Thumb base `L/R_Finger0` bind direction from the hand (Skyrim basis): R (0.410,0.736,-0.539).

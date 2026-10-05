@@ -208,6 +208,14 @@ namespace
 		Check(nearV(Rotate(flip, to), back) && Near(Angle(flip), 3.14159265f, 1e-3f), "rig: RotationArc of antiparallel vectors = 180 deg turn");
 		const Vec3 x{ 1, 0, 0 }, negX{ -1, 0, 0 };
 		Check(nearV(Rotate(RotationArc(x, negX), x), negX), "rig: RotationArc antiparallel along an axis");
+		{
+			// A known rotation is recovered from two directions it moved; the roll RotationArc can't see is part of it.
+			const auto q = *Normalize(Mul(AxisAngle({ 0, 0, 1 }, 1.2f), AxisAngle({ 1, 0, 0 }, 2.5f)));
+			const Vec3 main{ 0.6f, 0.0f, -0.8f }, side{ 0.1f, 0.9f, 0.3f };
+			const auto fit = FrameFit(main, side, Rotate(q, main), Rotate(q, side));
+			Check(fit && same(*fit, q), "rig: FrameFit recovers the rotation from two directions");
+			Check(!FrameFit(main, main, main, main), "rig: FrameFit rejects a side parallel to its main direction");
+		}
 	}
 
 	// DualSense report parser and button layouts (bridge/PadReport.h): USB, Bluetooth extended and simple; menu/gameplay/ER mappings.
