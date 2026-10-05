@@ -7,9 +7,9 @@
 
 namespace sxer::proto
 {
-	inline constexpr std::uint32_t kVersion = 6;
+	inline constexpr std::uint32_t kVersion = 7;
 	inline constexpr std::uint32_t kMagic = 0x52455853;  // "SXER" as little-endian bytes
-	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v6";
+	inline constexpr wchar_t kRegionName[] = L"Local\\SkyrimXER_v7";
 
 	// Peer counts as gone when its heartbeat is older than this.
 	inline constexpr std::uint64_t kHeartbeatTimeoutMs = 2000;
@@ -77,6 +77,7 @@ namespace sxer::proto
 	{
 		InCombat = 0,  // The Skyrim player is in combat. ER mirrors it in its own combat state (dodges cost stamina only in combat).
 		BridgeOn = 1,  // The bridge is on (F10). Off = Skyrim plays vanilla; ER leaves its own state alone.
+		Locomote = 2,  // ER drives locomotion now (LOCO-PLAN stage B): the move stick is forwarded every frame, turned by cam_yaw, and Dodge for the whole hold (tap = roll, hold = sprint). Off = dodge-only (stick around a dodge).
 	};
 
 	// InputState.stance: how the Skyrim player holds its weapon; ER switches its own stance (ChrAsm) to match, so the streamed pose matches.
@@ -211,7 +212,7 @@ namespace sxer::proto
 		std::uint32_t flags;  // InputFlag bits.
 		float move_x;  // Move stick right, -1..1.
 		float move_y;  // Move stick forward, -1..1.
-		float cam_yaw;  // Skyrim camera yaw, radians.
+		float cam_yaw;  // With Locomote: where Skyrim looks, as a yaw in ER's world (Skyrim camera yaw minus the mode's world offset W), radians. ER turns the stick by cam_yaw minus its own camera yaw.
 		std::uint32_t stance;  // Stance (Unarmed / OneHanded / TwoHanded).
 	};
 	static_assert(std::is_trivially_copyable_v<InputState> && std::is_standard_layout_v<InputState>);
@@ -248,7 +249,7 @@ namespace sxer::proto
 		float pos[3];  // ER world position (Y-up, metres).
 		float yaw;  // ER yaw, radians.
 		std::uint64_t time_us;  // QueryPerformanceCounter time when written, microseconds (one clock for both processes): interpolation.
-		float cam_yaw;  // ER camera yaw, radians (same convention as yaw): maps Skyrim's look onto ER's stick.
+		float cam_yaw;  // ER camera yaw, radians (same convention as yaw); the stick is relative to it. Diagnostics.
 		std::uint32_t _pad1;
 	};
 	static_assert(std::is_trivially_copyable_v<PlayerState> && std::is_standard_layout_v<PlayerState>);

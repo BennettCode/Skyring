@@ -4,7 +4,7 @@
 //! Once per skeleton: map each PoseBone to an ER bone by name, build the bind pose in model space from the skeleton's reference
 //! pose, and measure the ER → Skyrim basis on it (right = R_Thigh − L_Thigh, forward = toes − feet, up = model +Y).
 //! Every frame: one read of the model pose, per bone `delta = q_model · q_bind⁻¹` in Skyrim's basis (protocol `rig`), the pelvis
-//! offset from bind, ER's yaw, and `Active` while a dodge animation plays. Reads go through ReadProcessMemory (pose.rs helpers),
+//! offset from bind, ER's yaw, and `Active` while a dodge animation plays or ER drives locomotion (remote::LOCOMOTE). Reads go through ReadProcessMemory (pose.rs helpers),
 //! so a moved or freed pose is a failed read, never a crash.
 
 use std::sync::atomic::Ordering;
@@ -16,7 +16,7 @@ use skyrimxer_protocol::rig::{self, Basis, Quat, Vec3};
 use skyrimxer_protocol::slot::SlotWriter;
 
 use crate::pose::{IMPORTER, POSE_MODEL, POSE_SKELETON, f32s, hk_array, plausible, read_bytes, read_name, read_u64, u64_at};
-use crate::{bridge, game, park};
+use crate::{bridge, game, park, remote};
 
 const N: usize = POSE_BONE_COUNT as usize;
 /// hkQsTransform: translation f32[4], rotation (x, y, z, w), scale f32[4].
@@ -265,7 +265,8 @@ impl PoseStream {
                 }
             }
             pose.yaw = snap.yaw;
-            if self.rig.is_some() && park::is_dodge_anim(anim) {
+            // Dodges always; everything else while ER drives locomotion (LOCO-PLAN stage B).
+            if self.rig.is_some() && (park::is_dodge_anim(anim) || remote::LOCOMOTE.load(std::sync::atomic::Ordering::Relaxed)) {
                 pose.flags = 1 << PoseFlag::Active as u32;
             }
         }

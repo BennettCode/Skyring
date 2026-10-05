@@ -13,9 +13,9 @@
 # All values are little-endian (both games are x64 Windows).
 
 [protocol]
-version = 6
+version = 7
 magic = "SXER"                      # stored as a little-endian u32: bytes 'S' 'X' 'E' 'R'
-region_name = 'Local\SkyrimXER_v6'  # must end in _v<version>
+region_name = 'Local\SkyrimXER_v7'  # must end in _v<version>
 
 [constants]
 HEARTBEAT_TIMEOUT_MS = { type = "u64", value = 2000, doc = "Peer counts as gone when its heartbeat is older than this." }
@@ -74,6 +74,7 @@ doc = "InputState.flags. Values are BIT INDICES: mask = 1 << value."
 values = [
   { name = "InCombat", value = 0, doc = "The Skyrim player is in combat. ER mirrors it in its own combat state (dodges cost stamina only in combat)." },
   { name = "BridgeOn", value = 1, doc = "The bridge is on (F10). Off = Skyrim plays vanilla; ER leaves its own state alone." },
+  { name = "Locomote", value = 2, doc = "ER drives locomotion now (LOCO-PLAN stage B): the move stick is forwarded every frame, turned by cam_yaw, and Dodge for the whole hold (tap = roll, hold = sprint). Off = dodge-only (stick around a dodge)." },
 ]
 
 [[enums]]
@@ -201,7 +202,7 @@ fields = [
   { name = "flags", type = "u32", doc = "InputFlag bits." },
   { name = "move_x", type = "f32", doc = "Move stick right, -1..1." },
   { name = "move_y", type = "f32", doc = "Move stick forward, -1..1." },
-  { name = "cam_yaw", type = "f32", doc = "Skyrim camera yaw, radians." },
+  { name = "cam_yaw", type = "f32", doc = "With Locomote: where Skyrim looks, as a yaw in ER's world (Skyrim camera yaw minus the mode's world offset W), radians. ER turns the stick by cam_yaw minus its own camera yaw." },
   { name = "stance", type = "u32", doc = "Stance (Unarmed / OneHanded / TwoHanded)." },
 ]
 
@@ -227,7 +228,7 @@ fields = [
   { name = "pos", type = "f32[3]", doc = "ER world position (Y-up, metres)." },
   { name = "yaw", type = "f32", doc = "ER yaw, radians." },
   { name = "time_us", type = "u64", doc = "QueryPerformanceCounter time when written, microseconds (one clock for both processes): interpolation." },
-  { name = "cam_yaw", type = "f32", doc = "ER camera yaw, radians (same convention as yaw): maps Skyrim's look onto ER's stick." },
+  { name = "cam_yaw", type = "f32", doc = "ER camera yaw, radians (same convention as yaw); the stick is relative to it. Diagnostics." },
   { name = "_pad1", type = "u32" },
 ]
 

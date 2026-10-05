@@ -4,6 +4,15 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: protocol v7, ER drives locomotion on request (LOCO-PLAN stage B2)
+- **Changed:** protocol v7: new `InputFlag::Locomote`; InputState `cam_yaw` = Skyrim's look as a yaw in ER's world; PlayerState
+  `cam_yaw` = ER's camera yaw (filled now). No layout change. ER `remote.rs`, with Locomote: the stick is forwarded every frame and
+  turned by `cam_yaw − ER camera yaw`, and Dodge is forwarded for the whole hold (tap = roll, hold = sprint). Without it, the
+  dodge-only path is unchanged. `pose_stream.rs`: Active while Locomote is on. `fake-peer skyrim --walk DEG`.
+- **Tested:** `tests/run-tests.ps1` all passed. Real ER + `fake-peer skyrim --walk 0` (cam_yaw 0/90/180/−90°, 3 s runs): ER yaw =
+  the wanted yaw with 0° error in all 4 directions, run anim 20110, stop 22100, pose Active on/off with Locomote.
+- **Not done:** the Skyrim side doesn't send Locomote yet (B3), so in-game behaviour is unchanged.
+
 ## 2026-10-05: ER locomotion probe (LOCO-PLAN stage B1)
 - **Changed:** `game::camera_yaw()` (ER camera view matrix → yaw in the player's convention). `actions::LocoTest`, a scripted
   stick/Dodge self-test (`dev.ps1 -ErSelfTest walk|sprint`) that logs speed, yaw, camera yaw, anim and stamina.

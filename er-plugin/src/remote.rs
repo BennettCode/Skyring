@@ -4,6 +4,9 @@
 //!   (tap = backstep/roll, hold = dash). Stale or disconnected input = nothing held (fail-safe).
 //!   Skyrim's movement keys (`move_x/move_y`) → the virtual move stick, so Dodge + direction = roll (P3 step 5). Only while Dodge
 //!   is held and STICK_AFTER_RELEASE frames after (P4 step 1): Skyrim walks by itself, so the hidden character stays parked.
+//!   With `InputFlag::Locomote` (LOCO-PLAN stage B) ER drives locomotion: the stick is forwarded every frame, turned by
+//!   `InputState.cam_yaw − game::camera_yaw()` (ER's stick is relative to its own camera, which never turns by itself while hidden),
+//!   and Dodge is forwarded for the whole hold (tap = roll, hold = sprint; no DASH_AFTER drop).
 //! - [`publish_state`] (ChrIns_PostPhysics in world, FrameBegin otherwise): the player snapshot → PlayerState every frame.
 //! - [`sample_coords`] (ChrIns_PostPhysics): bounded `[coords]` position/yaw samples while moving (coordinate test).
 
@@ -20,6 +23,7 @@ use crate::{actions, bridge, combat, game, pad};
 const DODGE: u32 = 1 << Button::Dodge as u32;
 const IN_COMBAT: u32 = 1 << InputFlag::InCombat as u32;
 const BRIDGE_ON: u32 = 1 << InputFlag::BridgeOn as u32;
+const LOCOMOTE_FLAG: u32 = 1 << InputFlag::Locomote as u32;
 /// Frames the move stick stays forwarded after Dodge is released (ER picks the roll direction on the release frame or just after).
 const STICK_AFTER_RELEASE: u32 = 10;
 /// A Dodge held longer than this is a sprint, not a dodge: the stick is dropped so ER doesn't dash the hidden character away (Skyrim
@@ -28,6 +32,19 @@ const DASH_AFTER: u32 = 20;
 
 /// True while Skyrim input drives the ER character (Dodge held or the move stick forwarded); park.rs keeps the parking spot still then.
 pub static DRIVING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// True while Skyrim asks ER to drive locomotion (fresh InputState with BridgeOn + Locomote, player in world); pose_stream.rs keeps
+/// the pose Active then.
+pub static LOCOMOTE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Turns stick `(x right, y forward)` by `d` radians (positive = to the right), magnitude capped at 1 (two keys held = a diagonal).
+fn turn_stick((x, y): (f32, f32), d: f32) -> (f32, f32) {
+    let m = x.hypot(y).min(1.0);
+    if m == 0.0 {
+        return (0.0, 0.0);
+    }
+    let a = x.atan2(y) + d;
+    (m * a.sin(), m * a.cos())
+}
 
 fn flag(f: PlayerFlag) -> u32 {
     1 << f as u32
@@ -46,11 +63,13 @@ pub struct DodgeFromSkyrim {
     long_press: bool,
     /// Move stick we hold (x right, y forward); (0, 0) = not holding, so a real keyboard still works with `-ErVisible`.
     moving: (f32, f32),
+    /// Skyrim's keys behind `moving` (before the Locomote turn), for change-only log lines.
+    raw: (f32, f32),
 }
 
 impl DodgeFromSkyrim {
     pub fn new() -> Self {
-        Self { reader: None, last_input: None, fresh: false, held: false, held_frames: 0, since_release: u32::MAX, long_press: false, moving: (0.0, 0.0) }
+        Self { reader: None, last_input: None, fresh: false, held: false, held_frames: 0, since_release: u32::MAX, long_press: false, moving: (0.0, 0.0), raw: (0.0, 0.0) }
     }
 
     pub fn run(&mut self) {
@@ -88,25 +107,55 @@ impl DodgeFromSkyrim {
         // SAFETY: task callbacks run on the game's main thread.
         let player = unsafe { game::main_player() };
         let held = is_fresh && player.is_some() && input.is_some_and(|i| i.buttons & DODGE != 0);
+        let locomote = is_fresh && player.is_some() && input.is_some_and(|i| i.flags & BRIDGE_ON != 0 && i.flags & LOCOMOTE_FLAG != 0);
+        if locomote != LOCOMOTE.load(Ordering::Relaxed) {
+            LOCOMOTE.store(locomote, Ordering::Relaxed);
+            // SAFETY: main thread.
+            let cam = unsafe { game::camera_yaw() };
+            crate::info!(
+                "input",
+                "frame={frame} Locomote {} (ER camera yaw {})",
+                if locomote { "ON: ER drives walking/running/sprinting" } else { "off" },
+                cam.map_or("none".into(), |c| format!("{c:.3}"))
+            );
+        }
         self.since_release = if held { 0 } else { self.since_release.saturating_add(1) };
         if held && !self.held {
             self.long_press = false;
-        } else if held && self.held_frames >= DASH_AFTER && !self.long_press {
+        } else if !locomote && held && self.held_frames >= DASH_AFTER && !self.long_press {
             self.long_press = true;
             crate::info!("input", "frame={frame} Dodge held {} frames: sprint, not a dodge (stick dropped, ER character stays)", self.held_frames);
         }
-        let stick_window = self.since_release <= STICK_AFTER_RELEASE && !self.long_press;
-        let moving = match input {
+        let stick_window = locomote || (self.since_release <= STICK_AFTER_RELEASE && !self.long_press);
+        let raw = match input {
             Some(i) if is_fresh && player.is_some() && stick_window => (i.move_x.clamp(-1.0, 1.0), i.move_y.clamp(-1.0, 1.0)),
             _ => (0.0, 0.0),
         };
+        // Locomote: Skyrim's look (in ER's world) minus ER's camera yaw turns the keys, so ER walks where Skyrim looks + the keys.
+        // SAFETY: main thread.
+        let turn = match (locomote, input, unsafe { game::camera_yaw() }) {
+            (true, Some(i), Some(cam)) => (i.cam_yaw - cam + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI,
+            _ => 0.0,
+        };
+        let moving = if locomote { turn_stick(raw, turn) } else { raw };
         if moving != self.moving {
-            let seq = input.map_or(0, |i| i.seq);
-            let why = if stick_window { "dodge window" } else if self.long_press { "sprint hold" } else { "dodge window over" };
-            crate::info!("input", "frame={frame} move x={:.2} y={:.2} (InputState seq={seq}, {why})", moving.0, moving.1);
+            if raw != self.raw || (moving == (0.0, 0.0)) != (self.moving == (0.0, 0.0)) {
+                let seq = input.map_or(0, |i| i.seq);
+                let why = if locomote { "locomote" } else if stick_window { "dodge window" } else if self.long_press { "sprint hold" } else { "dodge window over" };
+                crate::info!(
+                    "input",
+                    "frame={frame} move x={:.2} y={:.2} (keys x={:.2} y={:.2}, turn {:.0} deg, InputState seq={seq}, {why})",
+                    moving.0,
+                    moving.1,
+                    raw.0,
+                    raw.1,
+                    turn.to_degrees()
+                );
+            }
             // SAFETY: main thread. The edge to (0, 0) writes the release once.
             unsafe { pad::set_move(moving.0, moving.1) };
             self.moving = moving;
+            self.raw = raw;
             MOVE.store(u64::from(moving.0.to_bits()) << 32 | u64::from(moving.1.to_bits()), Ordering::Relaxed);
         } else if moving != (0.0, 0.0) {
             // SAFETY: main thread. PadStep re-copies the device data each frame, so a held stick is written every frame.
@@ -234,6 +283,8 @@ pub fn publish_state(from_frame_begin: bool) {
         // Pinned character (park.rs): Skyrim follows where it would be, not where it is.
         state.pos = crate::park::virtual_pos().unwrap_or(s.pos);
         state.yaw = s.yaw;
+        // SAFETY: main thread (task callback).
+        state.cam_yaw = unsafe { game::camera_yaw() }.unwrap_or(0.0);
     }
     writer.write(&state);
 }

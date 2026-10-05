@@ -1,10 +1,12 @@
 //! fake-peer: plays one side of the link so the other side can be tested without its game.
 //!
-//! `cargo run -p fake-peer -- <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always]`
+//! `cargo run -p fake-peer -- <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always] [--walk DEG]`
 //! - `--seconds N`: run for N seconds (default: until killed), then exit.
 //! - `--no-bye`: exit without a Bye, like a crash (the other side should log a heartbeat timeout).
 //! - `--region NAME`: use another mapping name (tests use one so they never touch a running game's region).
 //! - `--dodge-every S` (skyrim): hold Dodge for 250 ms, first 1 s after connecting, then every S seconds (default 4).
+//! - `--walk DEG` (skyrim): instead of Dodge pulses, Locomote mode (LOCO-PLAN stage B): hold the stick forward 3 s, stand 1 s,
+//!   with `cam_yaw` = DEG degrees, +90 each cycle. A real ER should turn its character to that yaw (logged every 0.5 s).
 //! - `--pose-always` (er): PoseState stays Active (to watch the swing in Skyrim without dodging).
 //!
 //! Same thread shape as the plugins: the link ticks on its own thread every LINK_TICK_MS, the main thread runs ~60 "frames"
@@ -23,7 +25,7 @@ use std::time::{Duration, Instant};
 use skyrimxer_protocol::link::{Identity, Level, Link, LinkShared, Side};
 use skyrimxer_protocol::{now_ms, now_us};
 use skyrimxer_protocol::proto::{
-    Button, InputState, LINK_TICK_MS, OFF_SLOT_INPUT, OFF_SLOT_PLAYER, OFF_SLOT_POSE, OFF_SLOT_POSE_BIND, POSE_BONE_COUNT, PlayerFlag, PlayerState,
+    Button, InputFlag, InputState, LINK_TICK_MS, OFF_SLOT_INPUT, OFF_SLOT_PLAYER, OFF_SLOT_POSE, OFF_SLOT_POSE_BIND, POSE_BONE_COUNT, PlayerFlag, PlayerState,
     PoseBind, PoseBone, PoseFlag, PoseState, REGION_NAME,
 };
 use skyrimxer_protocol::slot::{SlotReader, SlotWriter, fresh};
@@ -33,7 +35,7 @@ const DODGE: u32 = 1 << Button::Dodge as u32;
 const IFRAME: u32 = 1 << PlayerFlag::IFrame as u32;
 
 fn usage() -> ! {
-    eprintln!("usage: fake-peer <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always]");
+    eprintln!("usage: fake-peer <skyrim|er> [--seconds N] [--no-bye] [--region NAME] [--dodge-every S] [--pose-always] [--walk DEG]");
     std::process::exit(2);
 }
 
@@ -127,11 +129,17 @@ struct FakeSky {
     writer: SlotWriter<InputState>,
     reader: SlotReader<PlayerState>,
     watch: PlayerWatch,
+    /// `--walk`: first cam_yaw (degrees); None = Dodge pulses.
+    walk: Option<f32>,
 }
 
 impl FakeSky {
     fn frame(&mut self, log: Logger, shared: &LinkShared, frame: u64, now: u64) {
         let connected = shared.connected();
+        if let Some(deg) = self.walk {
+            self.walk_frame(log, connected, deg, frame, now);
+            return;
+        }
         if connected && self.next_pulse.is_none() {
             self.next_pulse = Some(now + 1000);
         }
@@ -149,6 +157,38 @@ impl FakeSky {
         }
         self.writer.write(&InputState { frame, time_ms: now, buttons: if held { DODGE } else { 0 }, ..Default::default() });
         self.watch.update(log, self.reader.read(), connected, now);
+    }
+}
+
+impl FakeSky {
+    /// `--walk`: 4 s cycles (3 s stick forward, 1 s still), cam_yaw stepping +90 degrees per cycle.
+    fn walk_frame(&mut self, log: Logger, connected: bool, deg: f32, frame: u64, now: u64) {
+        let state = self.reader.read();
+        if connected && self.next_pulse.is_none() {
+            self.next_pulse = Some(now + 1000);
+        }
+        let (cycle, t) = match self.next_pulse {
+            Some(start) if now >= start => ((now - start) / 4000, (now - start) % 4000),
+            _ => (0, 3999),
+        };
+        let walking = t < 3000;
+        let cam = (deg + 90.0 * cycle as f32).to_radians();
+        let cam = (cam + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI;
+        if walking != self.held {
+            self.held = walking;
+            log.info("input", &format!("walk {} frame={frame} cam_yaw={:.3}", if walking { "start" } else { "stop" }, cam));
+        }
+        if frame % 30 == 0 && connected {
+            if let Some(p) = state {
+                let err = ((p.yaw - cam + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI).to_degrees();
+                log.info(
+                    "walk",
+                    &format!("frame={frame} want yaw={cam:.3} ER yaw={:.3} (error {err:.0} deg) ER cam={:.3} anim={} pos=({:.2},{:.2})", p.yaw, p.cam_yaw, p.anim_id, p.pos[0], p.pos[2]),
+                );
+            }
+        }
+        let flags = (1 << InputFlag::BridgeOn as u32) | (1 << InputFlag::Locomote as u32);
+        self.writer.write(&InputState { frame, time_ms: now, flags, move_y: if walking { 1.0 } else { 0.0 }, cam_yaw: cam, ..Default::default() });
     }
 }
 
@@ -279,11 +319,13 @@ fn main() {
         _ => usage(),
     };
     let (mut seconds, mut bye, mut region, mut dodge_every, mut pose_always) = (None, true, REGION_NAME.to_string(), 4.0, false);
+    let mut walk = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--seconds" => seconds = args.next().and_then(|s| s.parse::<f64>().ok()).or_else(|| usage()),
             "--no-bye" => bye = false,
             "--pose-always" => pose_always = true,
+            "--walk" => walk = Some(args.next().and_then(|s| s.parse::<f32>().ok()).unwrap_or_else(|| usage())),
             "--region" => region = args.next().unwrap_or_else(|| usage()),
             "--dodge-every" => dodge_every = args.next().and_then(|s| s.parse::<f64>().ok()).unwrap_or_else(|| usage()),
             _ => usage(),
@@ -334,6 +376,7 @@ fn main() {
                     writer: SlotWriter::new(r.clone(), OFF_SLOT_INPUT),
                     reader: SlotReader::new(r, OFF_SLOT_PLAYER),
                     watch: PlayerWatch::default(),
+                    walk,
                 }),
                 Side::EldenRing => Role::Er(FakeEr {
                     reader: SlotReader::new(r.clone(), OFF_SLOT_INPUT),

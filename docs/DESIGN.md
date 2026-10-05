@@ -33,13 +33,13 @@ Alternatives considered (if the draft fails the tests):
 - **ER owns position too** (like SkyCraft's Minecraft): would need Skyrim collision streamed into ER's Havok world. Very hard, deferred.
 - **No hidden ER, re-implement the rules in SKSE**: simpler, but it's not a merge and loses ER's exact timing/math. Fallback only.
 
-## 4. Protocol (`Local\SkyrimXER_v6`)
+## 4. Protocol (`Local\SkyrimXER_v7`)
 
 Source of truth: `protocol/schema/messages.toml` → `cargo run -p protogen` → `protocol/generated/skyrimxer_protocol.{h,rs}`.
 Fixed-size little-endian plain structs, explicit padding only (protogen rejects implicit padding), size/offset asserts in both
 languages, `version` + region name bump for any layout change.
 
-**v6 region (P4, 0x21000 bytes; v6 = v5 + InputState `stance` (Stance: Unarmed/OneHanded/TwoHanded, ER copies it); v5 = v4 + time_us stamps, PlayerState cam_yaw, 24 pose bones, PoseBind slot; v4 = v3 + PoseState slot; v3 = v2 + InputState `flags` + PlayerFlag InCombat; v1 = v2 without the slots):**
+**v7 region (P4, 0x21000 bytes; v7 = v6 + InputFlag `Locomote` (ER drives locomotion; InputState `cam_yaw` = Skyrim look in ER's world, PlayerState `cam_yaw` = ER camera yaw), no layout change; v6 = v5 + InputState `stance` (Stance: Unarmed/OneHanded/TwoHanded, ER copies it); v5 = v4 + time_us stamps, PlayerState cam_yaw, 24 pose bones, PoseBind slot; v4 = v3 + PoseState slot; v3 = v2 + InputState `flags` + PlayerFlag InCombat; v1 = v2 without the slots):**
 ```
 0x00000 Header       magic 'SXER' (written last by the creator), version, header_size, region_size,
                      sky_/er_ pid, state (SideState), heartbeat_ms (GetTickCount64), attach_count   (64 B)
