@@ -72,3 +72,12 @@ skeleton's reference pose and parent array, then sends `q_model · q_bind⁻¹` 
   travels in `yaw`, not in the pose. Per roll: dodge anim for 101 frames (≈ 1.7 s, recovery included), pelvis turn up to 179°
   (it tumbles), pelvis drop up to 0.84 m. Backsteps (27010): 81 frames, 56°, 0.54 m.
 - **Cost:** the write takes ≤ 0.27 ms (max per roll, three ReadProcessMemory calls + the snapshot).
+
+## Rendered facing vs physics yaw (2026-10-05)
+ER draws the body with `ChrCtrl.model_matrix` (physics orientation × `additional_orientation_quat`, then eased; eldenring-rs `cs/chr_ins.rs`).
+Measured with the `[body]` line (`er-plugin/src/body.rs`) during run, sprint, strafe and turns:
+- Its yaw equals the physics yaw (PlayerState.yaw) within 1°.
+- Its tilt is at most 4° (forward and sideways).
+
+So the physics yaw is the right facing. The matrix stores the model axes in its **rows** (the yaw read from `physics_model_matrix` rows
+matches the physics yaw; the columns don't). ER's own lean, from pelvis to neck: walk 7°, run 16–18°, sprint 35° forward.

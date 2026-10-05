@@ -129,6 +129,19 @@ before use (a missing id makes CommonLib abort the game at load).
   Hands and feet aren't checked: `Finger20`/`Toe0` have no skin bind, so they reuse the forearm/calf fit.
 - **Facing:** `movement::RollHeading()` (ER's forward is laid along it), else the body heading. Heading grows = turning right = −Z rotation.
   Verified: a right roll (D) turns the body +90° and it tumbles that way.
+- **NPC COM turns with the yaw** (2026-10-05). COM, the parent of the pelvis and the spine, kept the rotation Skyrim's animation gave it,
+  which faces the actor's heading. During locomotion the actor's heading is often 60–180° from the body's facing, so the spine's root (which
+  sits behind the pelvis) ended up beside or in front of the hips. `[body]` probe: running forward leaned 4° more than ER, running back
+  toward the camera 11° more. Fixed by turning COM by the yaw; the pelvis position is now predicted from COM's new rotation. After the fix,
+  hip/chest/lean match ER within 4° (run, sprint, strafe, back, weapon drawn).
+- **Spine deltas are conjugated by their bind fit** (2026-10-05): Spine/Spine1/Spine2 use `fit⁻¹·delta·fit` (fits 2°, 6°, 14°).
+  Applied unchanged, ER's sprint chest twist (about ER's own spine axis) swung Skyrim's Spine2 round in a cone, because it rests 14° further
+  forward than ER's. Frame-matched `[bodydump]` probe, 330 sprint frames: Spine2→neck swayed ±22° sideways against ER's ±9°, and the head
+  ±15 cm against ±7. Conjugated: ±11.5° against ±9.4°, trunk error mean 5.2° → 2.5°, limbs unchanged ≤ 1°. At rest it changes nothing
+  (a plain fit on shape bones stretched the chest, 2026-10-04). Remaining constant differences are bind shape only: clavicles 37°,
+  Spine2→neck 14°; Skyrim's upper torso is ~40% longer, so the same angle moves the head further.
+- **`[body]` line** (both sides, every 120 moving frames): face/hip/chest yaw and forward/side lean relative to the travel direction, mean/largest
+  in degrees (`Pose.cpp` MeasureBody, `er-plugin/src/body.rs`). The two sides compare without matching clocks.
 - **Cost:** ≤ 0.14 ms per frame while posing (hook p99 ~0.1 ms, 0.01 ms idle); frame time unchanged (17 ms p99).
 - **Polish later:** prefer the body mesh's bind (today the first skinned mesh wins, so armour with another bind can tilt a bone), finger and toe bones, foot planting/IK, smoothing between ER frames when Skyrim runs above 60 fps,
   ending the pose at ER's move-cancel window instead of the end of the animation (101 frames).

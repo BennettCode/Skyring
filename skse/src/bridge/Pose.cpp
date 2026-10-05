@@ -8,6 +8,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "bridge/Coords.h"
@@ -48,6 +49,11 @@ namespace sxer::pose
 			"NPC R Foot [Rft ]", nullptr, nullptr, nullptr, nullptr, nullptr };
 		// Parent PoseBone (-1 = none), for the shared-fit rule.
 		constexpr std::array<int, kBones> kParentBone = { -1, -1, 1, 2, 3, 4, 3, 6, 7, 8, 3, 10, 11, 12, 0, 14, 15, 0, 17, 18, 7, 7, 11, 11 };
+		// Spine, Spine1, Spine2: shape bones whose delta is conjugated by their bind fit (fit⁻¹·delta·fit). They keep Skyrim's bind shape
+		// (no posture change at rest), but ER's rotation turns about Skyrim's own segment instead of ER's. Applied unchanged, ER's sprint
+		// chest twist swung Skyrim's Spine2 (14 deg further forward than ER's in bind) round in a cone: the upper chest swayed +-22 deg
+		// sideways against ER's +-9, the head +-15 cm against +-7 ([bodydump] probe 2026-10-05).
+		constexpr std::array<bool, kBones> kConj = { false, true, true, true };
 		// Limbs get a fit; shape bones keep Skyrim's bind shape.
 		constexpr std::array<bool, kBones> kLimb = { false, false, false, false, false, false, false, true, true, true, false, true, true, true,
 			true, true, true, true, true, true, true, true, true, true };
@@ -120,6 +126,7 @@ namespace sxer::pose
 			std::array<std::optional<rig::Vec3>, kBones> skyDir{};  // Skyrim bind segment direction (unit), root space
 			std::array<RE::NiAVObject*, kBones> end{};             // segment end node with a bind, for the check line
 			std::array<rig::Quat, kBones> fit{};    // from PoseBind (identity until it arrives / for shape bones)
+			std::array<rig::Quat, kBones> conj{};   // spine bones: ER's delta is seen in Skyrim's bind frame (fit⁻¹·delta·fit), see kConj
 			std::array<rig::Vec3, kBones> erDir{};  // ER bind segment directions (PoseBind), for the check line
 			std::uint64_t bindFrame = 0;            // PoseBind.frame the fits came from (0 = none yet: don't pose)
 			rig::Vec3 pelvisBind{};                 // root space, game units
@@ -143,6 +150,70 @@ namespace sxer::pose
 			float maxUs = 0;
 		};
 		State g;
+
+		// [body] telemetry (2026-10-05: run/sprint body direction and lean looked off): the posed body's facing and lean relative to where
+		// the player travels, in the same terms as ER's [body] line (er-plugin/src/body.rs), so the sides compare without matching clocks.
+		// Degrees; turning right, leaning forward and leaning right are positive. One line per 120 frames of movement (mean/largest).
+		struct BodyStat
+		{
+			float sum = 0;
+			float max = 0;  // the value with the largest magnitude, signed
+			void Add(float a_rad)
+			{
+				const float v = a_rad * 57.2958f;
+				sum += v;
+				max = std::fabs(v) > std::fabs(max) ? v : max;
+			}
+			std::string Show(int a_n) const { return std::format("{:.0f}/{:.0f}", sum / a_n, max); }
+		};
+		struct Body
+		{
+			std::optional<RE::NiPoint3> last;
+			std::chrono::steady_clock::time_point lastAt;
+			int n = 0;
+			BodyStat face, actor, hip, chest, leanF, leanS;
+		} body;
+
+		float WrapPi(float a_angle) { return std::remainder(a_angle, 2.0f * 3.14159265f); }
+
+		void MeasureBody(RE::PlayerCharacter* a_player, RE::NiAVObject* a_root)
+		{
+			constexpr float kMinSpeed = 0.5f * coords::kSkyrimUnitsPerM;  // units/s; slower frames have no travel direction
+			const auto now = std::chrono::steady_clock::now();
+			const auto here = a_root->world.translate;
+			const auto last = std::exchange(body.last, here);
+			const float dt = std::chrono::duration<float>(now - std::exchange(body.lastAt, now)).count();
+			if (!last || dt <= 0 || dt > 0.1f) {
+				return;
+			}
+			const float dx = here.x - last->x, dy = here.y - last->y;
+			if (std::hypot(dx, dy) / dt < kMinSpeed) {
+				return;
+			}
+			const float travel = std::atan2(dx, dy);  // heading: forward = (sin h, cos h)
+			const auto& r = g.rig;
+			const auto at = [&](std::size_t k) { return r.nodes[k]->world.translate; };
+			// Axis L → R as a heading (right = (cos h, −sin h)), relative to travel.
+			const auto axis = [&](std::size_t l, std::size_t rt) {
+				const auto v = at(rt) - at(l);
+				return WrapPi(std::atan2(-v.y, v.x) - travel);
+			};
+			++body.n;
+			body.face.Add(WrapPi(g.facing - travel));
+			body.actor.Add(WrapPi(a_player->GetAngleZ() - travel));
+			body.hip.Add(axis(14, 17));   // L Thigh → R Thigh
+			body.chest.Add(axis(7, 11));  // L UpperArm → R UpperArm
+			const auto v = at(4) - at(0);  // pelvis → neck
+			const float s = std::sin(travel), c = std::cos(travel);
+			body.leanF.Add(std::atan2(v.x * s + v.y * c, v.z));
+			body.leanS.Add(std::atan2(v.x * c - v.y * s, v.z));
+			if (body.n >= 120) {
+				const int n = body.n;
+				SKSE::log::info("[body] n={} deg mean/max vs travel: face={} actor={} hip={} chest={} leanF={} leanS={}", n, body.face.Show(n),
+					body.actor.Show(n), body.hip.Show(n), body.chest.Show(n), body.leanF.Show(n), body.leanS.Show(n));
+				body = Body{ .last = body.last, .lastAt = body.lastAt };
+			}
+		}
 
 		// Nodes posed this frame and their world rotations (fixed size: no allocation per frame).
 		struct Done
@@ -341,9 +412,13 @@ namespace sxer::pose
 					r.fit[k] = kParentBone[k] >= 0 ? r.fit[kParentBone[k]] : rig::kIdentity;
 				}
 				line += std::format(" {}={:.0f}", k, rig::Angle(r.fit[k]) * 57.2958f);
+				r.conj[k] = kConj[k] && r.skyDir[k] && er ? rig::RotationArc(*r.skyDir[k], *er) : rig::kIdentity;
+				if (kConj[k]) {
+					line += std::format(" (conj {:.0f})", rig::Angle(r.conj[k]) * 57.2958f);
+				}
 			}
 			r.bindFrame = a_bind.frame;
-			SKSE::log::info("[pose] PoseBind er_frame={}: fit angles (deg, PoseBone order; shape bones 0):{}", a_bind.frame, line);
+			SKSE::log::info("[pose] PoseBind er_frame={}: fit angles (deg, PoseBone order; shape bones 0, spine conjugation in brackets):{}", a_bind.frame, line);
 		}
 
 		// World rotation of a_node this frame: ours if we posed it (or an ancestor of it), else the animation's.
@@ -421,11 +496,21 @@ namespace sxer::pose
 			before[k] = r.nodes[k]->world;
 		}
 		Done done;
+		// COM turns with the yaw too. Its rotation comes from Skyrim's animation, which faces the actor's heading, and it places the spine's
+		// root relative to the pelvis: left alone, a body facing away from the actor's heading had its spine root beside or in front of the
+		// hips ([body] probe 2026-10-05: lean 4-11 deg more than ER's, worst running back toward the camera).
+		{
+			const auto& above = r.mover->parent->world.rotate;
+			const auto target = rootRot * ToNi(rig::Mul(yaw, ToQuat(rootRot.Transpose() * r.mover->world.rotate)));
+			r.mover->local.rotate = ToNi(rig::Slerp(ToQuat(r.mover->local.rotate), ToQuat(above.Transpose() * target), g.weight));
+			done.Set(r.mover, above * r.mover->local.rotate);
+		}
 		for (std::size_t k = 0; k < kBones; ++k) {
 			auto* node = r.nodes[k];
 			const auto parentWorld = node->parent ? WorldRot(node->parent, done) : RE::NiMatrix3{};
 			if (const auto delta = rig::Normalize({ pose.rot[k * 4], pose.rot[k * 4 + 1], pose.rot[k * 4 + 2], pose.rot[k * 4 + 3] })) {
-				const auto world = rootRot * ToNi(rig::Mul(yaw, rig::Mul(rig::Mul(*delta, r.fit[k]), r.bind[k])));
+				const auto d = rig::Mul(rig::Conj(r.conj[k]), rig::Mul(*delta, r.conj[k]));  // identity conj = delta
+				const auto world = rootRot * ToNi(rig::Mul(yaw, rig::Mul(rig::Mul(d, r.fit[k]), r.bind[k])));
 				const auto target = ToQuat(parentWorld.Transpose() * world);
 				node->local.rotate = ToNi(rig::Slerp(ToQuat(node->local.rotate), target, g.weight));
 			}
@@ -435,20 +520,26 @@ namespace sxer::pose
 			h.node->local.rotate = ToNi(rig::Slerp(ToQuat(h.node->local.rotate), h.bindLocal, g.weight));
 		}
 		// Pelvis position: bind + ER's offset (metres → units, scaled to this body), turned by the same yaw. COM (the pelvis's parent,
-		// also the spine's) is moved by the difference, so hips and torso drop together; COM's rotation is untouched, so the
-		// rotations above stay valid.
+		// also the spine's) is moved by the difference, so hips and torso drop together. The pelvis's world position isn't updated yet:
+		// it's predicted from COM's new rotation (set above); the rotations above are world targets, so the move keeps them valid.
 		{
 			const float s = coords::kSkyrimUnitsPerM * r.heightRatio;
 			const rig::Vec3 model = rig::Rotate(yaw, { r.pelvisBind[0] + pose.pelvis_offset[0] * s, r.pelvisBind[1] + pose.pelvis_offset[1] * s,
 														 r.pelvisBind[2] + pose.pelvis_offset[2] * s });
 			const auto target = root->world.translate + rootRot * RE::NiPoint3(model[0], model[1], model[2]) * root->world.scale;
 			const auto& above = r.mover->parent->world;
-			const auto shift = above.rotate.Transpose() * (target - r.nodes[0]->world.translate) / above.scale;
+			const auto pelvisNow = r.mover->world.translate + *done.Find(r.mover) * r.nodes[0]->local.translate * r.mover->world.scale;
+			const auto shift = above.rotate.Transpose() * (target - pelvisNow) / above.scale;
 			r.mover->local.translate = r.mover->local.translate + shift * g.weight;
 		}
 		RE::NiUpdateData update{};
 		r.mover->UpdateDownwardPass(update, 0);
 		Carry(root, before);
+		if (g.weight >= 1.0f) {
+			MeasureBody(a_player, root);
+		} else {
+			body.last.reset();
+		}
 		// Check (first frames of each stretch, then every 300): the posed segment (bone → end) in model space vs ER's, after the yaw
 		// and delta, for every bone with a segment. Big errors mean a wrong bind, fit or basis; the numbers say which bone.
 		if (g.weight >= 1.0f && (g.applied == 10 || g.applied % 300 == 299)) {

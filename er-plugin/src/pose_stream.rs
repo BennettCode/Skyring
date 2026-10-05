@@ -16,6 +16,7 @@ use skyrimxer_protocol::rig::{self, Basis, Quat, Vec3};
 use skyrimxer_protocol::slot::SlotWriter;
 
 use crate::pose::{IMPORTER, POSE_MODEL, POSE_SKELETON, f32s, hk_array, plausible, read_bytes, read_name, read_u64, u64_at};
+use crate::body::BodyProbe;
 use crate::{bridge, game, park, remote};
 
 const N: usize = POSE_BONE_COUNT as usize;
@@ -177,8 +178,8 @@ impl Rig {
         Ok(Self { skeleton: skel, bones: n, index, bind, pelvis_bind, basis, dirs: seg })
     }
 
-    /// This frame's pose from the model-pose array, or why not.
-    fn sample(&self, importer: usize) -> Result<PoseState, &'static str> {
+    /// This frame's pose from the model-pose array, and the mapped bones' model positions in Skyrim's basis (metres, for `[body]`).
+    fn sample(&self, importer: usize) -> Result<(PoseState, [Vec3; N]), &'static str> {
         let (ptr, n) = hk_array(importer + POSE_MODEL).ok_or("model pose unreadable")?;
         if n != self.bones {
             return Err("model pose size changed");
@@ -186,17 +187,19 @@ impl Rig {
         let last = self.index.iter().max().copied().unwrap_or(0) + 1;
         let f = f32s(&read_bytes(ptr, last * QS).ok_or("model pose unreadable")?);
         let mut pose = PoseState { bone_count: POSE_BONE_COUNT, ..Default::default() };
+        let mut at = [[0.0f32; 3]; N];
         for k in 0..N {
             let b = &f[self.index[k] * 12..self.index[k] * 12 + 12];
             let q = rig::normalize(quat(b)).ok_or("bone rotation not finite")?;
             pose.rot[k * 4..k * 4 + 4].copy_from_slice(&self.basis.rot(rig::delta(q, self.bind[k])));
+            at[k] = self.basis.vec(pos(b));
         }
         let p = self.index[PoseBone::Pelvis as usize] * 12;
         pose.pelvis_offset = self.basis.vec(sub(pos(&f[p..p + 12]), self.pelvis_bind));
         if pose.pelvis_offset.iter().any(|v| !v.is_finite()) {
             return Err("pelvis offset not finite");
         }
-        Ok(pose)
+        Ok((pose, at))
     }
 }
 
@@ -221,11 +224,12 @@ pub struct PoseStream {
     /// Last error logged; repeats are counted, not logged, until a pose works again.
     error: Option<String>,
     repeats: u32,
+    body: BodyProbe,
 }
 
 impl PoseStream {
     pub fn new() -> Self {
-        Self { writer: None, bind_writer: None, bind_written: 0, rig: None, retry_at: 0, active: false, stats: Stats::default(), error: None, repeats: 0 }
+        Self { writer: None, bind_writer: None, bind_written: 0, rig: None, retry_at: 0, active: false, stats: Stats::default(), error: None, repeats: 0, body: BodyProbe::default() }
     }
 
     pub fn run(&mut self) {
@@ -251,8 +255,9 @@ impl PoseStream {
             let snap = game::snapshot(player);
             anim = snap.anim_id;
             match self.sample(&player.chr_ins as *const _ as usize, frame) {
-                Ok(p) => {
+                Ok((p, at)) => {
                     pose = p;
+                    self.body.update(player, snap.yaw, park::virtual_pos(), anim, &at);
                     if let Some(e) = self.error.take() {
                         crate::info!("pose", "pose readable again (after \"{e}\" x{})", self.repeats + 1);
                     }
@@ -312,7 +317,7 @@ impl PoseStream {
         self.stats.write_us = self.stats.write_us.max(started.elapsed().as_micros());
     }
 
-    fn sample(&mut self, chr: usize, frame: u64) -> Result<PoseState, String> {
+    fn sample(&mut self, chr: usize, frame: u64) -> Result<(PoseState, [Vec3; N]), String> {
         let (importer, skel) = skeleton(chr).ok_or("pose importer unreadable")?;
         if self.rig.as_ref().is_none_or(|r| r.skeleton != skel) {
             if frame < self.retry_at {

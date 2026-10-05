@@ -4,6 +4,23 @@ Newest first. One entry per session or verified step: **what changed · how it w
 
 ---
 
+## 2026-10-05: Run and sprint pose matches ER (body direction, lean, chest sway)
+- **User report:** in the run and sprint, the body direction and lean looked off (weapon sheathed and drawn); then the sprint still looked off.
+- **Probe:** a new `[body]` line on both sides (`er-plugin/src/body.rs`, `Pose.cpp` MeasureBody), every 120 moving frames. It gives the
+  face, hip and chest yaw plus forward/side lean relative to the travel direction, so the sides compare without matching clocks. A
+  bounded frame-matched `[bodydump]` probe compared every bone over 330 sprint frames; it was removed before this commit (method in
+  `docs/research/skyrim-hooks.md`).
+- **Ruled out by measurement:** ER draws the body with `ChrCtrl.model_matrix`, whose yaw equals the physics yaw (within 1°), with at
+  most 4° tilt (`docs/research/elden-ring-pose.md`).
+- **Fix 1, NPC COM turns with the yaw:** COM kept Skyrim's animation rotation, which faces the actor's heading (often 60–180° from the
+  body's facing), so the spine's root sat beside or in front of the hips. Running leaned 4° more than ER, running back toward the
+  camera 11° more. After the fix: hip, chest and lean are within 4° of ER for run, sprint, strafe and back-run, weapon sheathed and drawn.
+- **Fix 2, spine deltas conjugated by their bind fit** (`fit⁻¹·delta·fit`, Spine/Spine1/Spine2): ER's sprint chest twist swung
+  Skyrim's Spine2 (14° further forward in bind) round in a cone. Upper chest side sway was ±22° against ER's ±9°; now ±11.5°. Trunk error
+  mean 5.2° → 2.5°, limbs unchanged (≤ 1°), no change at rest.
+- **Tested:** agent key scripts in both games, side-view contact sheets, the frame-matched comparison, then the user's feel test
+  (no issue reported). `tests/run-tests.ps1` all passed.
+
 ## 2026-10-05: Elden Ring drives walking, running and sprinting (LOCO-PLAN stage B3)
 - **Changed:** new `skse/src/bridge/Locomotion.{h,cpp}`. While the bridge is on, ER drives the player:
   - Skyrim's keys go to ER's stick (Caps Lock walk = stick 0.6) with Locomote + `cam_yaw` = look − W. W = Skyrim heading − ER yaw,
